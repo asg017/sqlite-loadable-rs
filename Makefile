@@ -1,2 +1,2 @@
 test:
-	sqlite3 :memory: '.read examples/test.sql'
+	python3 examples/test-examples.py 
