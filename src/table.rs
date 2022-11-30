@@ -18,7 +18,7 @@ use std::ptr;
 use std::slice;
 use std::str::Utf8Error;
 
-use crate::api::{mprintf, MprintfError, value_type, ValueType};
+use crate::api::{mprintf, value_type, MprintfError, ValueType};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::ext::sqlitex_declare_vtab;
 use crate::ext::{sqlite3ext_create_module_v2, sqlite3ext_vtab_distinct};
@@ -253,7 +253,7 @@ impl OrderBy {
 
 /// Possible errors to return in xBestIndex.
 pub enum BestIndexError {
-  /// Returns SQLITE_CONSTRAINT. See <https://www.sqlite.org/vtab.html#return_value>
+    /// Returns SQLITE_CONSTRAINT. See <https://www.sqlite.org/vtab.html#return_value>
     Constraint,
     Error,
 }
@@ -390,117 +390,120 @@ pub fn define_virtual_table<'vtab, T: VTab<'vtab> + 'vtab>(
 }
 
 pub fn define_virtual_table_writeable<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
-  db: *mut sqlite3,
-  name: &str,
-  aux: Option<T::Aux>,
+    db: *mut sqlite3,
+    name: &str,
+    aux: Option<T::Aux>,
 ) -> Result<()> {
-  let m = &Module {
-      base: sqlite3_module {
-          iVersion: 2,
-          xCreate: Some(rust_create::<T>),
-          xConnect: Some(rust_connect::<T>),
-          xBestIndex: Some(rust_best_index::<T>),
-          xDisconnect: Some(rust_disconnect::<T>),
-          xDestroy: Some(rust_destroy::<T>),
-          xOpen: Some(rust_open::<T>),
-          xClose: Some(rust_close::<T::Cursor>),
-          xFilter: Some(rust_filter::<T::Cursor>),
-          xNext: Some(rust_next::<T::Cursor>),
-          xEof: Some(rust_eof::<T::Cursor>),
-          xColumn: Some(rust_column::<T::Cursor>),
-          xRowid: Some(rust_rowid::<T::Cursor>),
-          xUpdate: Some(rust_update::<T>),
-          xBegin: None, //Some(rust_begin::<T>),
-          xSync: None, //Some(rust_sync::<T>),
-          xCommit: None, //Some(rust_commit::<T>),
-          xRollback: None, //Some(rust_rollback::<T>),
-          xFindFunction: Some(rust_find_function::<T>),
-          xRename: None,
-          xSavepoint: None,
-          xRelease: None,
-          xRollbackTo: None,
-          xShadowName: None,
-      },
-      phantom: PhantomData::<&'vtab T>,
-  };
-  let cname = CString::new(name)?;
-  let p_app = match aux {
-      Some(aux) => {
-          let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
-          boxed_aux.cast::<c_void>()
-      }
-      None => ptr::null_mut(),
-  };
-  let result = unsafe {
-      sqlite3ext_create_module_v2(
-          db,
-          cname.as_ptr(),
-          &m.base,
-          p_app,
-          Some(destroy_aux::<T::Aux>),
-      )
-  };
-  if result != SQLITE_OKAY {
-      return Err(Error::new(ErrorKind::TableFunction(result)));
-  }
-  Ok(())
+    let m = &Module {
+        base: sqlite3_module {
+            iVersion: 2,
+            xCreate: Some(rust_create::<T>),
+            xConnect: Some(rust_connect::<T>),
+            xBestIndex: Some(rust_best_index::<T>),
+            xDisconnect: Some(rust_disconnect::<T>),
+            xDestroy: Some(rust_destroy::<T>),
+            xOpen: Some(rust_open::<T>),
+            xClose: Some(rust_close::<T::Cursor>),
+            xFilter: Some(rust_filter::<T::Cursor>),
+            xNext: Some(rust_next::<T::Cursor>),
+            xEof: Some(rust_eof::<T::Cursor>),
+            xColumn: Some(rust_column::<T::Cursor>),
+            xRowid: Some(rust_rowid::<T::Cursor>),
+            xUpdate: Some(rust_update::<T>),
+            xBegin: None,    //Some(rust_begin::<T>),
+            xSync: None,     //Some(rust_sync::<T>),
+            xCommit: None,   //Some(rust_commit::<T>),
+            xRollback: None, //Some(rust_rollback::<T>),
+            xFindFunction: Some(rust_find_function::<T>),
+            xRename: None,
+            xSavepoint: None,
+            xRelease: None,
+            xRollbackTo: None,
+            xShadowName: None,
+        },
+        phantom: PhantomData::<&'vtab T>,
+    };
+    let cname = CString::new(name)?;
+    let p_app = match aux {
+        Some(aux) => {
+            let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
+            boxed_aux.cast::<c_void>()
+        }
+        None => ptr::null_mut(),
+    };
+    let result = unsafe {
+        sqlite3ext_create_module_v2(
+            db,
+            cname.as_ptr(),
+            &m.base,
+            p_app,
+            Some(destroy_aux::<T::Aux>),
+        )
+    };
+    if result != SQLITE_OKAY {
+        return Err(Error::new(ErrorKind::TableFunction(result)));
+    }
+    Ok(())
 }
 
-pub fn define_virtual_table_writeable_with_transactions<'vtab, T: VTabWriteableWithTransactions<'vtab> + 'vtab>(
-  db: *mut sqlite3,
-  name: &str,
-  aux: Option<T::Aux>,
+pub fn define_virtual_table_writeable_with_transactions<
+    'vtab,
+    T: VTabWriteableWithTransactions<'vtab> + 'vtab,
+>(
+    db: *mut sqlite3,
+    name: &str,
+    aux: Option<T::Aux>,
 ) -> Result<()> {
-  let m = &Module {
-      base: sqlite3_module {
-          iVersion: 2,
-          xCreate: Some(rust_create::<T>),
-          xConnect: Some(rust_connect::<T>),
-          xBestIndex: Some(rust_best_index::<T>),
-          xDisconnect: Some(rust_disconnect::<T>),
-          xDestroy: Some(rust_destroy::<T>),
-          xOpen: Some(rust_open::<T>),
-          xClose: Some(rust_close::<T::Cursor>),
-          xFilter: Some(rust_filter::<T::Cursor>),
-          xNext: Some(rust_next::<T::Cursor>),
-          xEof: Some(rust_eof::<T::Cursor>),
-          xColumn: Some(rust_column::<T::Cursor>),
-          xRowid: Some(rust_rowid::<T::Cursor>),
-          xUpdate: Some(rust_update::<T>),
-          xBegin: Some(rust_begin::<T>),
-          xSync: Some(rust_sync::<T>),
-          xCommit: Some(rust_commit::<T>),
-          xRollback: Some(rust_rollback::<T>),
-          xFindFunction: Some(rust_find_function::<T>),
-          xRename: None,
-          xSavepoint: None,
-          xRelease: None,
-          xRollbackTo: None,
-          xShadowName: None,
-      },
-      phantom: PhantomData::<&'vtab T>,
-  };
-  let cname = CString::new(name)?;
-  let p_app = match aux {
-      Some(aux) => {
-          let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
-          boxed_aux.cast::<c_void>()
-      }
-      None => ptr::null_mut(),
-  };
-  let result = unsafe {
-      sqlite3ext_create_module_v2(
-          db,
-          cname.as_ptr(),
-          &m.base,
-          p_app,
-          Some(destroy_aux::<T::Aux>),
-      )
-  };
-  if result != SQLITE_OKAY {
-      return Err(Error::new(ErrorKind::TableFunction(result)));
-  }
-  Ok(())
+    let m = &Module {
+        base: sqlite3_module {
+            iVersion: 2,
+            xCreate: Some(rust_create::<T>),
+            xConnect: Some(rust_connect::<T>),
+            xBestIndex: Some(rust_best_index::<T>),
+            xDisconnect: Some(rust_disconnect::<T>),
+            xDestroy: Some(rust_destroy::<T>),
+            xOpen: Some(rust_open::<T>),
+            xClose: Some(rust_close::<T::Cursor>),
+            xFilter: Some(rust_filter::<T::Cursor>),
+            xNext: Some(rust_next::<T::Cursor>),
+            xEof: Some(rust_eof::<T::Cursor>),
+            xColumn: Some(rust_column::<T::Cursor>),
+            xRowid: Some(rust_rowid::<T::Cursor>),
+            xUpdate: Some(rust_update::<T>),
+            xBegin: Some(rust_begin::<T>),
+            xSync: Some(rust_sync::<T>),
+            xCommit: Some(rust_commit::<T>),
+            xRollback: Some(rust_rollback::<T>),
+            xFindFunction: Some(rust_find_function::<T>),
+            xRename: None,
+            xSavepoint: None,
+            xRelease: None,
+            xRollbackTo: None,
+            xShadowName: None,
+        },
+        phantom: PhantomData::<&'vtab T>,
+    };
+    let cname = CString::new(name)?;
+    let p_app = match aux {
+        Some(aux) => {
+            let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
+            boxed_aux.cast::<c_void>()
+        }
+        None => ptr::null_mut(),
+    };
+    let result = unsafe {
+        sqlite3ext_create_module_v2(
+            db,
+            cname.as_ptr(),
+            &m.base,
+            p_app,
+            Some(destroy_aux::<T::Aux>),
+        )
+    };
+    if result != SQLITE_OKAY {
+        return Err(Error::new(ErrorKind::TableFunction(result)));
+    }
+    Ok(())
 }
 
 pub fn define_virtual_table_writeablex<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
@@ -524,10 +527,10 @@ pub fn define_virtual_table_writeablex<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             xColumn: Some(rust_column::<T::Cursor>),
             xRowid: Some(rust_rowid::<T::Cursor>),
             xUpdate: Some(rust_update::<T>),
-            xBegin: None,//Some(rust_begin::<T>),
-            xSync: None,//Some(rust_sync::<T>),
-            xCommit: None,//Some(rust_commit::<T>),
-            xRollback: None,//Some(rust_rollback::<T>),
+            xBegin: None,    //Some(rust_begin::<T>),
+            xSync: None,     //Some(rust_sync::<T>),
+            xCommit: None,   //Some(rust_commit::<T>),
+            xRollback: None, //Some(rust_rollback::<T>),
             xFindFunction: Some(rust_find_function::<T>),
             xRename: None,
             xSavepoint: None,
@@ -587,21 +590,15 @@ pub trait VTab<'vtab>: Sized {
     }
 }
 
-
 pub trait VTabWriteable<'vtab>: VTab<'vtab> {
-  fn update(
-      &'vtab mut self,
-      operation: UpdateOperation,
-      p_rowid: *mut i64,
-  ) -> Result<()>;
+    fn update(&'vtab mut self, operation: UpdateOperation, p_rowid: *mut i64) -> Result<()>;
 }
 
-
 pub trait VTabWriteableWithTransactions<'vtab>: VTabWriteable<'vtab> {
-  fn begin(&'vtab mut self) -> Result<()>;
-  fn sync(&'vtab mut self) -> Result<()>;
-  fn commit(&'vtab mut self) -> Result<()>;
-  fn rollback(&'vtab mut self) -> Result<()>;
+    fn begin(&'vtab mut self) -> Result<()>;
+    fn sync(&'vtab mut self) -> Result<()>;
+    fn commit(&'vtab mut self) -> Result<()>;
+    fn rollback(&'vtab mut self) -> Result<()>;
 }
 
 pub trait VTabWriteableNestedTransactions<'vtab>: VTabWriteable<'vtab> {
@@ -859,48 +856,60 @@ pub enum UpdateOperation<'a> {
     },
 }
 
+fn determine_update_operation<'a>(
+    argc: c_int,
+    argv: *mut *mut sqlite3_value,
+) -> UpdateOperation<'a> {
+    let args = unsafe { slice::from_raw_parts(argv, argc as usize) };
 
-fn determine_update_operation<'a>(argc: c_int, argv: *mut *mut sqlite3_value) -> UpdateOperation<'a>{
-  let args = unsafe { slice::from_raw_parts(argv, argc as usize) };
-  
-  // "The value of argc will be 1 for a pure delete operation"
-  if argc == 1 {
-    return UpdateOperation::Delete(args.get(0).expect("argv[0] should be non-null for DELETE operations"));
-  }
+    // "The value of argc will be 1 for a pure delete operation"
+    if argc == 1 {
+        return UpdateOperation::Delete(
+            args.get(0)
+                .expect("argv[0] should be non-null for DELETE operations"),
+        );
+    }
 
-  let argv0 = args.get(0).expect("argv[0] should be defined on all non-delete operations");
-  let argv1 = args.get(1).expect("argv[1] should be defined on all non-delete operations");
+    let argv0 = args
+        .get(0)
+        .expect("argv[0] should be defined on all non-delete operations");
+    let argv1 = args
+        .get(1)
+        .expect("argv[1] should be defined on all non-delete operations");
 
-  //  argc > 1 AND argv[0] = NULL
-  // "INSERT: A new row is inserted with column values taken from argv[2] and following."
-  if value_type(argv1) == ValueType::Null {
-      let rowid = if value_type(argv0) == ValueType::Null {
-        None
-      }else {
-        Some(argv1)
-      };
-      UpdateOperation::Insert {
-          values: args.get(2..).expect("argv[0-1] should be defined on INSERT operations"),
-          rowid,
-      }
-  }
-  // argc > 1 AND argv[0] ≠ NULL AND argv[0] = argv[1]
-  // "UPDATE: The row with rowid or PRIMARY KEY argv[0] is updated with new values in argv[2] and following parameters.'
-  else if argv0 == argv1 {
-      UpdateOperation::Update {
-          _values: args.get(2..).expect("argv[0-1] should be defined on INSERT operations"),
-      }
-  }
-  //argc > 1 AND argv[0] ≠ NULL AND argv[0] ≠ argv[1]
-  // "UPDATE with rowid or PRIMARY KEY change: The row with rowid or PRIMARY KEY argv[0] is updated with
-  // the rowid or PRIMARY KEY in argv[1] and new values in argv[2] and following parameters. "
-  // what the hell does this even mean
-  else if true {
-      todo!();
-  } else {
-      todo!("some unsupported update operation?")
-  }
-
+    //  argc > 1 AND argv[0] = NULL
+    // "INSERT: A new row is inserted with column values taken from argv[2] and following."
+    if value_type(argv1) == ValueType::Null {
+        let rowid = if value_type(argv0) == ValueType::Null {
+            None
+        } else {
+            Some(argv1)
+        };
+        UpdateOperation::Insert {
+            values: args
+                .get(2..)
+                .expect("argv[0-1] should be defined on INSERT operations"),
+            rowid,
+        }
+    }
+    // argc > 1 AND argv[0] ≠ NULL AND argv[0] = argv[1]
+    // "UPDATE: The row with rowid or PRIMARY KEY argv[0] is updated with new values in argv[2] and following parameters.'
+    else if argv0 == argv1 {
+        UpdateOperation::Update {
+            _values: args
+                .get(2..)
+                .expect("argv[0-1] should be defined on INSERT operations"),
+        }
+    }
+    //argc > 1 AND argv[0] ≠ NULL AND argv[0] ≠ argv[1]
+    // "UPDATE with rowid or PRIMARY KEY change: The row with rowid or PRIMARY KEY argv[0] is updated with
+    // the rowid or PRIMARY KEY in argv[1] and new values in argv[2] and following parameters. "
+    // what the hell does this even mean
+    else if true {
+        todo!();
+    } else {
+        todo!("some unsupported update operation?")
+    }
 }
 /// <https://www.sqlite.org/vtab.html#the_xupdate_method>
 // TODO set error message properly
@@ -914,7 +923,7 @@ where
     T: VTabWriteable<'vtab>,
 {
     let vt = vtab.cast::<T>();
-    
+
     match (*vt).update(determine_update_operation(argc, argv), p_rowid) {
         Ok(_) => SQLITE_OKAY,
         Err(err) => err.code(),

@@ -134,7 +134,7 @@ pub enum ConfigOptionValue {
 
 /// Given a raw argument, returns a parsed [`Argument`]. Should already by
 /// comma (?) delimited, typically sourced from [`VTabArguments`](crate::table::VTabArguments).
-pub fn parse_argument(argument: &str) -> std::result::Result<Argument, &str> {
+pub fn parse_argument(argument: &str) -> std::result::Result<Argument, String> {
     match arg_is_config_option(argument) {
         Ok(Some(config_option)) => return Ok(Argument::Config(config_option)),
         Ok(None) => (),
@@ -145,11 +145,11 @@ pub fn parse_argument(argument: &str) -> std::result::Result<Argument, &str> {
         Ok(None) => (),
         Err(err) => return Err(err),
     };
-    Err("argument is niether a configuration option or column declaration.")
+    Err("argument is neither a configuration option or column declaration.".to_owned())
 }
 
 /// TODO renamed "parameter" to "named argument"
-fn arg_is_config_option(arg: &str) -> Result<Option<ConfigOption>, &str> {
+fn arg_is_config_option(arg: &str) -> Result<Option<ConfigOption>, String> {
     let mut split = arg.split('=');
     let key = match split.next() {
         Some(k) => k,
@@ -161,10 +161,10 @@ fn arg_is_config_option(arg: &str) -> Result<Option<ConfigOption>, &str> {
     };
     Ok(Some(ConfigOption {
         key: key.to_owned(),
-        value: parse_config_option_value(value)?,
+        value: parse_config_option_value(key.to_string(), value)?,
     }))
 }
-fn parse_config_option_value(value: &str) -> Result<ConfigOptionValue, &str> {
+fn parse_config_option_value(key: String, value: &str) -> Result<ConfigOptionValue, String> {
     let value = value.trim();
     match value.chars().next() {
         Some('\'') | Some('"') => {
@@ -183,10 +183,10 @@ fn parse_config_option_value(value: &str) -> Result<ConfigOptionValue, &str> {
             // TODO ensure there's no quote words in bareword?
             Ok(ConfigOptionValue::Bareword(value.to_owned()))
         }
-        None => Err("asdf"),
+        None => Err(format!("Empty value for key '{}'", key)),
     }
 }
-pub fn arg_is_column_declaration(arg: &str) -> Result<Option<ColumnDeclaration>, &str> {
+pub fn arg_is_column_declaration(arg: &str) -> Result<Option<ColumnDeclaration>, String> {
     if arg.trim().is_empty() {
         return Ok(None);
     }
@@ -213,6 +213,12 @@ mod tests {
                 Some("text"),
                 None,
             )))
+        );
+        assert_eq!(
+            parse_argument("name"),
+            Ok(Argument::Column(
+                ColumnDeclaration::new("name", None, None,)
+            ))
         );
         assert_eq!(
             parse_argument("option='quoted'"),

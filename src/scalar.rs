@@ -55,91 +55,89 @@ bitflags! {
 /// define_scalar_function(db, "xyz_version", 0, xyz_version)?;
 /// ```
 pub fn define_scalar_function<F>(
-  db: *mut sqlite3,
-  name: &str,
-  num_args: c_int,
-  x_func: F,
-  func_flags: FunctionFlags,
+    db: *mut sqlite3,
+    name: &str,
+    num_args: c_int,
+    x_func: F,
+    func_flags: FunctionFlags,
 ) -> Result<()>
 where
-  // TODO - can we wrap the context arg with a safe/ergonomic struct?
-  // calling `context_result_text(context, "foo")` is long, but maybe
-  // `context.result_text("foo")` with a special wrapper struct can be
-  // as fast
-  F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+    // TODO - can we wrap the context arg with a safe/ergonomic struct?
+    // calling `context_result_text(context, "foo")` is long, but maybe
+    // `context.result_text("foo")` with a special wrapper struct can be
+    // as fast
+    F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
 {
-  let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
+    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
 
-  unsafe extern "C" fn x_func_wrapper<F>(
-      context: *mut sqlite3_context,
-      argc: c_int,
-      argv: *mut *mut sqlite3_value,
-  ) where
-      F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
-  {
-      let boxed_function: *mut F = sqlite3_user_data(context).cast::<F>();
-      // .collect slows things waaaay down, so stick with slice for now
-      let args = slice::from_raw_parts(argv, argc as usize);
-      match (*boxed_function)(context, args) {
-          Ok(()) => (),
-          Err(e) => {
-              if api::result_error(context, &e.result_error_message()).is_err() {
-                  api::result_error_code(context, SQLITE_INTERNAL);
-              }
-          }
-      }
-  }
-  let cname = CString::new(name)?;
-  let result = unsafe {
-      sqlite3ext_create_function_v2(
-          db,
-          cname.as_ptr(),
-          num_args,
-          func_flags.bits,
-          function_pointer.cast::<c_void>(),
-          Some(x_func_wrapper::<F>),
-          None,
-          None,
-          None,
-      )
-  };
+    unsafe extern "C" fn x_func_wrapper<F>(
+        context: *mut sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut sqlite3_value,
+    ) where
+        F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+    {
+        let boxed_function: *mut F = sqlite3_user_data(context).cast::<F>();
+        // .collect slows things waaaay down, so stick with slice for now
+        let args = slice::from_raw_parts(argv, argc as usize);
+        match (*boxed_function)(context, args) {
+            Ok(()) => (),
+            Err(e) => {
+                if api::result_error(context, &e.result_error_message()).is_err() {
+                    api::result_error_code(context, SQLITE_INTERNAL);
+                }
+            }
+        }
+    }
+    let cname = CString::new(name)?;
+    let result = unsafe {
+        sqlite3ext_create_function_v2(
+            db,
+            cname.as_ptr(),
+            num_args,
+            func_flags.bits,
+            function_pointer.cast::<c_void>(),
+            Some(x_func_wrapper::<F>),
+            None,
+            None,
+            None,
+        )
+    };
 
-  if result != SQLITE_OKAY {
-      Err(Error::new(ErrorKind::DefineScalarFunction(result)))
-  } else {
-      Ok(())
-  }
+    if result != SQLITE_OKAY {
+        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
+    } else {
+        Ok(())
+    }
 }
 
-
 pub fn delete_scalar_function(
-  db: *mut sqlite3,
-  name: &str,
-  num_args: c_int,
-  func_flags: FunctionFlags,
-) -> Result<()>
-{
-  let cname = CString::new(name)?;
-  let result = unsafe {
-      sqlite3ext_create_function_v2(
-          db,
-          cname.as_ptr(),
-    num_args,
-    func_flags.bits,
-          std::ptr::null_mut(),
-          None,
-          None,
-          None,
-          None,
-      )
-  };
+    db: *mut sqlite3,
+    name: &str,
+    num_args: c_int,
+    func_flags: FunctionFlags,
+) -> Result<()> {
+    let cname = CString::new(name)?;
+    let result = unsafe {
+        sqlite3ext_create_function_v2(
+            db,
+            cname.as_ptr(),
+            num_args,
+            func_flags.bits,
+            std::ptr::null_mut(),
+            None,
+            None,
+            None,
+            None,
+        )
+    };
 
-  if result != SQLITE_OKAY {
-      println!("failed with {result}");
-      Err(Error::new(ErrorKind::DefineScalarFunction(result)))
-  } else {
-      Ok(())
-  }
+    if result != SQLITE_OKAY {
+        println!("failed with {result}");
+        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
+    } else {
+        Ok(())
+    }
 }
 
 /// Defines a new scalar function, but with the added ability to pass in an arbritary

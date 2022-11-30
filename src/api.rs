@@ -144,13 +144,10 @@ pub fn value_text_notnull<'a>(value: &*mut sqlite3_value) -> Result<&'a str, Err
 }
 
 /// [`sqlite3_value_pointer`](https://www.sqlite.org/bindptr.html)
-/// 
+///
 /// # Safety
-/// Calls [`Box::from_raw`] 
-pub unsafe fn value_pointer<T>(
-    value: &*mut sqlite3_value,
-    c_name: &[u8],
-) -> Option<Box<T>> {
+/// Calls [`Box::from_raw`]
+pub unsafe fn value_pointer<T>(value: &*mut sqlite3_value, c_name: &[u8]) -> Option<Box<T>> {
     let result = sqlite3ext_value_pointer(
         value.to_owned(),
         c_name.as_ptr().cast::<c_char>().cast_mut(),
@@ -322,11 +319,7 @@ unsafe extern "C" fn pointer_destroy<T>(pointer: *mut c_void) {
 }
 
 /// [sqlite3_result_pointer](https://www.sqlite.org/bindptr.html)
-pub fn result_pointer<T>(
-    context: *mut sqlite3_context,
-    name: &[u8],
-    object: T,
-) {
+pub fn result_pointer<T>(context: *mut sqlite3_context, name: &[u8], object: T) {
     let b = Box::new(object);
     let pointer = Box::into_raw(b).cast::<c_void>();
     unsafe {
