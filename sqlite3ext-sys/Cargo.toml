@@ -1,9 +1,13 @@
 [package]
 name = "sqlite3ext-sys"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Alex Garcia <alexsebastian.garcia@gmail.com>"]
+description = "FFI bindings to sqlite3ext.h - you probably want libsqlite3-sys, however"
+homepage = "https://github.com/asg017/sqlite-loadable-rs"
+repository = "https://github.com/asg017/sqlite-loadable-rs"
+keywords = ["sqlite"]
+license = "MIT/Apache-2.0"
 
 [dependencies]
 

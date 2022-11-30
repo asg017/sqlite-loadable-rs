@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite-loadable-macros"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite3ext-sys"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "bindgen",
  "cc",
