@@ -9,6 +9,8 @@ jobs:
   test-ubuntu:
     name: Testing ubuntu-latest
     runs-on: ubuntu-latest
+    # https://kobzol.github.io/rust/ci/2021/05/07/building-rust-binaries-in-ci-that-work-with-older-glibc.html
+    container: quay.io/pypa/manylinux2014_x86_64
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -23,19 +25,19 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: sudo apt install -y gcc-multilib && rustup target install i686-unknown-linux-gnu
+      #- run: sudo apt install -y gcc-multilib && rustup target install i686-unknown-linux-gnu
 
-      - run: cargo build --release --examples --verbose --target=i686-unknown-linux-gnu
+      - run: cargo build --release --examples --verbose #--target=i686-unknown-linux-gnu
       #- run: make test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: ubuntu-latest-exts
           path: |
-            target/i686-unknown-linux-gnu/release/examples/libcharacters.*
-            target/i686-unknown-linux-gnu/release/examples/libhello.*
-            target/i686-unknown-linux-gnu/release/examples/libscalar.*
-            target/i686-unknown-linux-gnu/release/examples/libseries.*
+            target/release/examples/libcharacters.*
+            target/release/examples/libhello.*
+            target/release/examples/libscalar.*
+            target/release/examples/libseries.*
   test-macos:
     name: Testing ubuntu-latest
     runs-on: macos-latest
