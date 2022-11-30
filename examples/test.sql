@@ -3,7 +3,7 @@
 .bail on
 
 .header on
-.mode box
+--.mode box
 
 .load target/release/examples/libhello
 
