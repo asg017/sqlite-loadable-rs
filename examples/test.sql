@@ -19,5 +19,3 @@ select * from pragma_function_list where name = 'hello';
 
 .timer on
 select count(value) as rs from generate_series_rs(1, 1e7);
-
-select count(value) as c from generate_series(1, 1e7);

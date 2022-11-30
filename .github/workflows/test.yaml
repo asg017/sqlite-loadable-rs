@@ -6,9 +6,15 @@ on:
 permissions:
   contents: read
 jobs:
-  build-linux:
-    name: Test on Linux
-    runs-on: ubuntu-latest
+  test:
+    name: Testing on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: windows-latest
+          - os: macos-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -25,33 +31,12 @@ jobs:
           toolchain: stable
       - run: cargo build --release --examples
       - run: make test
-      #- name: Upload artifacts
-      #  uses: actions/upload-artifact@v2
-      #  with:
-      #    name: linux_exts
-      #    path: |
-      #      target/debug/examples/libcharacters.so
-      #      target/debug/examples/libhello.so
-      #      target/debug/examples/libscalar.so
-      #      target/debug/examples/libseries.so
-  #test-macos:
-  #  name: Test on MacOS
-  #  runs-on: macos-latest
-  #  steps:
-  #    - uses: actions/checkout@v2
-  #    - uses: actions-rs/toolchain@v1
-  #      with:
-  #        toolchain: stable
-  #    - run: cargo build --release --examples
-  #    - run: make test
-  #test-windows:
-  #  name: Test on Windows
-  #  runs-on: windows-latest
-  #  steps:
-  #    - uses: actions/checkout@v2
-  #    - uses: actions-rs/toolchain@v1
-  #      with:
-  #        toolchain: stable
-  #    - run: cargo build --release --examples
-  #    - run: make test
-#
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.os }}-exts
+          path: |
+            target/debug/examples/libcharacters.*
+            target/debug/examples/libhello.*
+            target/debug/examples/libscalar.*
+            target/debug/examples/libseries.*
