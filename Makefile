@@ -1,2 +1,2 @@
 test:
-	sqlite3x :memory: '.read examples/test.sql'
+	sqlite3 :memory: '.read examples/test.sql'

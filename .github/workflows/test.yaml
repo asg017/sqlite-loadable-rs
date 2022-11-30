@@ -24,6 +24,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --release --examples
+      - run: make test
       #- name: Upload artifacts
       #  uses: actions/upload-artifact@v2
       #  with:
@@ -33,23 +34,24 @@ jobs:
       #      target/debug/examples/libhello.so
       #      target/debug/examples/libscalar.so
       #      target/debug/examples/libseries.so
-  test-macos:
-    name: Test on MacOS
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - run: cargo build --release --examples
-      - run: make test
-  test-windows:
-    name: Test on Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - run: cargo build --release --examples
-      - run: make test
+  #test-macos:
+  #  name: Test on MacOS
+  #  runs-on: macos-latest
+  #  steps:
+  #    - uses: actions/checkout@v2
+  #    - uses: actions-rs/toolchain@v1
+  #      with:
+  #        toolchain: stable
+  #    - run: cargo build --release --examples
+  #    - run: make test
+  #test-windows:
+  #  name: Test on Windows
+  #  runs-on: windows-latest
+  #  steps:
+  #    - uses: actions/checkout@v2
+  #    - uses: actions-rs/toolchain@v1
+  #      with:
+  #        toolchain: stable
+  #    - run: cargo build --release --examples
+  #    - run: make test
+#

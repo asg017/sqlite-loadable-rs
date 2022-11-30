@@ -5,7 +5,7 @@
 .header on
 .mode box
 
-.load target/debug/examples/libhello
+.load target/release/examples/libhello
 
 select
   hello('world'),
