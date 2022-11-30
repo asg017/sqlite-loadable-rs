@@ -1,0 +1,5 @@
+github.com/mattn/go-pointer v0.0.1 h1:n+XhsuGeVO6MEAp7xyEukFINEa+Quek5psIR/ylA6o0=
+github.com/mattn/go-pointer v0.0.1/go.mod h1:2zXcozF6qYGgmsG+SeTZz3oAbFLdD3OWqnUbNvJZAlc=
+github.com/mattn/go-sqlite3 v1.14.6/go.mod h1:NyWgC/yNuGj7Q9rpYnZvas74GogHl5/Z4A/KQRfk6bU=
+go.riyazali.net/sqlite v0.0.0-20221028101729-bd9e30b2936b h1:7nDvQUuw15dMIyJ1QQ7YgqhfpA59loKdy5b62o4YV64=
+go.riyazali.net/sqlite v0.0.0-20221028101729-bd9e30b2936b/go.mod h1:UVocl0mLwS0QKUKa5mI6lppmBjvQnUEkFjFfoWqFWQU=
