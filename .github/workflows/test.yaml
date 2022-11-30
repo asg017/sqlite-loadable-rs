@@ -30,7 +30,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --release --examples --verbose
-      - run: make test
+      #- run: make test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
