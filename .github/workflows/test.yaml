@@ -6,15 +6,39 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
-    name: Testing on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-          #- os: windows-latest
-          - os: macos-latest
+  test-ubuntu:
+    name: Testing ubuntu-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: sudo apt install -y gcc-multilib && rustup target install i686-unknown-linux-gnu
+
+      - run: cargo build --release --examples --verbose --target=i686-unknown-linux-gnu
+      #- run: make test
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: ubuntu-latest-exts
+          path: |
+            target/i686-unknown-linux-gnu/release/examples/libcharacters.*
+            target/i686-unknown-linux-gnu/release/examples/libhello.*
+            target/i686-unknown-linux-gnu/release/examples/libscalar.*
+            target/i686-unknown-linux-gnu/release/examples/libseries.*
+  test-macos:
+    name: Testing ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -34,7 +58,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.os }}-exts
+          name: macos-latest-exts
           path: |
             target/release/examples/libcharacters.*
             target/release/examples/libhello.*
