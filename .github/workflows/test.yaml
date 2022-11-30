@@ -11,22 +11,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --examples
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: linux_exts
-          path: |
-            target/debug/examples/libcharacters.so
-            target/debug/examples/libhello.so
-            target/debug/examples/libscalar.so
-            target/debug/examples/libseries.so
+      - run: cargo build --release --examples
+      #- name: Upload artifacts
+      #  uses: actions/upload-artifact@v2
+      #  with:
+      #    name: linux_exts
+      #    path: |
+      #      target/debug/examples/libcharacters.so
+      #      target/debug/examples/libhello.so
+      #      target/debug/examples/libscalar.so
+      #      target/debug/examples/libseries.so
   test-macos:
     name: Test on MacOS
     runs-on: macos-latest
@@ -35,7 +41,15 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: actions-rs/cargo@v1
+      - run: cargo build --release --examples
+      - run: make test
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          command: build
-          args: --examples
+          toolchain: stable
+      - run: cargo build --release --examples
+      - run: make test
