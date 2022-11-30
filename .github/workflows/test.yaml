@@ -9,8 +9,6 @@ jobs:
   test-ubuntu:
     name: Testing ubuntu-latest
     runs-on: ubuntu-latest
-    # https://kobzol.github.io/rust/ci/2021/05/07/building-rust-binaries-in-ci-that-work-with-older-glibc.html
-    container: quay.io/pypa/manylinux2014_x86_64
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -22,7 +20,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: apt-get install -y install libclang-dev
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -67,3 +64,31 @@ jobs:
             target/release/examples/libhello.*
             target/release/examples/libscalar.*
             target/release/examples/libseries.*
+  test-windows:
+    name: Testing windows-latest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - run: cargo build --release --examples --verbose
+      #- run: make test
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: windows-latest-exts
+          path: |
+            target/release/examples/characters.*
+            target/release/examples/hello.*
+            target/release/examples/scalar.*
+            target/release/examples/series.*
