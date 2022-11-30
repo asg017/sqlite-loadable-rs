@@ -22,7 +22,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run: sudo apt install -y install libclang-dev
+      - run: apt-get install -y install libclang-dev
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
