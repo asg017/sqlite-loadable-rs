@@ -36,7 +36,7 @@ jobs:
         with:
           name: ${{ matrix.os }}-exts
           path: |
-            target/debug/examples/libcharacters.*
-            target/debug/examples/libhello.*
-            target/debug/examples/libscalar.*
-            target/debug/examples/libseries.*
+            target/release/examples/libcharacters.*
+            target/release/examples/libhello.*
+            target/release/examples/libscalar.*
+            target/release/examples/libseries.*
