@@ -3,7 +3,7 @@
 [![Latest Version](https://img.shields.io/crates/v/sqlite-loadable.svg)](https://crates.io/crates/sqlite-loadable)
 [![Documentation](https://docs.rs/sqlite-loadable/badge.svg)](https://docs.rs/sqlite-loadable)
 
-A framework for building loadable SQLite extensions in Rust. Inspired by [rusqlite](https://github.com/rusqlite/rusqlite), [pgx](https://github.com/tcdi/pgx), and Riyaz Ali's similar [SQLite Go library](https://github.com/riyaz-ali/sqlite).
+A framework for building loadable SQLite extensions in Rust. Inspired by [rusqlite](https://github.com/rusqlite/rusqlite), [pgx](https://github.com/tcdi/pgx), and Riyaz Ali's similar [SQLite Go library](https://github.com/riyaz-ali/sqlite). See [_Introducing sqlite-loadable-rs: A framework for building SQLite Extensions in Rust_](https://observablehq.com/@asg017/introducing-sqlite-loadable-rs) (Dec 2022) for more details!
 
 If your company or organization finds this library useful, consider [supporting my work](#supporting)!
 
