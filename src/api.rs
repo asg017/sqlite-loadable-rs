@@ -21,6 +21,7 @@ use sqlite3ext_sys::{
 };
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
+use std::str::Utf8Error;
 use std::{
     ffi::{CStr, CString, NulError},
     os::raw::{c_char, c_void},
@@ -87,7 +88,7 @@ impl Value {
     {
         match value_text(&self.value) {
             Ok(value) => Ok(value),
-            Err(err) => Err(error(err)),
+            Err(err) => Err(error(err.into())),
         }
     }
 }
@@ -114,24 +115,34 @@ pub fn mprintf(base: &str) -> Result<*mut c_char, MprintfError> {
     }
 }
 
+/// Returns the [`sqlite3_value_blob`](https://www.sqlite.org/c3ref/value_blob.html) result
+/// from the given sqlite3_value, as a u8 slice.
+pub fn value_blob<'a>(value: &*mut sqlite3_value) -> &'a [u8] {
+    let n = value_bytes(value);
+    let b = unsafe { sqlite3ext_value_blob(value.to_owned()) };
+    return unsafe { from_raw_parts(b.cast::<u8>(), n as usize) };
+}
+
+/// Returns the [`sqlite3_value_bytes`](https://www.sqlite.org/c3ref/value_blob.html) result
+/// from the given sqlite3_value, as i32.
+pub fn value_bytes(value: &*mut sqlite3_value) -> i32 {
+    unsafe { sqlite3ext_value_bytes(value.to_owned()) }
+}
+
 /// Returns the [`sqlite3_value_text`](https://www.sqlite.org/c3ref/value_blob.html) result
-/// from the given sqlite3_value, as a str.
-///
-/// # Safety
-///
-/// Will probably segfault if the sqlite3_value has a NULL type.
-/// One should call value_type and check if it's ValueType::Null
-/// before calling this function - or use [`Value`] with
-/// `notnull_or_else`.
-pub fn value_text<'a>(value: &*mut sqlite3_value) -> Result<&'a str, Error> {
-    // Calling sqlite3_value_text() on a NULL value causes a segfault -
-    // so check the value type before returning text. This isn't great,
-    // the error message isn't very helpful, but I guess better error handling
-    // can happen one level above
-    //if value_type(value) == ValueType::Null {return Err(Error::new_message("Unexpected null value")) }
-    let c_string = unsafe { sqlite3ext_value_text(value.to_owned()) };
-    let string = unsafe { CStr::from_ptr(c_string as *const c_char) };
-    Ok(string.to_str()?)
+/// from the given sqlite3_value, as a str. If the number of bytes of the underlying value
+/// is 0, then an empty string is returned. A UTF8 Error is returned if there are problems
+/// encoding the string.
+pub fn value_text<'a>(value: &*mut sqlite3_value) -> Result<&'a str, Utf8Error> {
+    let n = value_bytes(value);
+    if n == 0 {
+        return Ok("");
+    }
+    unsafe {
+        let c_string = sqlite3ext_value_text(value.to_owned());
+        // TODO can i32 always fit as usize? maybe not all architectures...
+        std::str::from_utf8(from_raw_parts(c_string, n as usize))
+    }
 }
 
 pub fn value_text_notnull<'a>(value: &*mut sqlite3_value) -> Result<&'a str, Error> {
@@ -178,20 +189,6 @@ pub fn value_double(value: &*mut sqlite3_value) -> f64 {
     unsafe { sqlite3ext_value_double(value.to_owned()) }
 }
 
-/// Returns the [`sqlite3_value_blob`](https://www.sqlite.org/c3ref/value_blob.html) result
-/// from the given sqlite3_value, as a u8 slice.
-pub fn value_blob<'a>(value: &*mut sqlite3_value) -> &'a [u8] {
-    let n = unsafe { sqlite3ext_value_bytes(value.to_owned()) };
-    let b = unsafe { sqlite3ext_value_blob(value.to_owned()) };
-    return unsafe { from_raw_parts(b.cast::<u8>(), n as usize) };
-}
-
-/// Returns the [`sqlite3_value_bytes`](https://www.sqlite.org/c3ref/value_blob.html) result
-/// from the given sqlite3_value, as i32.
-pub fn value_bytes(value: *mut sqlite3_value) -> i32 {
-    unsafe { sqlite3ext_value_bytes(value) }
-}
-
 /// Possible values that sqlite3_value_type will return for a value.
 #[derive(Eq, PartialEq)]
 pub enum ValueType {
@@ -226,18 +223,29 @@ pub fn value_type(value: &*mut sqlite3_value) -> ValueType {
 }
 
 /// Calls [`sqlite3_result_text`](https://www.sqlite.org/c3ref/result_blob.html)
-/// to represent that a function returns xx with the given value.
-pub fn result_text(context: *mut sqlite3_context, text: &str) -> crate::Result<()> {
-    let s = CString::new(text.as_bytes())?;
-    let n = text
-        .len()
-        .try_into()
-        .map_err(|_| Error::new_message("i32 overflow, string to large"))?;
-    unsafe { sqlite3ext_result_text(context, s.into_raw(), n, Some(result_text_destructor)) };
+/// to represent that a function returns a string with the given value. Fails if
+/// the string length is larger than i32 maximum value.
+pub fn result_text<S: AsRef<str>>(context: *mut sqlite3_context, text: S) -> crate::Result<()> {
+    let bytes = text.as_ref().as_bytes();
+    unsafe {
+        // Rational: why not use CString::new here? Turns out, SQLite strings can have NUL characters
+        // inside of strings. It fucks with LENGTH()/QUOTE(), but is totally valid. So, we should allow
+        // returning strings with NULL values, as the "n" parameter sets the size limit of the string.
+        // <https://www.sqlite.org/nulinstr.html>
+        let s = CString::from_vec_unchecked(bytes.into());
+
+        let n: i32 = bytes
+            .len()
+            .try_into()
+            .map_err(|_| Error::new_message("i32 overflow, string to large"))?;
+        // CString and into_raw() is needed here, that way we can pass in a proper destructor so
+        // SQLite can drop the allocated memory (avoids segfaults)
+        sqlite3ext_result_text(context, s.into_raw(), n, Some(result_text_destructor));
+    }
     Ok(())
 }
 unsafe extern "C" fn result_text_destructor(raw: *mut c_void) {
-    drop(CString::from_raw(raw as *mut c_char));
+    drop(CString::from_raw(raw.cast::<c_char>()));
 }
 
 /// Calls [`sqlite3_result_int`](https://www.sqlite.org/c3ref/result_blob.html)

@@ -8,7 +8,7 @@ use sqlite_loadable::{
     Result,
 };
 
-use std::{mem, os::raw::c_int};
+use std::mem;
 
 static CREATE_SQL: &str = "CREATE TABLE x(value, input hidden)";
 enum Columns {
@@ -38,8 +38,7 @@ impl<'vtab> VTab<'vtab> for CharactersTable {
         _aux: Option<&Self::Aux>,
         _args: VTabArguments,
     ) -> Result<(String, CharactersTable)> {
-        let base: sqlite3_vtab = unsafe { mem::zeroed() };
-        let vtab = CharactersTable { base };
+        let vtab = CharactersTable { base: unsafe { mem::zeroed() } };
         // TODO db.config(VTabConfig::Innocuous)?;
         Ok((CREATE_SQL.to_owned(), vtab))
     }
@@ -88,9 +87,8 @@ pub struct CharactersCursor {
 }
 impl CharactersCursor {
     fn new() -> CharactersCursor {
-        let base: sqlite3_vtab_cursor = unsafe { mem::zeroed() };
         CharactersCursor {
-            base,
+            base: unsafe { mem::zeroed() },
             input: None,
             characters: None,
             idx: 0,
@@ -101,7 +99,7 @@ impl CharactersCursor {
 impl VTabCursor for CharactersCursor {
     fn filter(
         &mut self,
-        _idx_num: c_int,
+        _idx_num: i32,
         _idx_str: Option<&str>,
         values: &[*mut sqlite3_value],
     ) -> Result<()> {
@@ -125,7 +123,7 @@ impl VTabCursor for CharactersCursor {
         }
     }
 
-    fn column(&self, context: *mut sqlite3_context, i: c_int) -> Result<()> {
+    fn column(&self, context: *mut sqlite3_context, i: i32) -> Result<()> {
         match column(i) {
             Some(Columns::Value) => {
                 api::result_text(

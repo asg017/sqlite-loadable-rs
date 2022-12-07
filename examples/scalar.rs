@@ -13,7 +13,7 @@ fn yo(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<(
 // surround_rs(name)
 fn surround(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let value = api::value_text(values.get(0).expect("1st argument as name"))?;
-    api::result_text(context, format!("x{}x", value).as_str())?;
+    api::result_text(context, format!("x{}x", value))?;
     Ok(())
 }
 
@@ -34,7 +34,7 @@ fn connect(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Resu
         .iter()
         .filter_map(|v| api::value_text(v).ok())
         .collect();
-    api::result_text(context, &strings.join(seperator))?;
+    api::result_text(context, strings.join(seperator))?;
     Ok(())
 }
 

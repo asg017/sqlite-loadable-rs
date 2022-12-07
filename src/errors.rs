@@ -41,7 +41,7 @@ impl Error {
     pub fn result_error_message(self) -> String {
         match *self.0 {
             ErrorKind::DefineScalarFunction(_) => "Error defining scalar function".to_owned(),
-            ErrorKind::CStringError(_) => "UTF8 error".to_owned(),
+            ErrorKind::CStringError(e) => format!("String Nul error: {}", e),
             ErrorKind::CStringUtf8Error(_) => "utf8 err".to_owned(),
             ErrorKind::Message(msg) => msg,
             ErrorKind::TableFunction(_) => "table func error".to_owned(),

@@ -10,7 +10,7 @@ use sqlite_loadable::{api, define_scalar_function, Result};
 pub fn hello(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let name = api::value_text(values.get(0).expect("1st argument as name"))?;
 
-    api::result_text(context, format!("hello, {}!", name).as_str())?;
+    api::result_text(context, format!("hello, {}!", name))?;
     Ok(())
 }
 

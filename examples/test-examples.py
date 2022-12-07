@@ -11,7 +11,7 @@ def connect():
   db.execute("create table base_modules as select name from pragma_module_list")
 
   db.enable_load_extension(True)
-  db.load_extension("target/release/examples/libhello")
+  db.load_extension("target/debug/examples/libhello")
 
   db.execute("create temp table loaded_functions as select name from pragma_function_list where name not in (select name from base_functions) order by name")
   db.execute("create temp table loaded_modules as select name from pragma_module_list where name not in (select name from base_modules) order by name")
@@ -31,12 +31,13 @@ def execute_all(sql, args=None):
 
 class TestExamples(unittest.TestCase):
   def test_funcs(self):
-    self.assertEqual(execute_all("select hello('world'), hello('Alex'), hello(1234);"), [
-      {
-        "hello('Alex')": 'hello, Alex!',
-        "hello('world')": 'hello, world!',
-        'hello(1234)': 'hello, 1234!'
-    }
-   ])
+    hello = lambda name: db.execute("select hello(?)", [name]).fetchone()[0]
+    self.assertEqual(hello('world'), "hello, world!")
+    self.assertEqual(hello(None), "hello, !")
+    self.assertEqual(hello(1234), "hello, 1234!")
+    self.assertEqual(hello("null: x\0x"), "hello, null: x\0x!")
+    #hello("x" * (2_147_483_647 - len("hello, !") - 20) )
+    #hello("x" * (200) )
+    
 if __name__ == '__main__':
     unittest.main()
