@@ -136,7 +136,7 @@ Some real-world non-Rust examples of traditional virtual tables in SQLite includ
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
 
-```
+```bash
 $ cargo build --example hello
 $ sqlite3 :memory: '.load target/debug/examples/hello' 'select hello("world");'
 hello, world!
@@ -164,7 +164,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlite-loadable = "0.0.2"
+sqlite-loadable = "0.0.3"
 
 [lib]
 crate-type=["cdylib"]
