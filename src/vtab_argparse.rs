@@ -66,7 +66,7 @@ pub enum Argument {
 // TODO can this also support "aliased" or "computed/generated" columns,
 // like "'/item/name' as name" (xml) or "FirstName as first_name" (csv)
 // or "'$.name.first' as first_name" (json)?
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ColumnDeclaration {
     /// Name of declared column
     pub name: String,
