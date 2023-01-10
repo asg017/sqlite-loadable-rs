@@ -93,7 +93,7 @@ impl ColumnDeclaration {
     pub fn affinity(&self) -> ColumnAffinity {
         match &self.declared_type {
             Some(declared_type) => ColumnAffinity::from_declared_type(declared_type.as_str()),
-            None => crate::api::ColumnAffinity::Numeric,
+            None => crate::api::ColumnAffinity::Blob,
         }
     }
 
