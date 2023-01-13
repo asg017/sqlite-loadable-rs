@@ -35,7 +35,7 @@ jobs:
             target/debug/examples/libseries.*
   test-linux-arm7:
     name: Testing test-linux-arm7
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
