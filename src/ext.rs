@@ -219,7 +219,7 @@ pub unsafe fn sqlite3ext_result_pointer(
     }
 }
 
-pub unsafe fn sqlite3ext_result_error(context: *mut sqlite3_context, s: *const i8, n: i32) {
+pub unsafe fn sqlite3ext_result_error(context: *mut sqlite3_context, s: *const c_char, n: i32) {
     if SQLITE3_API.is_null() {
         sqlite3_result_error(context, s, n);
     } else {
@@ -236,7 +236,7 @@ pub unsafe fn sqlite3ext_result_error_code(context: *mut sqlite3_context, code: 
 }
 pub unsafe fn sqlite3ext_result_text(
     context: *mut sqlite3_context,
-    s: *const i8,
+    s: *const c_char,
     n: i32,
     d: Option<unsafe extern "C" fn(*mut c_void)>,
 ) {
@@ -277,7 +277,7 @@ pub unsafe fn sqlite3ext_get_auxdata(context: *mut sqlite3_context, n: c_int) ->
 
 pub unsafe fn sqlite3ext_create_function_v2(
     db: *mut sqlite3,
-    s: *const i8,
+    s: *const c_char,
     argc: i32,
     text_rep: i32,
     p_app: *mut c_void,
@@ -299,7 +299,7 @@ pub unsafe fn sqlite3ext_create_function_v2(
 
 pub unsafe fn sqlite3ext_create_module_v2(
     db: *mut sqlite3,
-    s: *const i8,
+    s: *const c_char,
     module: *const sqlite3_module,
     p_app: *mut c_void,
     destroy: Option<unsafe extern "C" fn(*mut c_void)>,
@@ -315,7 +315,7 @@ pub unsafe fn sqlite3ext_vtab_distinct(index_info: *mut sqlite3_index_info) -> i
     ((*SQLITE3_API).vtab_distinct.expect(EXPECT_MESSAGE))(index_info)
 }
 
-pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const i8) -> i32 {
+pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
     if SQLITE3_API.is_null() {
         return sqlite3_declare_vtab(db, s);
     }
