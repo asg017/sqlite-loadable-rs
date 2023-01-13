@@ -23,14 +23,37 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      #- run: sudo apt install -y gcc-multilib && rustup target install i686-unknown-linux-gnu
-
-      - run: cargo build --release --examples --verbose #--target=i686-unknown-linux-gnu
-      #- run: make test
+      - run: cargo build --examples --verbose
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: ubuntu-latest-exts
+          path: |
+            target/release/examples/libcharacters.*
+            target/release/examples/libhello.*
+            target/release/examples/libscalar.*
+            target/release/examples/libseries.*
+  test-linux-arm7:
+    name: Testing test-linux-arm7
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions-rs/toolchain@v1
+      - run: rustup target add armv7-unknown-linux-gnueabihf
+      - run: cargo build --examples --verbose --target armv7-unknown-linux-gnueabihf
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-linux-arm7
           path: |
             target/release/examples/libcharacters.*
             target/release/examples/libhello.*
@@ -53,8 +76,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: cargo build --release --examples --verbose
-      #- run: make test
+      - run: cargo build --examples --verbose
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -81,8 +103,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: cargo build --release --examples --verbose
-      #- run: make test
+      - run: cargo build --examples --verbose
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
