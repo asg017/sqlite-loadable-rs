@@ -58,7 +58,7 @@ jobs:
         with:
           name: test-linux-arm7
           path: |
-            target/armv7-unknown-linux-gnueabihf/debug/examples/*.dylib
+            target/armv7-unknown-linux-gnueabihf/debug/examples/*.so
   test-macos:
     name: Testing macos-latest
     runs-on: macos-latest
