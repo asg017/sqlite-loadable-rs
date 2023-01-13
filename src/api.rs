@@ -287,7 +287,17 @@ pub fn result_error(context: *mut sqlite3_context, text: &str) -> crate::Result<
     let s = CString::new(text.as_bytes())?;
     let n = text.len() as i32;
 
-    unsafe { sqlite3ext_result_error(context, s.into_raw(), n) };
+    unsafe {
+        // According to the docs: https://www.sqlite.org/c3ref/result_blob.html
+        // "The sqlite3_result_error() and sqlite3_result_error16() routines make a
+        // private copy of the error message text before they return. Hence, the
+        // calling function can deallocate or modify the text after they return
+        // without harm."
+        let s_ptr = s.into_raw();
+        sqlite3ext_result_error(context, s_ptr, n);
+        drop(CString::from_raw(s_ptr));
+    }
+
     Ok(())
 }
 
