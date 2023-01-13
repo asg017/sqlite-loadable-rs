@@ -58,10 +58,7 @@ jobs:
         with:
           name: test-linux-arm7
           path: |
-            target/debug/examples/libcharacters.*
-            target/debug/examples/libhello.*
-            target/debug/examples/libscalar.*
-            target/debug/examples/libseries.*
+            target/armv7-unknown-linux-gnueabihf/debug/examples/*.dylib
   test-macos:
     name: Testing macos-latest
     runs-on: macos-latest
