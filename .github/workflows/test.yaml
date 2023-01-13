@@ -29,10 +29,10 @@ jobs:
         with:
           name: ubuntu-latest-exts
           path: |
-            target/release/examples/libcharacters.*
-            target/release/examples/libhello.*
-            target/release/examples/libscalar.*
-            target/release/examples/libseries.*
+            target/debug/examples/libcharacters.*
+            target/debug/examples/libhello.*
+            target/debug/examples/libscalar.*
+            target/debug/examples/libseries.*
   test-linux-arm7:
     name: Testing test-linux-arm7
     runs-on: ubuntu-latest
@@ -58,10 +58,10 @@ jobs:
         with:
           name: test-linux-arm7
           path: |
-            target/release/examples/libcharacters.*
-            target/release/examples/libhello.*
-            target/release/examples/libscalar.*
-            target/release/examples/libseries.*
+            target/debug/examples/libcharacters.*
+            target/debug/examples/libhello.*
+            target/debug/examples/libscalar.*
+            target/debug/examples/libseries.*
   test-macos:
     name: Testing macos-latest
     runs-on: macos-latest
@@ -85,10 +85,10 @@ jobs:
         with:
           name: macos-latest-exts
           path: |
-            target/release/examples/libcharacters.*
-            target/release/examples/libhello.*
-            target/release/examples/libscalar.*
-            target/release/examples/libseries.*
+            target/debug/examples/libcharacters.*
+            target/debug/examples/libhello.*
+            target/debug/examples/libscalar.*
+            target/debug/examples/libseries.*
   test-windows:
     name: Testing windows-latest
     runs-on: windows-latest
@@ -112,7 +112,7 @@ jobs:
         with:
           name: windows-latest-exts
           path: |
-            target/release/examples/characters.*
-            target/release/examples/hello.*
-            target/release/examples/scalar.*
-            target/release/examples/series.*
+            target/debug/examples/characters.*
+            target/debug/examples/hello.*
+            target/debug/examples/scalar.*
+            target/debug/examples/series.*
