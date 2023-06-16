@@ -18,8 +18,8 @@ impl Error {
     pub fn new(kind: ErrorKind) -> Error {
         Error(Box::new(kind))
     }
-    pub fn new_message(message: &str) -> Error {
-        Error(Box::new(ErrorKind::Message(message.to_owned())))
+    pub fn new_message<S: AsRef<str>>(message: S) -> Error {
+        Error(Box::new(ErrorKind::Message(message.as_ref().to_owned())))
     }
 
     /// Return the specific type of this error.
