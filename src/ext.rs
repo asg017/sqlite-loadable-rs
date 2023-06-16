@@ -17,13 +17,14 @@ use std::{
 
 use sqlite3ext_sys::{
     sqlite3, sqlite3_api_routines, sqlite3_bind_text, sqlite3_column_text, sqlite3_column_value,
-    sqlite3_context, sqlite3_create_function_v2, sqlite3_create_module_v2, sqlite3_declare_vtab,
-    sqlite3_finalize, sqlite3_get_auxdata, sqlite3_index_info, sqlite3_module, sqlite3_prepare_v2,
-    sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error, sqlite3_result_error_code,
-    sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null, sqlite3_result_pointer,
-    sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt, sqlite3_value,
-    sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int,
-    sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_text, sqlite3_value_type,
+    sqlite3_context, sqlite3_create_collation_v2, sqlite3_create_function_v2,
+    sqlite3_create_module_v2, sqlite3_declare_vtab, sqlite3_finalize, sqlite3_get_auxdata,
+    sqlite3_index_info, sqlite3_module, sqlite3_prepare_v2, sqlite3_result_blob,
+    sqlite3_result_double, sqlite3_result_error, sqlite3_result_error_code, sqlite3_result_int,
+    sqlite3_result_int64, sqlite3_result_null, sqlite3_result_pointer, sqlite3_result_text,
+    sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt, sqlite3_value, sqlite3_value_blob,
+    sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int, sqlite3_value_int64,
+    sqlite3_value_pointer, sqlite3_value_text, sqlite3_value_type,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -293,6 +294,30 @@ pub unsafe fn sqlite3ext_create_function_v2(
     } else {
         ((*SQLITE3_API).create_function_v2.expect(EXPECT_MESSAGE))(
             db, s, argc, text_rep, p_app, x_func, x_step, x_final, destroy,
+        )
+    }
+}
+pub unsafe fn sqlite3ext_collation_v2(
+    db: *mut sqlite3,
+    s: *const c_char,
+    text_rep: i32,
+    p_app: *mut c_void,
+    x_compare: Option<
+        unsafe extern "C" fn(
+            *mut ::std::os::raw::c_void,
+            ::std::os::raw::c_int,
+            *const ::std::os::raw::c_void,
+            ::std::os::raw::c_int,
+            *const ::std::os::raw::c_void,
+        ) -> ::std::os::raw::c_int,
+    >,
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>,
+) -> c_int {
+    if SQLITE3_API.is_null() {
+        sqlite3_create_collation_v2(db, s, text_rep, p_app, x_compare, destroy)
+    } else {
+        ((*SQLITE3_API).create_collation_v2.expect(EXPECT_MESSAGE))(
+            db, s, text_rep, p_app, x_compare, destroy,
         )
     }
 }
