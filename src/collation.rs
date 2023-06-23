@@ -28,6 +28,7 @@ where
         F: Fn(&str, &str) -> i32,
     {
         let boxed_function: *mut F = func.cast::<F>();
+        // TODO: don't unwrap here. Maybe collation function should use &[u8] ?
         let a = std::str::from_utf8(std::slice::from_raw_parts(
             a_pointer as *const u8,
             a_size as usize,
