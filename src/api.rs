@@ -11,7 +11,8 @@ use crate::ext::{
     sqlite3ext_result_int64, sqlite3ext_result_null, sqlite3ext_result_pointer,
     sqlite3ext_result_subtype, sqlite3ext_result_text, sqlite3ext_set_auxdata,
     sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double, sqlite3ext_value_int,
-    sqlite3ext_value_int64, sqlite3ext_value_pointer, sqlite3ext_value_text, sqlite3ext_value_type,
+    sqlite3ext_value_int64, sqlite3ext_value_pointer, sqlite3ext_value_subtype,
+    sqlite3ext_value_text, sqlite3ext_value_type,
 };
 use crate::Error;
 use sqlite3ext_sys::sqlite3_mprintf;
@@ -188,6 +189,9 @@ pub fn value_int64(value: &*mut sqlite3_value) -> i64 {
 pub fn value_double(value: &*mut sqlite3_value) -> f64 {
     unsafe { sqlite3ext_value_double(value.to_owned()) }
 }
+pub fn value_json(value: &*mut sqlite3_value) -> serde_json::Result<serde_json::Value> {
+    serde_json::from_slice(value_blob(value))
+}
 
 /// Possible values that sqlite3_value_type will return for a value.
 #[derive(Eq, PartialEq)]
@@ -220,6 +224,26 @@ pub fn value_type(value: &*mut sqlite3_value) -> ValueType {
         // this same extension, so we can as well
         _ => unreachable!(),
     }
+}
+pub fn value_is_null(value: &*mut sqlite3_value) -> bool {
+    let raw_type = unsafe { sqlite3ext_value_type(value.to_owned()) };
+    (raw_type as u32) == SQLITE_NULL
+}
+
+pub fn value_subtype(value: &*mut sqlite3_value) -> u32 {
+    unsafe { sqlite3ext_value_subtype(value.to_owned()) }
+}
+
+// TODO test
+pub fn value_has_pointer_subtype(value: &*mut sqlite3_value) -> bool {
+    // https://github.com/sqlite/sqlite/blob/cc19bed8b10f4584d39aeb3e72fb6c30c3355955/src/vdbemem.c#L957
+    // 112 == 'p'
+    value_subtype(value) == 112
+}
+pub fn value_has_json_subtype(value: &*mut sqlite3_value) -> bool {
+    // https://github.com/sqlite/sqlite/blob/cc19bed8b10f4584d39aeb3e72fb6c30c3355955/src/json.c#L89
+    // 74 == 'p'
+    value_subtype(value) == 74
 }
 
 /// Calls [`sqlite3_result_text`](https://www.sqlite.org/c3ref/result_blob.html)

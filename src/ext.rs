@@ -24,7 +24,7 @@ use sqlite3ext_sys::{
     sqlite3_result_int64, sqlite3_result_null, sqlite3_result_pointer, sqlite3_result_text,
     sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt, sqlite3_value, sqlite3_value_blob,
     sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int, sqlite3_value_int64,
-    sqlite3_value_pointer, sqlite3_value_text, sqlite3_value_type,
+    sqlite3_value_pointer, sqlite3_value_subtype, sqlite3_value_text, sqlite3_value_type,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -59,6 +59,12 @@ pub unsafe fn sqlite3ext_value_type(value: *mut sqlite3_value) -> i32 {
         return sqlite3_value_type(value);
     }
     ((*SQLITE3_API).value_type.expect(EXPECT_MESSAGE))(value)
+}
+pub unsafe fn sqlite3ext_value_subtype(value: *mut sqlite3_value) -> u32 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_value_subtype(value);
+    }
+    ((*SQLITE3_API).value_subtype.expect(EXPECT_MESSAGE))(value)
 }
 
 pub unsafe fn sqlite3ext_value_bytes(arg1: *mut sqlite3_value) -> i32 {
