@@ -43,6 +43,39 @@ bitflags! {
     }
 }
 
+fn create_function_v2(
+    db: *mut sqlite3,
+    name: &str,
+    num_args: c_int,
+    func_flags: FunctionFlags,
+    p_app: *mut c_void,
+    x_func: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    x_step: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>,
+) -> Result<()> {
+    let cname = CString::new(name)?;
+    let result = unsafe {
+        sqlite3ext_create_function_v2(
+            db,
+            cname.as_ptr(),
+            num_args,
+            func_flags.bits,
+            p_app,
+            x_func,
+            x_step,
+            x_final,
+            destroy,
+        )
+    };
+
+    if result != SQLITE_OKAY {
+        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
+    } else {
+        Ok(())
+    }
+}
+
 /// Defines a new scalar function on the given database connection.
 ///
 /// # Example
@@ -89,87 +122,17 @@ where
             }
         }
     }
-    let cname = CString::new(name)?;
-    let result = unsafe {
-        sqlite3ext_create_function_v2(
-            db,
-            cname.as_ptr(),
-            num_args,
-            func_flags.bits,
-            function_pointer.cast::<c_void>(),
-            Some(x_func_wrapper::<F>),
-            None,
-            None,
-            None,
-        )
-    };
-
-    if result != SQLITE_OKAY {
-        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
-    } else {
-        Ok(())
-    }
-}
-
-// TODO only used for find_function, probably can combine with that return type?
-pub fn scalar_function_raw<F>(
-    x_func: F,
-) -> unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)
-where
-    F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
-{
-    // TODO: how does x_func even get called here???
-    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
-
-    unsafe extern "C" fn x_func_wrapper<F>(
-        context: *mut sqlite3_context,
-        argc: c_int,
-        argv: *mut *mut sqlite3_value,
-    ) where
-        F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
-    {
-        let boxed_function: *mut F = sqlite3_user_data(context).cast::<F>();
-        let args = slice::from_raw_parts(argv, argc as usize);
-        match (*boxed_function)(context, args) {
-            Ok(()) => (),
-            Err(e) => {
-                if api::result_error(context, &e.result_error_message()).is_err() {
-                    api::result_error_code(context, SQLITE_INTERNAL);
-                }
-            }
-        }
-    }
-
-    x_func_wrapper::<F>
-}
-
-pub fn delete_scalar_function(
-    db: *mut sqlite3,
-    name: &str,
-    num_args: c_int,
-    func_flags: FunctionFlags,
-) -> Result<()> {
-    let cname = CString::new(name)?;
-    let result = unsafe {
-        sqlite3ext_create_function_v2(
-            db,
-            cname.as_ptr(),
-            num_args,
-            func_flags.bits,
-            std::ptr::null_mut(),
-            None,
-            None,
-            None,
-            None,
-        )
-    };
-
-    if result != SQLITE_OKAY {
-        println!("failed with {result}");
-        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
-    } else {
-        Ok(())
-    }
+    create_function_v2(
+        db,
+        name,
+        num_args,
+        func_flags,
+        function_pointer.cast::<c_void>(),
+        Some(x_func_wrapper::<F>),
+        None,
+        None,
+        None,
+    )
 }
 
 /// Defines a new scalar function, but with the added ability to pass in an arbritary
@@ -214,25 +177,66 @@ where
         }
         Box::into_raw(b);
     }
-    let cname = CString::new(name)?;
+    create_function_v2(
+        db,
+        name,
+        num_args,
+        func_flags,
+        app_pointer.cast::<c_void>(),
+        Some(x_func_wrapper::<F, T>),
+        None,
+        None,
+        None,
+    )
+}
 
-    let result = unsafe {
-        sqlite3ext_create_function_v2(
-            db,
-            cname.as_ptr(),
-            num_args,
-            func_flags.bits,
-            app_pointer.cast::<c_void>(),
-            Some(x_func_wrapper::<F, T>),
-            None,
-            None,
-            None,
-        )
-    };
+pub fn delete_scalar_function(
+    db: *mut sqlite3,
+    name: &str,
+    num_args: c_int,
+    func_flags: FunctionFlags,
+) -> Result<()> {
+    create_function_v2(
+        db,
+        name,
+        num_args,
+        func_flags,
+        std::ptr::null_mut(),
+        None,
+        None,
+        None,
+        None,
+    )
+}
 
-    if result != SQLITE_OKAY {
-        Err(Error::new(ErrorKind::DefineScalarFunction(result)))
-    } else {
-        Ok(())
+// TODO only used for find_function, probably can combine with that return type?
+pub fn scalar_function_raw<F>(
+    x_func: F,
+) -> unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)
+where
+    F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+{
+    // TODO: how does x_func even get called here???
+    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
+
+    unsafe extern "C" fn x_func_wrapper<F>(
+        context: *mut sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut sqlite3_value,
+    ) where
+        F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+    {
+        let boxed_function: *mut F = sqlite3_user_data(context).cast::<F>();
+        let args = slice::from_raw_parts(argv, argc as usize);
+        match (*boxed_function)(context, args) {
+            Ok(()) => (),
+            Err(e) => {
+                if api::result_error(context, &e.result_error_message()).is_err() {
+                    api::result_error_code(context, SQLITE_INTERNAL);
+                }
+            }
+        }
     }
+
+    x_func_wrapper::<F>
 }
