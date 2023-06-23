@@ -157,8 +157,8 @@ pub fn value_text_notnull<'a>(value: &*mut sqlite3_value) -> Result<&'a str, Err
 /// [`sqlite3_value_pointer`](https://www.sqlite.org/bindptr.html)
 ///
 /// # Safety
-/// Calls [`Box::from_raw`]
-pub unsafe fn value_pointer<T>(value: &*mut sqlite3_value, c_name: &[u8]) -> Option<Box<T>> {
+/// should this really be unsafe???
+pub unsafe fn value_pointer<T>(value: &*mut sqlite3_value, c_name: &[u8]) -> Option<*mut T> {
     let result = sqlite3ext_value_pointer(
         value.to_owned(),
         c_name.as_ptr().cast::<c_char>().cast_mut(),
@@ -168,7 +168,7 @@ pub unsafe fn value_pointer<T>(value: &*mut sqlite3_value, c_name: &[u8]) -> Opt
         return None;
     }
 
-    Some(Box::from_raw(result.cast::<T>()))
+    Some(result.cast::<T>())
 }
 
 /// Returns the [`sqlite3_value_int`](https://www.sqlite.org/c3ref/value_blob.html) result
