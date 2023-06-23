@@ -111,6 +111,38 @@ where
     }
 }
 
+// TODO only used for find_function, probably can combine with that return type?
+pub fn scalar_function_raw<F>(
+    x_func: F,
+) -> unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)
+where
+    F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+{
+    // TODO: how does x_func even get called here???
+    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
+
+    unsafe extern "C" fn x_func_wrapper<F>(
+        context: *mut sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut sqlite3_value,
+    ) where
+        F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
+    {
+        let boxed_function: *mut F = sqlite3_user_data(context).cast::<F>();
+        let args = slice::from_raw_parts(argv, argc as usize);
+        match (*boxed_function)(context, args) {
+            Ok(()) => (),
+            Err(e) => {
+                if api::result_error(context, &e.result_error_message()).is_err() {
+                    api::result_error_code(context, SQLITE_INTERNAL);
+                }
+            }
+        }
+    }
+
+    x_func_wrapper::<F>
+}
+
 pub fn delete_scalar_function(
     db: *mut sqlite3,
     name: &str,

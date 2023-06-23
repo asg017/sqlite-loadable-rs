@@ -325,6 +325,62 @@ pub fn define_table_function<'vtab, T: VTab<'vtab> + 'vtab>(
     }
     Ok(())
 }
+pub fn define_table_function_with_find<'vtab, T: VTabFind<'vtab> + 'vtab>(
+    db: *mut sqlite3,
+    name: &str,
+    aux: Option<T::Aux>,
+) -> Result<()> {
+    let m = &Module {
+        base: sqlite3_module {
+            iVersion: 2,
+            xCreate: None,
+            xConnect: Some(rust_connect::<T>),
+            xBestIndex: Some(rust_best_index::<T>),
+            xDisconnect: Some(rust_disconnect::<T>),
+            xDestroy: Some(rust_destroy::<T>),
+            xOpen: Some(rust_open::<T>),
+            xClose: Some(rust_close::<T::Cursor>),
+            xFilter: Some(rust_filter::<T::Cursor>),
+            xNext: Some(rust_next::<T::Cursor>),
+            xEof: Some(rust_eof::<T::Cursor>),
+            xColumn: Some(rust_column::<T::Cursor>),
+            xRowid: Some(rust_rowid::<T::Cursor>),
+            xUpdate: None,
+            xBegin: None,
+            xSync: None,
+            xCommit: None,
+            xRollback: None,
+            xFindFunction: Some(rust_find_function::<T>),
+            xRename: None,
+            xSavepoint: None,
+            xRelease: None,
+            xRollbackTo: None,
+            xShadowName: None,
+        },
+        phantom: PhantomData::<&'vtab T>,
+    };
+    let cname = CString::new(name)?;
+    let p_app = match aux {
+        Some(aux) => {
+            let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
+            boxed_aux.cast::<c_void>()
+        }
+        None => ptr::null_mut(),
+    };
+    let result = unsafe {
+        sqlite3ext_create_module_v2(
+            db,
+            cname.as_ptr(),
+            &m.base,
+            p_app,
+            Some(destroy_aux::<T::Aux>),
+        )
+    };
+    if result != SQLITE_OKAY {
+        return Err(Error::new(ErrorKind::TableFunction(result)));
+    }
+    Ok(())
+}
 
 // source: https://github.com/rusqlite/rusqlite/blob/12a6d3c1b1bdd58ca7103619b8a133e76d30decd/src/vtab/mod.rs#L931
 unsafe extern "C" fn destroy_aux<T>(p: *mut c_void) {
@@ -414,7 +470,7 @@ pub fn define_virtual_table_writeable<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             xSync: None,     //Some(rust_sync::<T>),
             xCommit: None,   //Some(rust_commit::<T>),
             xRollback: None, //Some(rust_rollback::<T>),
-            xFindFunction: Some(rust_find_function::<T>),
+            xFindFunction: None,
             xRename: None,
             xSavepoint: None,
             xRelease: None,
@@ -474,7 +530,7 @@ pub fn define_virtual_table_writeable_with_transactions<
             xSync: Some(rust_sync::<T>),
             xCommit: Some(rust_commit::<T>),
             xRollback: Some(rust_rollback::<T>),
-            xFindFunction: Some(rust_find_function::<T>),
+            xFindFunction: None,
             xRename: None,
             xSavepoint: None,
             xRelease: None,
@@ -531,7 +587,7 @@ pub fn define_virtual_table_writeablex<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             xSync: None,     //Some(rust_sync::<T>),
             xCommit: None,   //Some(rust_commit::<T>),
             xRollback: None, //Some(rust_rollback::<T>),
-            xFindFunction: Some(rust_find_function::<T>),
+            xFindFunction: None,
             xRename: None,
             xSavepoint: None,
             xRelease: None,
@@ -592,6 +648,14 @@ pub trait VTab<'vtab>: Sized {
 
 pub trait VTabWriteable<'vtab>: VTab<'vtab> {
     fn update(&'vtab mut self, operation: UpdateOperation, p_rowid: *mut i64) -> Result<()>;
+}
+pub trait VTabFind<'vtab>: VTab<'vtab> {
+    // TODO should be able to return SQLITE_INDEX_CONSTRAINT_FUNCTION or more
+    fn find_function(
+        &'vtab mut self,
+        argc: i32,
+        name: &str,
+    ) -> Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>;
 }
 
 pub trait VTabWriteableWithTransactions<'vtab>: VTabWriteable<'vtab> {
@@ -985,16 +1049,26 @@ where
 /// <https://www.sqlite.org/vtab.html#the_xfindfunction_method>
 // TODO set error message properly
 unsafe extern "C" fn rust_find_function<'vtab, T: 'vtab>(
-    _vtab: *mut sqlite3_vtab,
-    _n_arg: c_int,
-    _name: *const c_char,
-    _p_xfunc: *mut Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
-    _p_p_arg: *mut *mut c_void,
+    vtab: *mut sqlite3_vtab,
+    n_arg: c_int,
+    name: *const c_char,
+    p_xfunc: *mut Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    p_p_arg: *mut *mut c_void,
 ) -> c_int
 where
-    T: VTabWriteable<'vtab>,
+    T: VTabFind<'vtab>,
 {
-    0
+    let vt = vtab.cast::<T>();
+    let name = CStr::from_ptr(name).to_bytes();
+    let name = std::str::from_utf8_unchecked(name);
+
+    match (*vt).find_function(n_arg, name) {
+        Some(function) => {
+            (*p_xfunc) = Some(function);
+            1 // TODO give option to return non 1 funcs
+        }
+        None => 0,
+    }
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xclose_method>
