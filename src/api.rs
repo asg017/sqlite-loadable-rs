@@ -6,19 +6,18 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use crate::ext::{
-    sqlite3ext_get_auxdata, sqlite3ext_result_blob, sqlite3ext_result_double,
-    sqlite3ext_result_error, sqlite3ext_result_error_code, sqlite3ext_result_int,
-    sqlite3ext_result_int64, sqlite3ext_result_null, sqlite3ext_result_pointer,
-    sqlite3ext_result_subtype, sqlite3ext_result_text, sqlite3ext_set_auxdata,
-    sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double, sqlite3ext_value_int,
-    sqlite3ext_value_int64, sqlite3ext_value_pointer, sqlite3ext_value_subtype,
-    sqlite3ext_value_text, sqlite3ext_value_type,
+    sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_result_blob,
+    sqlite3ext_result_double, sqlite3ext_result_error, sqlite3ext_result_error_code,
+    sqlite3ext_result_int, sqlite3ext_result_int64, sqlite3ext_result_null,
+    sqlite3ext_result_pointer, sqlite3ext_result_subtype, sqlite3ext_result_text,
+    sqlite3ext_set_auxdata, sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double,
+    sqlite3ext_value_int, sqlite3ext_value_int64, sqlite3ext_value_pointer,
+    sqlite3ext_value_subtype, sqlite3ext_value_text, sqlite3ext_value_type,
 };
 use crate::Error;
-use sqlite3ext_sys::sqlite3_mprintf;
 use sqlite3ext_sys::{
-    sqlite3_context, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL,
-    SQLITE_TEXT,
+    sqlite3, sqlite3_context, sqlite3_mprintf, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT,
+    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT,
 };
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
@@ -393,6 +392,9 @@ pub fn auxdata_get(context: *mut sqlite3_context, col: i32) -> *mut c_void {
     unsafe { sqlite3ext_get_auxdata(context, col) }
 }
 
+pub fn context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
+    unsafe { sqlite3ext_context_db_handle(context) }
+}
 /// A columns "affinity". <https://www.sqlite.org/datatype3.html#type_affinity>
 /* TODO maybe include extra affinities?
 - JSON - parse as text, see if it's JSON, if so then set subtype

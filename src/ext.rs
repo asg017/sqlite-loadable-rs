@@ -16,15 +16,16 @@ use std::{
 };
 
 use sqlite3ext_sys::{
-    sqlite3, sqlite3_api_routines, sqlite3_bind_text, sqlite3_column_text, sqlite3_column_value,
-    sqlite3_context, sqlite3_create_collation_v2, sqlite3_create_function_v2,
-    sqlite3_create_module_v2, sqlite3_declare_vtab, sqlite3_finalize, sqlite3_get_auxdata,
-    sqlite3_index_info, sqlite3_module, sqlite3_prepare_v2, sqlite3_result_blob,
-    sqlite3_result_double, sqlite3_result_error, sqlite3_result_error_code, sqlite3_result_int,
-    sqlite3_result_int64, sqlite3_result_null, sqlite3_result_pointer, sqlite3_result_text,
-    sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt, sqlite3_value, sqlite3_value_blob,
-    sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int, sqlite3_value_int64,
-    sqlite3_value_pointer, sqlite3_value_subtype, sqlite3_value_text, sqlite3_value_type,
+    sqlite3, sqlite3_api_routines, sqlite3_bind_text, sqlite3_column_bytes, sqlite3_column_int64,
+    sqlite3_column_text, sqlite3_column_value, sqlite3_context, sqlite3_context_db_handle,
+    sqlite3_create_collation_v2, sqlite3_create_function_v2, sqlite3_create_module_v2,
+    sqlite3_declare_vtab, sqlite3_finalize, sqlite3_get_auxdata, sqlite3_index_info,
+    sqlite3_module, sqlite3_prepare_v2, sqlite3_result_blob, sqlite3_result_double,
+    sqlite3_result_error, sqlite3_result_error_code, sqlite3_result_int, sqlite3_result_int64,
+    sqlite3_result_null, sqlite3_result_pointer, sqlite3_result_text, sqlite3_set_auxdata,
+    sqlite3_step, sqlite3_stmt, sqlite3_value, sqlite3_value_blob, sqlite3_value_bytes,
+    sqlite3_value_double, sqlite3_value_int, sqlite3_value_int64, sqlite3_value_pointer,
+    sqlite3_value_subtype, sqlite3_value_text, sqlite3_value_type,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -109,6 +110,18 @@ pub unsafe fn sqlite3ext_column_text(stmt: *mut sqlite3_stmt, c: c_int) -> *cons
     }
     ((*SQLITE3_API).column_text.expect(EXPECT_MESSAGE))(stmt, c)
 }
+pub unsafe fn sqlite3ext_column_int64(stmt: *mut sqlite3_stmt, c: c_int) -> i64 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_column_int64(stmt, c);
+    }
+    ((*SQLITE3_API).column_int64.expect(EXPECT_MESSAGE))(stmt, c)
+}
+pub unsafe fn sqlite3ext_column_bytes(stmt: *mut sqlite3_stmt, c: c_int) -> i32 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_column_bytes(stmt, c);
+    }
+    ((*SQLITE3_API).column_bytes.expect(EXPECT_MESSAGE))(stmt, c)
+}
 
 pub unsafe fn sqlite3ext_column_value(stmt: *mut sqlite3_stmt, c: c_int) -> *mut sqlite3_value {
     if SQLITE3_API.is_null() {
@@ -122,11 +135,12 @@ pub unsafe fn sqlite3ext_bind_text(
     c: c_int,
     s: *const c_char,
     n: c_int,
+    destructor: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> i32 {
     if SQLITE3_API.is_null() {
-        return sqlite3_bind_text(stmt, c, s, n, None);
+        return sqlite3_bind_text(stmt, c, s, n, destructor);
     }
-    ((*SQLITE3_API).bind_text.expect(EXPECT_MESSAGE))(stmt, c, s, n, None)
+    ((*SQLITE3_API).bind_text.expect(EXPECT_MESSAGE))(stmt, c, s, n, destructor)
 }
 
 pub unsafe fn sqlite3ext_prepare_v2(
@@ -178,6 +192,13 @@ pub unsafe fn sqlite3ext_result_int(context: *mut sqlite3_context, v: c_int) {
     }
 }
 
+// https://www.sqlite.org/c3ref/c_static.html
+// SQLITE_STATIC == 0
+// SQLITE_TRANSIENT == -1
+// TODO instead of making a copy every time, let's tranfer ownership to some Rust box
+// also maybe pass in a box/T and do the box stuff ourself?
+// or serde??
+// or slice??
 pub unsafe fn sqlite3ext_result_blob(context: *mut sqlite3_context, p: *const c_void, n: i32) {
     if SQLITE3_API.is_null() {
         sqlite3_result_blob(context, p, n, Some(mem::transmute(-1_isize)));
@@ -351,4 +372,10 @@ pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
         return sqlite3_declare_vtab(db, s);
     }
     ((*SQLITE3_API).declare_vtab.expect(EXPECT_MESSAGE))(db, s)
+}
+pub unsafe fn sqlite3ext_context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_context_db_handle(context);
+    }
+    ((*SQLITE3_API).context_db_handle.expect(EXPECT_MESSAGE))(context)
 }
