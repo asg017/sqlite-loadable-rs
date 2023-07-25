@@ -13,3 +13,6 @@ pub const SQLITE_OKAY: i32 = 0;
 
 /// https://www.sqlite.org/rescode.html#internal
 pub const SQLITE_INTERNAL: i32 = 2;
+
+/// https://www.sqlite.org/rescode.html#done
+pub const SQLITE_DONE: i32 = 101;

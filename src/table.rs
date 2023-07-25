@@ -20,8 +20,11 @@ use std::str::Utf8Error;
 
 use crate::api::{mprintf, value_type, MprintfError, ValueType};
 use crate::errors::{Error, ErrorKind, Result};
-use crate::ext::sqlitex_declare_vtab;
-use crate::ext::{sqlite3ext_create_module_v2, sqlite3ext_vtab_distinct};
+use crate::ext::{
+    sqlite3ext_create_module_v2, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in_first,
+    sqlite3ext_vtab_in_next,
+};
+use crate::ext::{sqlite3ext_vtab_in, sqlitex_declare_vtab};
 use serde::{Deserialize, Serialize};
 
 /// Possible operators for a given constraint, found and used in xBestIndex and xFilter.
@@ -138,9 +141,12 @@ impl IndexInfo {
         return constraints
             .iter()
             .zip(constraint_usages.iter_mut())
-            .map(|z| Constraint {
+            .enumerate()
+            .map(|(idx, z)| Constraint {
                 constraint: *z.0,
                 usage: z.1,
+                index_info: self.index_info,
+                constraint_idx: idx as i32,
             })
             .collect();
     }
@@ -207,6 +213,9 @@ impl IndexInfo {
 pub struct Constraint {
     pub constraint: sqlite3_index_info_sqlite3_index_constraint,
     pub usage: *mut sqlite3_index_info_sqlite3_index_constraint_usage,
+    // needed for sqlite3_vtab_* methods
+    index_info: *mut sqlite3_index_info,
+    constraint_idx: i32,
 }
 
 impl Constraint {
@@ -226,6 +235,50 @@ impl Constraint {
     }
     pub fn set_omit(&mut self, value: bool) {
         unsafe { (*self.usage).omit = u8::from(value) }
+    }
+
+    // # TODO check for sqlite version 3.38.0 (2022-02-22)
+    pub fn can_process_all_in(&self) -> bool {
+        unsafe { sqlite3ext_vtab_in(self.index_info, self.constraint_idx, -1) == 1 }
+    }
+    pub fn enable_process_all_in(&self) -> bool {
+        unsafe { sqlite3ext_vtab_in(self.index_info, self.constraint_idx, 1) == 1 }
+    }
+    pub fn disable_process_all_in(&self) -> bool {
+        unsafe { sqlite3ext_vtab_in(self.index_info, self.constraint_idx, 0) == 1 }
+    }
+}
+
+pub struct InValues {
+    list_value: *mut sqlite3_value,
+    yielded_first: bool,
+    value: *mut sqlite3_value,
+}
+impl InValues {
+    pub fn new(list_value: *mut sqlite3_value) -> Self {
+        InValues {
+            list_value,
+            yielded_first: false,
+            value: unsafe { std::mem::zeroed() },
+        }
+    }
+}
+impl Iterator for InValues {
+    type Item = Result<*mut sqlite3_value>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let rc = if self.yielded_first {
+            unsafe { sqlite3ext_vtab_in_next(self.list_value, &mut self.value) }
+        } else {
+            self.yielded_first = true;
+            unsafe { sqlite3ext_vtab_in_first(self.list_value, &mut self.value) }
+        };
+        if rc == SQLITE_DONE {
+            None
+        } else if rc == SQLITE_ERROR {
+            Some(Err(Error::new_message("TODO")))
+        } else {
+            Some(Ok(self.value))
+        }
     }
 }
 

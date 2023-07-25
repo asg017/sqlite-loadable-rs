@@ -34,3 +34,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "characters"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "in"
+crate-type = ["cdylib"]
