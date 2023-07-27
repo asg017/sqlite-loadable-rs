@@ -1,4 +1,4 @@
-//! cargo build --example hello
+//! cargo build --example load_permanent
 //! sqlite3 :memory: '.read examples/test.sql'
 
 use sqlite_loadable::prelude::*;
