@@ -5,14 +5,16 @@
 //! Useful when working with sqlite3_value or sqlite3_context.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+use crate::constants::SQLITE_OKAY;
 use crate::ext::{
-    sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_result_blob,
-    sqlite3ext_result_double, sqlite3ext_result_error, sqlite3ext_result_error_code,
-    sqlite3ext_result_int, sqlite3ext_result_int64, sqlite3ext_result_null,
-    sqlite3ext_result_pointer, sqlite3ext_result_subtype, sqlite3ext_result_text,
-    sqlite3ext_set_auxdata, sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double,
-    sqlite3ext_value_int, sqlite3ext_value_int64, sqlite3ext_value_pointer,
-    sqlite3ext_value_subtype, sqlite3ext_value_text, sqlite3ext_value_type,
+    sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_overload_function,
+    sqlite3ext_result_blob, sqlite3ext_result_double, sqlite3ext_result_error,
+    sqlite3ext_result_error_code, sqlite3ext_result_int, sqlite3ext_result_int64,
+    sqlite3ext_result_null, sqlite3ext_result_pointer, sqlite3ext_result_subtype,
+    sqlite3ext_result_text, sqlite3ext_set_auxdata, sqlite3ext_value_blob, sqlite3ext_value_bytes,
+    sqlite3ext_value_double, sqlite3ext_value_int, sqlite3ext_value_int64,
+    sqlite3ext_value_pointer, sqlite3ext_value_subtype, sqlite3ext_value_text,
+    sqlite3ext_value_type,
 };
 use crate::Error;
 use sqlite3ext_sys::{
@@ -394,6 +396,14 @@ pub fn auxdata_get(context: *mut sqlite3_context, col: i32) -> *mut c_void {
 
 pub fn context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
     unsafe { sqlite3ext_context_db_handle(context) }
+}
+pub fn overload_function(db: *mut sqlite3, func_name: &str, n_args: i32) -> crate::Result<()> {
+    let cname = CString::new(func_name)?;
+    let result = unsafe { sqlite3ext_overload_function(db, cname.as_ptr(), n_args) };
+    if result != SQLITE_OKAY {
+        return Err(Error::new_message("TODO"));
+    }
+    Ok(())
 }
 /// A columns "affinity". <https://www.sqlite.org/datatype3.html#type_affinity>
 /* TODO maybe include extra affinities?

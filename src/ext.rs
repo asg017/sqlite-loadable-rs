@@ -20,13 +20,13 @@ use sqlite3ext_sys::{
     sqlite3_column_bytes, sqlite3_column_int64, sqlite3_column_text, sqlite3_column_value,
     sqlite3_context, sqlite3_context_db_handle, sqlite3_create_collation_v2,
     sqlite3_create_function_v2, sqlite3_create_module_v2, sqlite3_declare_vtab, sqlite3_finalize,
-    sqlite3_get_auxdata, sqlite3_index_info, sqlite3_module, sqlite3_prepare_v2,
-    sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error, sqlite3_result_error_code,
-    sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null, sqlite3_result_pointer,
-    sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt, sqlite3_value,
-    sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double, sqlite3_value_int,
-    sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_subtype, sqlite3_value_text,
-    sqlite3_value_type,
+    sqlite3_get_auxdata, sqlite3_index_info, sqlite3_module, sqlite3_overload_function,
+    sqlite3_prepare_v2, sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error,
+    sqlite3_result_error_code, sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null,
+    sqlite3_result_pointer, sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt,
+    sqlite3_value, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double,
+    sqlite3_value_int, sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_subtype,
+    sqlite3_value_text, sqlite3_value_type,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -405,6 +405,12 @@ pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
         return sqlite3_declare_vtab(db, s);
     }
     ((*SQLITE3_API).declare_vtab.expect(EXPECT_MESSAGE))(db, s)
+}
+pub unsafe fn sqlite3ext_overload_function(db: *mut sqlite3, s: *const c_char, n: i32) -> i32 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_overload_function(db, s, n);
+    }
+    ((*SQLITE3_API).overload_function.expect(EXPECT_MESSAGE))(db, s, n)
 }
 pub unsafe fn sqlite3ext_context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
     if SQLITE3_API.is_null() {
