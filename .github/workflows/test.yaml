@@ -24,6 +24,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
+      - run: cargo test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -92,6 +93,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
+      - run: cargo test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -119,6 +121,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
+      - run: cargo test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
