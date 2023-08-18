@@ -6,6 +6,8 @@ pub mod collation;
 mod constants;
 pub mod entrypoints;
 pub mod errors;
+
+#[cfg(feature = "exec")]
 pub mod exec;
 pub mod ext; // TODO dont expose
 pub mod prelude;
