@@ -62,7 +62,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf
+      - run: sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf gcc-arm-linux-gnueabi
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --examples --verbose --target ${{ matrix.target }}
       - name: Upload artifacts
