@@ -40,7 +40,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - arm-unknown-linux-gnueabi
+          # - arm-unknown-linux-gnueabi # "failed to merge target specific data of file ..."
           - arm-unknown-linux-gnueabihf
           - armv7-unknown-linux-gnueabihf
           #- armv7-unknown-linux-musleabihf # "cannot produce cdylib ... as the target `armv7-unknown-linux-musleabihf` does not support these crate types"
