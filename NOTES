@@ -1,0 +1,27 @@
+TODO
+
+- aggregate functions
+  - `scalar.rs` -> `functions.rs`
+  - `Aggregate` and `Window` structs?
+  - should it use `sqlite3_aggregate_context` or something else?
+  - `create_aggregate_function`
+  - `create_window_function`
+- vtab_in
+  - `IndexInfo.is_in_operator(i32 constraint_idx)`
+  - `IndexInfo.process_in_operator(constraint_idx: i32, value: bool)`
+  - `api::iter_in_values(*mut sqlite3) -> Result<Vec<*mut sqlite3_value>>z`
+- queries
+
+  - `exec::prepare(db: *mut sqlite3, sql: &str) -> Result<Statement>`
+  - `Statement.bind_int32(column_idx: i32, value: i32)`
+  - `Statement.bind_text(column_idx: i32, value: &str)`
+  - `Statement.bind_blob(column_idx: i32, value: &[u8])`
+  - `Statement.execute() -> Iterator<Result<Row>>`
+  - `Statement.execute_to_completion()`
+  - `exec::execute(db, sql)`
+
+- tests
+  - charcters table func
+  - some vtab to test argc/argv/argparse handling
+  - vtab in tests
+  - more exec tests

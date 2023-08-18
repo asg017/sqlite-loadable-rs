@@ -18,6 +18,10 @@ bitflags = "1.3.2"
 
 [dev-dependencies]
 rusqlite = "0.29.0"
+libsqlite3-sys = {version="0.26.0", default-features = false}
+
+[features]
+exec = []
 
 [[example]]
 name = "hello"
@@ -33,4 +37,8 @@ crate-type = ["cdylib"]
 
 [[example]]
 name = "characters"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "in"
 crate-type = ["cdylib"]
