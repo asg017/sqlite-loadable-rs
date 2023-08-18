@@ -167,3 +167,30 @@ pub fn sqlite3_seriesrs_init(db: *mut sqlite3) -> Result<()> {
     define_table_function::<GenerateSeriesTable>(db, "generate_series_rs", None)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rusqlite::{ffi::sqlite3_auto_extension, Connection};
+
+    #[test]
+    fn test_rusqlite_auto_extension() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_seriesrs_init as *const (),
+            )));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+
+        let result: Vec<i32> = conn
+            .prepare("select value from generate_series_rs(?, ?)")
+            .unwrap()
+            .query_map([1, 10], |r| r.get(0))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(result, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+}
