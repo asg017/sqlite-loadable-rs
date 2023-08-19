@@ -1,19 +1,23 @@
-use sqlite3ext_sys::{sqlite3, sqlite3_stmt, sqlite3_value, SQLITE_ROW};
+use sqlite3ext_sys::{sqlite3, sqlite3_stmt, sqlite3_value};
 use std::{
     error::Error,
     ffi::{c_char, c_void, CString},
 };
 
-use crate::ext::{
-    sqlite3ext_bind_text, sqlite3ext_column_bytes, sqlite3ext_column_int64, sqlite3ext_column_text,
-    sqlite3ext_finalize, sqlite3ext_prepare_v2, sqlite3ext_step,
+use crate::{
+    constants::{SQLITE_OKAY, SQLITE_ROW},
+    ext::{
+        sqlite3ext_bind_int, sqlite3ext_bind_text, sqlite3ext_column_bytes,
+        sqlite3ext_column_int64, sqlite3ext_column_text, sqlite3ext_finalize,
+        sqlite3ext_prepare_v2, sqlite3ext_step,
+    },
 };
 
 pub struct Statement {
     stmt: *mut sqlite3_stmt,
 }
 
-unsafe extern "C" fn destructor(raw: *mut c_void) {
+unsafe extern "C" fn cstring_destructor(raw: *mut c_void) {
     drop(CString::from_raw(raw.cast::<c_char>()));
 }
 
@@ -21,16 +25,23 @@ impl Statement {
     pub fn prepare(db: *mut sqlite3, sql: &str) -> Result<Self, Box<dyn Error>> {
         let s = unsafe { CString::from_vec_unchecked(sql.into()) };
 
-        let n: i32 = sql.len().try_into().unwrap();
+        let n: i32 = sql.len().try_into()?;
         let mut stmt: *mut sqlite3_stmt = std::ptr::null_mut();
-        unsafe {
-            sqlite3ext_prepare_v2(db, s.as_ptr(), -1, &mut stmt, std::ptr::null_mut());
+        let result =
+            unsafe { sqlite3ext_prepare_v2(db, s.as_ptr(), n, &mut stmt, std::ptr::null_mut()) };
+        if result != SQLITE_OKAY {
+            Err("".into())
+        } else {
+            Ok(Statement { stmt })
         }
-        Ok(Statement { stmt })
     }
-    fn bind_i32(&mut self, param_idx: i32, value: i32) -> Result<(), Box<dyn Error>> {
-        todo!();
-        Ok(())
+    pub fn bind_i32(&mut self, param_idx: i32, value: i32) -> Result<(), Box<dyn Error>> {
+        let result = unsafe { sqlite3ext_bind_int(self.stmt, param_idx, value) };
+        if result == SQLITE_OKAY {
+            Ok(())
+        } else {
+            Err("".into())
+        }
     }
     pub fn bind_text(&mut self, param_idx: i32, value: &str) -> Result<(), Box<dyn Error>> {
         let bytes = value.as_bytes();
@@ -40,7 +51,13 @@ impl Statement {
             let n: i32 = bytes.len().try_into().unwrap();
             // CString and into_raw() is needed here, that way we can pass in a proper destructor so
             // SQLite can drop the allocated memory (avoids segfaults)
-            sqlite3ext_bind_text(self.stmt, param_idx, s.into_raw(), n, Some(destructor));
+            sqlite3ext_bind_text(
+                self.stmt,
+                param_idx,
+                s.into_raw(),
+                n,
+                Some(cstring_destructor),
+            );
         }
         Ok(())
     }
@@ -50,9 +67,6 @@ impl Statement {
     }
     pub fn execute(&mut self) -> Rows {
         Rows { stmt: self.stmt }
-    }
-    fn execute_to_completion() -> Result<(), ()> {
-        todo!();
     }
 }
 
