@@ -26,3 +26,24 @@ where
         Err(err) => err.code_extended(),
     }
 }
+
+/// Low-level wrapper around an entrypoint to a SQLite extension that loads permanently.  You
+/// shouldn't have to use this directly - the sqlite_entrypoint_permanent macro will do this
+/// for you.
+pub fn register_entrypoint_load_permanently<F>(
+    db: *mut sqlite3,
+    _pz_err_msg: *mut *mut c_char,
+    p_api: *mut sqlite3_api_routines,
+    callback: F,
+) -> c_uint
+where
+    F: Fn(*mut sqlite3) -> Result<()>,
+{
+    unsafe {
+        faux_sqlite_extension_init2(p_api);
+    }
+    match callback(db) {
+        Ok(()) => 256, // https://www.sqlite.org/rescode.html#ok_load_permanently
+        Err(err) => err.code_extended(),
+    }
+}
