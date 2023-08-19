@@ -39,6 +39,3 @@ crate-type = ["cdylib"]
 name = "characters"
 crate-type = ["cdylib"]
 
-[[example]]
-name = "in"
-crate-type = ["cdylib"]
