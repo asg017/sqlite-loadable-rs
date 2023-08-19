@@ -1,6 +1,10 @@
 use sqlite_loadable::prelude::*;
-use sqlite_loadable::{api, define_scalar_function, exec, Result};
+use sqlite_loadable::{api, define_scalar_function, Result};
 
+#[cfg(feature = "exec")]
+use sqlite_loadable::ext;
+
+#[cfg(feature = "exec")]
 pub fn t_values(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     let mut stmt =
         exec::Statement::prepare(api::context_db_handle(context), "select value from t").unwrap();
@@ -13,6 +17,7 @@ pub fn t_values(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -
     Ok(())
 }
 
+#[cfg(feature = "exec")]
 #[sqlite_entrypoint]
 pub fn sqlite3_exec_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
@@ -20,6 +25,7 @@ pub fn sqlite3_exec_init(db: *mut sqlite3) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "exec")]
 #[cfg(test)]
 mod tests {
     use super::*;
