@@ -63,7 +63,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf gcc-arm-linux-gnueabi
+      - run: sudo apt-get update && sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf gcc-arm-linux-gnueabi
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --examples --verbose --target ${{ matrix.target }}
         env:
