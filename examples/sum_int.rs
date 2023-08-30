@@ -39,9 +39,9 @@ pub fn x_inverse(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 }
 
 #[sqlite_entrypoint]
-pub fn sqlite3_sum_int_init(db: *mut sqlite3) -> Result<()> {
+pub fn sqlite3_sumint_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
-    define_window_function(db, "sum_int", -1, flags,
+    define_window_function(db, "sumint", -1, flags,
     WindowFunctionCallbacks::new(x_step, x_final, x_value, x_inverse))?;
     Ok(())
 }

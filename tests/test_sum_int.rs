@@ -36,9 +36,9 @@ pub fn x_inverse(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 }
 
 #[sqlite_entrypoint]
-pub fn sqlite3_sum_int_init(db: *mut sqlite3) -> Result<()> {
+pub fn sqlite3_sumint_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
-    define_window_function(db, "sum_int", -1, flags,
+    define_window_function(db, "sumint", -1, flags,
     WindowFunctionCallbacks::new(x_step, x_final, x_value, x_inverse))?;
     Ok(())
 }
@@ -54,7 +54,7 @@ mod tests {
     #[test]
     fn test_rusqlite_auto_extension() {
         unsafe {
-            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_sum_int_init as *const ())));
+            sqlite3_auto_extension(Some(std::mem::transmute(sqlite3_sumint_init as *const ())));
         }
 
         let conn = Connection::open_in_memory().unwrap();
@@ -65,7 +65,7 @@ mod tests {
         let _ = conn
             .execute("INSERT INTO t3 VALUES ('a', 4), ('b', 5), ('c', 3), ('d', 8), ('e', 1)", ());
 
-        let result: sqlite3_int64 = conn.query_row("SELECT x, sum_int(y) OVER (
+        let result: sqlite3_int64 = conn.query_row("SELECT x, sumint(y) OVER (
             ORDER BY x ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
           ) AS sum_y
           FROM t3 ORDER BY x", (), |x| x.get(1)).unwrap();

@@ -129,7 +129,7 @@ pub fn define_window_function_with_aux<T>(
         let aux = (*x).1;
         // .collect slows things waaaay down, so stick with slice for now
         let args = slice::from_raw_parts(argv, argc as usize);
-        let b = Box::from_raw(aux);
+        let b: Box<T> = Box::from_raw(aux);
         match boxed_function(context, args, &*b) {
             Ok(()) => (),
             Err(e) => {
@@ -180,6 +180,7 @@ pub fn define_window_function_with_aux<T>(
                 }
             }
         }
+        Box::into_raw(b);
     }
 
     unsafe extern "C" fn x_value_wrapper<T>(
@@ -198,6 +199,7 @@ pub fn define_window_function_with_aux<T>(
                 }
             }
         }
+        Box::into_raw(b);
     }
 
     create_window_function(
