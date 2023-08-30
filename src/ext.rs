@@ -26,7 +26,7 @@ use sqlite3ext_sys::{
     sqlite3_result_pointer, sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt,
     sqlite3_value, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double,
     sqlite3_value_int, sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_subtype,
-    sqlite3_value_text, sqlite3_value_type,
+    sqlite3_value_text, sqlite3_value_type, sqlite3_create_window_function,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -314,6 +314,29 @@ pub unsafe fn sqlite3ext_get_auxdata(context: *mut sqlite3_context, n: c_int) ->
         return sqlite3_get_auxdata(context, n);
     }
     ((*SQLITE3_API).get_auxdata.expect(EXPECT_MESSAGE))(context, n)
+}
+
+pub unsafe fn sqlite3ext_create_window_function(
+    db: *mut sqlite3,
+    s: *const c_char,
+    argc: i32,
+    text_rep: i32,
+    p_app: *mut c_void,
+    x_step: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_value: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_inverse: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>
+) -> c_int {
+    if SQLITE3_API.is_null() {
+        sqlite3_create_window_function(
+            db, s, argc, text_rep, p_app, x_step, x_final, x_value, x_inverse, destroy,
+        )
+    } else {
+        ((*SQLITE3_API).create_window_function.expect(EXPECT_MESSAGE))(
+            db, s, argc, text_rep, p_app, x_step, x_final, x_value, x_inverse, destroy,
+        )
+    }
 }
 
 pub unsafe fn sqlite3ext_create_function_v2(

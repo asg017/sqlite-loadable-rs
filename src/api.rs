@@ -19,7 +19,7 @@ use crate::ext::{
 use crate::Error;
 use sqlite3ext_sys::{
     sqlite3, sqlite3_context, sqlite3_mprintf, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT,
-    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT,
+    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT, sqlite3_aggregate_context,
 };
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
@@ -570,4 +570,42 @@ impl ExtendedColumnAffinity {
         // "Otherwise, the affinity is NUMERIC"
         ExtendedColumnAffinity::Numeric
     }
+}
+
+// TODO write test
+pub fn get_aggregate_context_value<T>(context: *mut sqlite3_context) -> Result<T, String>
+where
+    T: Copy,
+{
+    let p_value: *mut T = unsafe {
+        sqlite3_aggregate_context(context, std::mem::size_of::<T>() as i32) as *mut T
+    };
+
+    if p_value.is_null() {
+        return Err("sqlite3_aggregate_context returned a null pointer.".to_string());
+    }
+
+    let value: T = unsafe { *p_value };
+
+    Ok(value)
+}
+
+// TODO write test
+pub fn set_aggregate_context_value<T>(context: *mut sqlite3_context, value: T) -> Result<(), String>
+where
+    T: Copy,
+{
+    let p_value: *mut T = unsafe {
+        sqlite3_aggregate_context(context, std::mem::size_of::<T>() as i32) as *mut T
+    };
+
+    if p_value.is_null() {
+        return Err("sqlite3_aggregate_context returned a null pointer.".to_string());
+    }
+
+    unsafe {
+        *p_value = value;
+    }
+
+    Ok(())
 }
