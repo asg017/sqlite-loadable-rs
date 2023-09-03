@@ -42,7 +42,9 @@ static mut SQLITE3_API: *mut sqlite3_api_routines = std::ptr::null_mut();
 /// Instead, a sqlite3_api_routines object is provided through the entrypoint at runtime, to which
 /// sqlite_loadable will redefine the static SQLITE3_API variable that the functions below requre.
 pub unsafe fn faux_sqlite_extension_init2(api: *mut sqlite3_api_routines) {
-    SQLITE3_API = api;
+    if !api.is_null() {
+        SQLITE3_API = api;
+    }
 }
 
 //definex!("value_text", c_uchar);
@@ -327,6 +329,7 @@ pub unsafe fn sqlite3ext_create_function_v2(
     x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
     destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
+    println!("SQLITE3_API.is_null() {}", SQLITE3_API.is_null());
     if SQLITE3_API.is_null() {
         sqlite3_create_function_v2(
             db, s, argc, text_rep, p_app, x_func, x_step, x_final, destroy,

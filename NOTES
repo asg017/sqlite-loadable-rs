@@ -6,10 +6,6 @@ TODO
   - should it use `sqlite3_aggregate_context` or something else?
   - `create_aggregate_function`
   - `create_window_function`
-- vtab_in
-  - `IndexInfo.is_in_operator(i32 constraint_idx)`
-  - `IndexInfo.process_in_operator(constraint_idx: i32, value: bool)`
-  - `api::iter_in_values(*mut sqlite3) -> Result<Vec<*mut sqlite3_value>>z`
 - queries
 
   - `exec::prepare(db: *mut sqlite3, sql: &str) -> Result<Statement>`
@@ -23,5 +19,4 @@ TODO
 - tests
   - charcters table func
   - some vtab to test argc/argv/argparse handling
-  - vtab in tests
   - more exec tests

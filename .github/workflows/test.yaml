@@ -41,14 +41,14 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - arm-unknown-linux-gnueabi # "failed to merge target specific data of file ..."
-          - arm-unknown-linux-gnueabihf
-          - armv7-unknown-linux-gnueabihf
-          - armv7-unknown-linux-musleabihf # "cannot produce cdylib ... as the target `armv7-unknown-linux-musleabihf` does not support these crate types"
           - x86_64-unknown-linux-gnu
           - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl # cannot produce cdylib for ... as the target `aarch64-unknown-linux-musl` does not support these crate types
+          #- aarch64-unknown-linux-musl # cannot produce cdylib for ... as the target `aarch64-unknown-linux-musl` does not support these crate types
+          - arm-unknown-linux-gnueabihf
+          #- arm-unknown-linux-gnueabi # "failed to merge target specific data of file ..."
+          - armv7-unknown-linux-gnueabihf
+          #- armv7-unknown-linux-musleabihf # "cannot produce cdylib ... as the target `armv7-unknown-linux-musleabihf` does not support these crate types"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3

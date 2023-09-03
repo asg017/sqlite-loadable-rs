@@ -79,7 +79,7 @@ fn create_function_v2(
 /// Defines a new scalar function on the given database connection.
 ///
 /// # Example
-/// ```rs
+/// ```rust
 /// fn xyz_version(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
 ///   context_result_text(context, &format!("v{}", env!("CARGO_PKG_VERSION")))?;
 ///   Ok(())
