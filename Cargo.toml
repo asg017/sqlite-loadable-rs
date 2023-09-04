@@ -46,3 +46,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "sum_int"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "sum_int_aux"
+crate-type = ["cdylib"]

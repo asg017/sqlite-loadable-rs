@@ -186,5 +186,148 @@ pub fn define_window_function(
         destroy,
     )
 
+}
+
+// Now with aux in case the aggregate type does not implement the Copy trait
+// Implementing the Copy trait implies that the underlying bytes are copyable
+
+type ValueCallbackWithAux<T> = fn(context: *mut sqlite3_context, values: &[*mut sqlite3_value], aux: &mut T) -> Result<()>;
+type ContextCallbackWithAux<T> = fn(context: *mut sqlite3_context, aux: &mut T) -> Result<()>;
+
+struct WindowFunctionCallbacksWithAux<T>
+{
+    x_step: ValueCallbackWithAux<T>,
+    x_final: ContextCallbackWithAux<T>,
+    x_value: Option<ContextCallbackWithAux<T>>,
+    x_inverse: Option<ValueCallbackWithAux<T>>,
+    aux: T,
+}
+
+impl<T> WindowFunctionCallbacksWithAux<T> {
+    fn new(
+        x_step: ValueCallbackWithAux<T>,
+        x_final: ContextCallbackWithAux<T>,
+        x_value: Option<ContextCallbackWithAux<T>>,
+        x_inverse: Option<ValueCallbackWithAux<T>>,
+        aux: T
+    ) -> Self {
+        Self {
+            x_step,
+            x_final,
+            x_value,
+            x_inverse,
+            aux,
+        }
+    }
+}
+
+pub fn define_window_function_with_aux<T>(
+    db: *mut sqlite3,
+    name: &str,
+    num_args: c_int,
+    func_flags: FunctionFlags,
+    x_step: ValueCallbackWithAux<T>,
+    x_final: ContextCallbackWithAux<T>,
+    x_value: Option<ContextCallbackWithAux<T>>,
+    x_inverse: Option<ValueCallbackWithAux<T>>,
+    aux: T,
+) -> Result<()>
+{
+    let app_pointer = Box::into_raw(
+        Box::new(
+            WindowFunctionCallbacksWithAux::new(x_step, x_final, x_value, x_inverse, aux)
+        )
+    );
+    
+    unsafe extern "C" fn x_step_wrapper<T>(
+        context: *mut sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut sqlite3_value,
+    )
+    {
+        let x = sqlite3_user_data(context).cast::<WindowFunctionCallbacksWithAux<T>>();
+        let args = slice::from_raw_parts(argv, argc as usize);
+        match ((*x).x_step)(context, args, &mut (*x).aux) {
+            Ok(()) => (),
+            Err(e) => {
+                if api::result_error(context, &e.result_error_message()).is_err() {
+                    api::result_error_code(context, SQLITE_INTERNAL);
+                }
+            }
+        }
+    }
+
+    unsafe extern "C" fn x_inverse_wrapper<T>(
+        context: *mut sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut sqlite3_value,
+    )
+    {
+        let x = sqlite3_user_data(context).cast::<WindowFunctionCallbacksWithAux<T>>();
+        if let Some(x_inverse) = (*x).x_inverse {
+            let args = slice::from_raw_parts(argv, argc as usize);
+            match x_inverse(context, args, &mut (*x).aux) {
+                Ok(()) => (),
+                Err(e) => {
+                    if api::result_error(context, &e.result_error_message()).is_err() {
+                        api::result_error_code(context, SQLITE_INTERNAL);
+                    }
+                }
+            }    
+        }
+    }
+
+    unsafe extern "C" fn x_final_wrapper<T>(
+        context: *mut sqlite3_context,
+    )
+    {
+        let x = sqlite3_user_data(context).cast::<WindowFunctionCallbacksWithAux<T>>();
+        match ((*x).x_final)(context, &mut (*x).aux) {
+            Ok(()) => (),
+            Err(e) => {
+                if api::result_error(context, &e.result_error_message()).is_err() {
+                    api::result_error_code(context, SQLITE_INTERNAL);
+                }
+            }
+        }
+    }
+
+    unsafe extern "C" fn x_value_wrapper<T>(
+        context: *mut sqlite3_context,
+    )
+    {
+        let x = sqlite3_user_data(context).cast::<WindowFunctionCallbacksWithAux<T>>();
+        if let Some(x_value) = (*x).x_value {
+            match x_value(context, &mut (*x).aux) {
+                Ok(()) => (),
+                Err(e) => {
+                    if api::result_error(context, &e.result_error_message()).is_err() {
+                        api::result_error_code(context, SQLITE_INTERNAL);
+                    }
+                }
+            }    
+        }
+    }
+
+    unsafe extern "C" fn destroy(
+        p_app: *mut c_void,
+    )
+    {
+        let callbacks = p_app.cast::<WindowFunctionCallbacks>();
+        let _ = Box::from_raw(callbacks); // drop
+    }
+
+    create_window_function(
+        db,
+        name,
+        num_args,
+        func_flags,
+        app_pointer.cast::<c_void>(),
+        x_step_wrapper::<T>,
+        x_final_wrapper::<T>,
+        Some(x_value_wrapper::<T>),
+        Some(x_inverse_wrapper::<T>),
+        destroy,
+    )
 
 }

@@ -137,6 +137,7 @@ Some real-world non-Rust examples of traditional virtual tables in SQLite includ
 
 A window function can be defined using the `define_window_function`. The step and final function must be defined. See the [`sum_int.rs`](./examples/sum_int.rs) implementation and the [sqlite's own example](https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions) for a full solution.
 
+There is also a [`define_window_function_with_aux`](./src/window.rs), in case a mutable auxillary object is required in place of the context aggregate pointer provided by sqlite3.
 
 
 ## Examples
