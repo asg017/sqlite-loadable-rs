@@ -132,6 +132,13 @@ select * from xxx;
 
 Some real-world non-Rust examples of traditional virtual tables in SQLite include the [CSV virtual table](https://www.sqlite.org/csv.html), the full-text search [fts5 extension](https://www.sqlite.org/fts5.html#fts5_table_creation_and_initialization), and the [R-Tree extension](https://www.sqlite.org/rtree.html#creating_an_r_tree_index).
 
+
+### Window (aggregate) functions
+
+A window function can be defined using the `define_window_function`. The step and final function must be defined. See the [`sum_int.rs`](./examples/sum_int.rs) implementation and the [sqlite's own example](https://www.sqlite.org/windowfunctions.html#user_defined_aggregate_window_functions) for a full solution.
+
+
+
 ## Examples
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
