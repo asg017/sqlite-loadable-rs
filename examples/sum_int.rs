@@ -3,7 +3,7 @@
 
 use libsqlite3_sys::sqlite3_int64;
 use sqlite_loadable::prelude::*;
-use sqlite_loadable::window::{WindowFunctionCallbacks, define_window_function};
+use sqlite_loadable::window::define_window_function;
 use sqlite_loadable::{api, Result};
 
 /// Example inspired by sqlite3's sumint
@@ -41,8 +41,10 @@ pub fn x_inverse(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 #[sqlite_entrypoint]
 pub fn sqlite3_sumint_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
-    define_window_function(db, "sumint", -1, flags,
-    WindowFunctionCallbacks::new(x_step, x_final, x_value, x_inverse))?;
+    define_window_function(
+        db, "sumint", -1, flags,
+        x_step, x_final, Some(x_value), Some(x_inverse),
+    )?;
     Ok(())
 }
 
