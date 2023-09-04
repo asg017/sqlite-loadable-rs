@@ -78,8 +78,6 @@ impl WindowFunctionCallbacks {
     }
 }
 
-// TODO add documentation
-/// The aux parameter can be used to pass another context object altogether
 pub fn define_window_function(
     db: *mut sqlite3,
     name: &str,
@@ -172,7 +170,7 @@ pub fn define_window_function(
     )
     {
         let callbacks = p_app.cast::<WindowFunctionCallbacks>();
-        let _ = Box::from(callbacks); // drop
+        let _ = Box::from_raw(callbacks); // drop
     }
 
     create_window_function(
