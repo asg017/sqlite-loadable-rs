@@ -27,7 +27,7 @@ pub use bit_flags::FunctionFlags;
 pub use scalar::{define_scalar_function, define_scalar_function_with_aux};
 
 #[doc(inline)]
-pub use window::{WindowFunctionCallbacks, define_window_function};
+pub use window::define_window_function;
 
 #[doc(inline)]
 pub use collation::define_collation;

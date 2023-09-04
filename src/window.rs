@@ -54,7 +54,7 @@ fn create_window_function(
 type ValueCallback = fn(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()>;
 type ContextCallback = fn(context: *mut sqlite3_context) -> Result<()>;
 
-pub struct WindowFunctionCallbacks
+struct WindowFunctionCallbacks
 {
     x_step: ValueCallback,
     x_final: ContextCallback,
@@ -63,7 +63,7 @@ pub struct WindowFunctionCallbacks
 }
 
 impl WindowFunctionCallbacks {
-    pub fn new(
+    fn new(
         x_step: ValueCallback,
         x_final: ContextCallback,
         x_value: Option<ContextCallback>,
