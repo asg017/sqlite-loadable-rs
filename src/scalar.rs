@@ -139,35 +139,39 @@ where
 /// application "pointer" as any rust type. Can be accessed in the callback
 /// function as the 3rd argument, as a reference.
 /// <https://www.sqlite.org/c3ref/create_function.html#:~:text=The%20fifth%20parameter%20is%20an%20arbitrary%20pointer.>
-pub fn define_scalar_function_with_aux<F, T>(
+type ValueScalarCallbackWithAux<T> = fn(*mut sqlite3_context, &[*mut sqlite3_value], &mut T) -> Result<()>;
+
+struct ScalarCallbackWithAux<T> {
+    x_func: ValueScalarCallbackWithAux<T>,
+    aux: T,
+}
+
+pub fn define_scalar_function_with_aux<T>(
     db: *mut sqlite3,
     name: &str,
     num_args: c_int,
-    x_func: F,
+    x_func: ValueScalarCallbackWithAux<T>,
     func_flags: FunctionFlags,
     aux: T,
 ) -> Result<()>
-where
-    F: Fn(*mut sqlite3_context, &[*mut sqlite3_value], &T) -> Result<()>,
 {
-    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
-    let aux_pointer: *mut T = Box::into_raw(Box::new(aux));
-    let app_pointer = Box::into_raw(Box::new((function_pointer, aux_pointer)));
+    let app_pointer = Box::into_raw(
+        Box::new(
+            ScalarCallbackWithAux { x_func, aux }
+        )
+    );
 
-    unsafe extern "C" fn x_func_wrapper<F, T>(
+    unsafe extern "C" fn x_func_wrapper<T>(
         context: *mut sqlite3_context,
         argc: c_int,
         argv: *mut *mut sqlite3_value,
-    ) where
-        F: Fn(*mut sqlite3_context, &[*mut sqlite3_value], &T) -> Result<()>,
+    )
     {
-        let x = sqlite3_user_data(context).cast::<(*mut F, *mut T)>();
-        let boxed_function = (*x).0;
-        let aux = (*x).1;
-        // .collect slows things waaaay down, so stick with slice for now
+        let x = sqlite3_user_data(context).cast::<ScalarCallbackWithAux<T>>();
+
         let args = slice::from_raw_parts(argv, argc as usize);
-        let b = Box::from_raw(aux);
-        match (*boxed_function)(context, args, &*b) {
+
+        match ((*x).x_func)(context, args, &mut (*x).aux) {
             Ok(()) => (),
             Err(e) => {
                 if api::result_error(context, &e.result_error_message()).is_err() {
@@ -175,18 +179,26 @@ where
                 }
             }
         }
-        Box::into_raw(b);
     }
+
+    unsafe extern "C" fn destroy<T>(
+        p_app: *mut c_void,
+    )
+    {
+        let callbacks = p_app.cast::<ScalarCallbackWithAux<T>>();
+        let _ = Box::from_raw(callbacks); // drop
+    }
+
     create_function_v2(
         db,
         name,
         num_args,
         func_flags,
         app_pointer.cast::<c_void>(),
-        Some(x_func_wrapper::<F, T>),
+        Some(x_func_wrapper::<T>),
         None,
         None,
-        None,
+        Some(destroy::<T>),
     )
 }
 
