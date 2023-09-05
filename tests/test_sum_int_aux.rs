@@ -24,10 +24,10 @@ pub fn x_value(context: *mut sqlite3_context, i: &mut i64) -> Result<()> {
     Ok(())
 }
 
-pub fn x_inverse(context: *mut sqlite3_context, values: &[*mut sqlite3_value], i: &mut i64) -> Result<()> {
+pub fn x_inverse(_context: *mut sqlite3_context, values: &[*mut sqlite3_value], i: &mut i64) -> Result<()> {
     assert!(values.len() == 1);
     let new_value = api::value_int64(values.get(0).expect("should be one"));
-    api::set_aggregate_context_value::<sqlite3_int64>(context, *i - new_value)?;
+    *i = *i - new_value;
     Ok(())
 }
 
