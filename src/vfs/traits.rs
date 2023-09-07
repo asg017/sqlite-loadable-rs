@@ -2,40 +2,42 @@ use std::os::raw::{c_int, c_void, c_char};
 
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
 
-// TODO replace return types c_int with Result
+// TODO pass i_version to actual C struct
+// TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks)
+/// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
 pub trait SqliteIoMethods {
     fn close(&mut self) -> Result<(), c_int>;
     fn read(
         &mut self,
         buf: *mut c_void,
-        iAmt: c_int,
-        iOfst: sqlite3_int64,
+        i_amt: c_int,
+        i_ofst: sqlite3_int64,
     ) -> Result<(), c_int>;
     fn write(
         &mut self,
         buf: *const c_void,
-        iAmt: c_int,
-        iOfst: sqlite3_int64,
+        i_amt: c_int,
+        i_ofst: sqlite3_int64,
     ) -> Result<(), c_int>;
     fn truncate(&mut self, size: sqlite3_int64) -> Result<(), c_int>;
     fn sync(&mut self, flags: c_int) -> Result<(), c_int>;
-    fn file_size(&mut self, pSize: *mut sqlite3_int64) -> Result<(), c_int>;
+    fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<(), c_int>;
     fn lock(&mut self, arg2: c_int) -> Result<(), c_int>;
     fn unlock(&mut self, arg2: c_int) -> Result<(), c_int>;
     fn check_reserved_lock(
         &mut self,
-        pResOut: *mut c_int,
+        p_res_out: *mut c_int,
     ) -> Result<(), c_int>;
     fn file_control(
         &mut self,
         op: c_int,
-        pArg: *mut c_void,
+        p_arg: *mut c_void,
     ) -> Result<(), c_int>;
     fn sector_size(&mut self) -> Result<(), c_int>;
     fn device_characteristics(&mut self) -> Result<(), c_int>;
     fn shm_map(
         &mut self,
-        iPg: c_int,
+        i_pg: c_int,
         pgsz: c_int,
         arg2: c_int,
         arg3: *mut *mut c_void,
@@ -49,21 +51,22 @@ pub trait SqliteIoMethods {
     fn shm_barrier(&mut self) -> Result<(), c_int>;
     fn shm_unmap(
         &mut self,
-        deleteFlag: c_int,
+        delete_flag: c_int,
     ) -> Result<(), c_int>;
     fn fetch(
         &mut self,
-        iOfst: sqlite3_int64,
-        iAmt: c_int,
+        i_ofst: sqlite3_int64,
+        i_amt: c_int,
         pp: *mut *mut c_void,
     ) -> Result<(), c_int>;
     fn unfetch(
         &mut self,
-        iOfst: sqlite3_int64,
+        i_ofst: sqlite3_int64,
         p: *mut c_void,
     ) -> Result<(), c_int>;
 }
 
+// TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks)
 pub trait SqliteVfs {
     fn open(
         &mut self,
