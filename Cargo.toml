@@ -42,3 +42,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "load_permanent"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "mem_vfs"
+crate-type = ["cdylib"]

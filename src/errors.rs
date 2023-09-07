@@ -40,6 +40,7 @@ impl Error {
     }
     pub fn result_error_message(self) -> String {
         match *self.0 {
+            ErrorKind::DefineVfs(_) => "Error defining VFS".to_owned(), // TODO test
             ErrorKind::DefineScalarFunction(_) => "Error defining scalar function".to_owned(),
             ErrorKind::CStringError(e) => format!("String Nul error: {}", e),
             ErrorKind::CStringUtf8Error(_) => "utf8 err".to_owned(),
@@ -52,6 +53,7 @@ impl Error {
 /// The specific type of an error.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErrorKind {
+    DefineVfs(c_int),
     DefineScalarFunction(c_int),
     CStringError(NulError),
     CStringUtf8Error(std::str::Utf8Error),
@@ -88,6 +90,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self.0 {
             ErrorKind::DefineScalarFunction(ref err) => err.fmt(f),
+            ErrorKind::DefineVfs(i) => f.write_fmt(format_args!("Define vfs error: {}", i)), // TODO test
             _ => unreachable!(),
         }
     }

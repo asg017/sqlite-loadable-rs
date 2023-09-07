@@ -1,3 +1,3 @@
-mod traits;
-mod file;
-mod methods;
+pub mod traits;
+pub mod vfs;
+pub mod file;

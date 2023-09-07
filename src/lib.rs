@@ -30,3 +30,9 @@ pub use table::{
     define_table_function, define_virtual_table, define_virtual_table_writeable,
     define_virtual_table_writeablex, BestIndexError,
 };
+
+#[doc(inline)]
+pub use vfs::vfs::declare_vfs;
+pub use vfs::file::declare_file;
+pub use vfs::traits::{SqliteIoMethods, SqliteVfs};
+
