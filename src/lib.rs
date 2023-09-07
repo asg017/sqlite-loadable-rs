@@ -14,6 +14,7 @@ pub mod prelude;
 pub mod scalar;
 pub mod table;
 pub mod vtab_argparse;
+pub mod vfs;
 
 #[doc(inline)]
 pub use errors::{Error, ErrorKind, Result};
