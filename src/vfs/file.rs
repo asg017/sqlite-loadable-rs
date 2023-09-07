@@ -1,3 +1,6 @@
+#![ allow(non_snake_case)] 
+#![ allow(unused)] 
+
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr};
 use std::ffi::CString;
 use std::os::raw::{c_int, c_char, c_void};
@@ -278,18 +281,18 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
 }
 
 /// Increment vfs_version for production purposes
-unsafe fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32, vfs_version: c_int) -> sqlite3_vfs {
+unsafe fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
     let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
     let size_ptr = std::mem::size_of::<*mut T>();
     let vfs_name = CString::new(name)
         .expect("should be a C string").as_ptr().to_owned();
 
     sqlite3_vfs {
-        iVersion: vfs_version,
+        iVersion: 3, // this library targets version 3?
+        pNext: ptr::null_mut(), // sqlite3 will change this
         pAppData: vfs_ptr.cast(),
         szOsFile: size_ptr as i32,
         mxPathname: max_path_name_size,
-        pNext: ptr::null_mut(), // sqlite3 will change this
         zName: vfs_name,
 
         // TODO some are optional, break down to multiple traits?
