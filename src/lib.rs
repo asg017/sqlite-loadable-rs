@@ -32,7 +32,7 @@ pub use table::{
 };
 
 #[doc(inline)]
-pub use vfs::vfs::declare_vfs;
+pub use vfs::vfs::register_vfs;
 pub use vfs::file::declare_file;
 pub use vfs::traits::{SqliteIoMethods, SqliteVfs};
 

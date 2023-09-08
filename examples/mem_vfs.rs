@@ -2,9 +2,10 @@
 //! sqlite3 :memory: '.read examples/test.sql'
 #![allow(unused)]
 
+use sqlite_loadable::vfs::vfs::declare_vfs;
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, declare_file, declare_vfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, declare_file, register_vfs};
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 
 use std::os::raw::{c_int, c_void, c_char};
@@ -79,13 +80,15 @@ impl SqliteVfs for MemVfs {
     }
 
     fn init (&self) -> (sqlite3_file, Option<c_int>) {
-        (declare_file::<MemIoMethods>(), None)
+        (declare_file::<MemFile>(), None)
     }
 }
 
-struct MemIoMethods;
+struct MemFile {
+    data: Vec<u8>
+}
 
-impl SqliteIoMethods for MemIoMethods {
+impl SqliteIoMethods for MemFile {
     fn close(&mut self) -> Result<()> {
         Ok(())
     }
@@ -162,13 +165,13 @@ impl SqliteIoMethods for MemIoMethods {
 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
-    // Why is this necessary in the original example?
-    // mem_vfs.pAppData = sqlite3_vfs_find(0);
+    // Why is `sqlite3_vfs_find(0)` necessary in the original example?
+    // Answer: to fetch the default sqlite3_vfs instance to copy behaviour from the default vfs
+    // TODO cksumvfs.c and memvfs.c hold a ptr to the default vfs, see the ORIGVFS macro, mind you,
+    // TODO it must not be double-freed, ownership should stay with sqlite3
+    // code: mem_vfs.pAppData = sqlite3_vfs_find(0);
 
     let vfs: sqlite3_vfs = declare_vfs::<MemVfs>(MemVfs {}, "memvfs", 1024);
-    let vfs_ptr = Box::into_raw(Box::new(vfs));
-
-    unsafe { sqlite3_vfs_register(vfs_ptr, 1); } // TODO wrap, to use pretty syntax: api::register_vfs(vfs_ptr, true)?;
-
+    register_vfs(vfs, true)?;
     Ok(())
 }

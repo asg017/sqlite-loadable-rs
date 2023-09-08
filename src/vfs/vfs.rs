@@ -1,7 +1,7 @@
 #![ allow(non_snake_case)] 
 #![ allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, sqlite3_vfs_register};
 use std::ffi::CString;
 use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
@@ -329,3 +329,15 @@ pub fn declare_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) ->
     }
 }
 
+pub fn register_vfs(vfs: sqlite3_vfs, make_default: bool) -> Result<(), String> {
+    let translate_to_int = if make_default { 1 } else { 0 };
+
+    let result = unsafe { sqlite3_vfs_register(Box::into_raw(Box::new(vfs)),
+        translate_to_int) };
+    
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(format!("sqlite3_vfs_register failed with error code: {}", result))
+    }
+}
