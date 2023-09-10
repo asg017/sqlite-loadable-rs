@@ -1,7 +1,7 @@
-#![ allow(non_snake_case)] 
+#![ allow(non_snake_case)]
 #![ allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, sqlite3_vfs_register};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, sqlite3_vfs_register, sqlite3_vfs_find};
 use std::ffi::CString;
 use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
@@ -16,15 +16,8 @@ pub unsafe extern "C" fn x_open<T: SqliteVfs>(
     p_out_flags: *mut c_int,
 ) -> c_int {
     let mut b = Box::<dyn SqliteVfs>::from_raw(p_vfs.cast::<T>());
-
-    let (new_file, opt_flags) = b.init();
-    *p_file = new_file;
-
-    if let Some(out_flags) = opt_flags {
-        *p_out_flags = out_flags;
-    }
     
-    match b.open(z_name, flags) {
+    match b.open(z_name, p_file, flags, p_out_flags) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -288,44 +281,42 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     ptr::null() // TODO
 }
 
-unsafe fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
-    let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
-    let size_ptr = std::mem::size_of::<*mut T>(); // this should remain the same
-    let vfs_name = CString::new(name)
-        .expect("should be a C string").as_ptr().to_owned();
-
-    sqlite3_vfs {
-        iVersion: 3, // this library targets version 3?
-        pNext: ptr::null_mut(), // sqlite3 will change this
-        pAppData: vfs_ptr.cast(),
-        szOsFile: size_ptr as i32,
-        mxPathname: max_path_name_size,
-        zName: vfs_name,
-
-        // TODO some are optional, break down to multiple traits?
-        // TODO investigate: maybe use attribute to generate a static dispatch type, if it's too slow
-        xOpen: Some(x_open::<T>),
-        xDelete: Some(x_delete::<T>),
-        xAccess: Some(x_access::<T>),
-        xFullPathname: Some(x_full_pathname::<T>),
-        xDlOpen: Some(x_dl_open::<T>),
-        xDlError: Some(x_dl_error::<T>),
-        xDlSym: Some(x_dl_sym::<T>),
-        xDlClose: Some(x_dl_close::<T>),
-        xRandomness: Some(x_randomness::<T>),
-        xSleep: Some(x_sleep::<T>),
-        xCurrentTime: Some(x_current_time::<T>),
-        xGetLastError: Some(x_get_last_error::<T>),
-        xCurrentTimeInt64: Some(x_current_time_int64::<T>),
-        xSetSystemCall: Some(x_set_system_call::<T>),
-        xGetSystemCall: Some(x_get_system_call::<T>),
-        xNextSystemCall: Some(x_next_system_call::<T>),
-    }
-}
-
-pub fn declare_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
+pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
     unsafe {
-        create_vfs(vfs, name, max_path_name_size)
+        let default_vfs_ptr = sqlite3_vfs_find(ptr::null());
+        let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
+        let size_ptr = std::mem::size_of::<*mut T>(); // this should remain the same
+        let vfs_name = CString::new(name)
+            .expect("should be a C string").as_ptr().to_owned();
+    
+        sqlite3_vfs {
+            iVersion: 3, // this library targets version 3?
+            pNext: ptr::null_mut(), // sqlite3 will change this
+            pAppData: vfs_ptr.cast(),
+            szOsFile: size_ptr as i32,
+            mxPathname: max_path_name_size,
+            zName: vfs_name,
+    
+            // TODO some are optional, break down to multiple traits?
+            // TODO investigate: maybe use attribute to generate a static dispatch type, if it's too slow
+            xOpen: Some(x_open::<T>),
+            xDelete: Some(x_delete::<T>),
+            xAccess: Some(x_access::<T>),
+            xFullPathname: Some(x_full_pathname::<T>),
+            xDlOpen: Some(x_dl_open::<T>),
+            xDlError: Some(x_dl_error::<T>),
+            xDlSym: Some(x_dl_sym::<T>),
+            xDlClose: Some(x_dl_close::<T>),
+            xRandomness: Some(x_randomness::<T>),
+            xSleep: Some(x_sleep::<T>),
+            xCurrentTime: Some(x_current_time::<T>),
+            xGetLastError: Some(x_get_last_error::<T>),
+            xCurrentTimeInt64: Some(x_current_time_int64::<T>),
+            xSetSystemCall: Some(x_set_system_call::<T>),
+            xGetSystemCall: Some(x_get_system_call::<T>),
+            xNextSystemCall: Some(x_next_system_call::<T>),
+        }
+    
     }
 }
 

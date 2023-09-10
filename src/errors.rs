@@ -40,7 +40,7 @@ impl Error {
     }
     pub fn result_error_message(self) -> String {
         match *self.0 {
-            ErrorKind::DefineVfs(_) => "Error defining VFS".to_owned(), // TODO test
+            ErrorKind::DefineVfs(i) => format!("Error resulted after calling function: {}", i),
             ErrorKind::DefineScalarFunction(_) => "Error defining scalar function".to_owned(),
             ErrorKind::CStringError(e) => format!("String Nul error: {}", e),
             ErrorKind::CStringUtf8Error(_) => "utf8 err".to_owned(),

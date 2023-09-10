@@ -69,12 +69,12 @@ pub trait SqliteIoMethods {
 
 // TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks)
 pub trait SqliteVfs {
-    fn init (&self) -> (sqlite3_file, Option<c_int>);
-
     fn open(
         &mut self,
         z_name: *const c_char,
+        p_file: *mut sqlite3_file,
         flags: c_int,
+        p_out_flags: *mut c_int,
     ) -> Result<()>;
 
     fn delete(

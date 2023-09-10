@@ -355,7 +355,7 @@ unsafe fn create_io_methods<T: SqliteIoMethods>() -> sqlite3_io_methods {
     }
 }
 
-pub fn declare_file<T: SqliteIoMethods>() -> sqlite3_file {
+pub fn create_file_ptr<T: SqliteIoMethods>() -> sqlite3_file {
     unsafe {
         let methods = create_io_methods::<T>();
         let methods_ptr = Box::into_raw(Box::new(methods));
