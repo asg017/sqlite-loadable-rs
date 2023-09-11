@@ -1,7 +1,7 @@
 #!/bin/sh
-NAME="valgrind:1.0"
+NAME="io_uring:1.0"
 docker image inspect "$NAME" || docker build -t "$NAME" .
-docker run -it -v $PWD:/tmp -w /tmp valgrind:1.0
+docker run -it -v $PWD:/tmp -w /tmp $NAME
 
 # see https://github.com/jfrimmel/cargo-valgrind/pull/58/commits/1c168f296e0b3daa50279c642dd37aecbd85c5ff#L59
 # scan for double frees and leaks
