@@ -281,10 +281,13 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     ptr::null() // TODO
 }
 
+
+
 pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
     unsafe {
         let default_vfs_ptr = sqlite3_vfs_find(ptr::null());
         let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
+        // TODO also put sqlite3_file with vfs
         let size_ptr = std::mem::size_of::<*mut T>(); // this should remain the same
         let vfs_name = CString::new(name)
             .expect("should be a C string").as_ptr().to_owned();
@@ -319,6 +322,8 @@ pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> 
     
     }
 }
+
+
 
 pub fn register_vfs(vfs: sqlite3_vfs, make_default: bool) -> Result<(), String> {
     let translate_to_int = if make_default { 1 } else { 0 };

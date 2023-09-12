@@ -2,10 +2,11 @@
 //! sqlite3 :memory: '.read examples/test.sql'
 #![allow(unused)]
 
+use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_ptr, register_vfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_ptr, register_vfs, Error, ErrorKind};
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 
 use std::os::raw::{c_int, c_void, c_char};
@@ -18,7 +19,39 @@ struct MemVfs {
 
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
-        unsafe { *p_file = create_file_ptr::<MemFile>(); }
+        let rust_file = MemFile {
+            size: 0,
+            max_size: 0,
+            file_content: Vec::new(),
+        };
+        
+        // TODO finish implementation
+
+        /*
+        memset(p, 0, sizeof(*p));
+
+        if( (flags & SQLITE_OPEN_MAIN_DB) == 0 ) return SQLITE_CANTOPEN;
+
+        p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
+
+        if( p->aData == 0 ) return SQLITE_CANTOPEN;
+
+        p->sz = sqlite3_uri_int64(zName,"sz",0);
+        
+        if( p->sz < 0 ) return SQLITE_CANTOPEN;
+        
+        // Set MemFile parameter
+        p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
+        
+        if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
+
+        // This is implemented and active by default
+        p->bFreeOnClose = sqlite3_uri_boolean(zName,"freeonclose",0);
+
+        // This is implemented with traits
+        pFile->pMethods = &mem_io_methods;
+        */
+        unsafe { *p_file = *create_file_ptr( rust_file ); }
     
         Ok(())
     }
@@ -86,23 +119,61 @@ impl SqliteVfs for MemVfs {
 }
 
 struct MemFile {
-    data: Vec<u8>
+    size: sqlite3_int64, // equal to self.data.len()
+    max_size: sqlite3_int64,
+    file_content: Vec<u8>,
 }
 
 impl SqliteIoMethods for MemFile {
     fn close(&mut self) -> Result<()> {
+        // The example contains an explicit deallocation,
+        // but the base implementation takes care of that already
+        // with a Box::from_raw, that forces the datastructure
+        // to drop at the end of the scope
         Ok(())
     }
 
     fn read(&mut self, buf: *mut c_void, i_amt: c_int, i_ofst: sqlite3_int64) -> Result<()> {
         Ok(())
+        /*
+        // TODO write requested data to buf
+        memcpy(buf, p->aData+iOfst, iAmt);
+        */
     }
 
     fn write(&mut self, buf: *const c_void, i_amt: c_int, i_ofst: sqlite3_int64) -> Result<()> {
         Ok(())
+        /*
+            if( (iOfst + iAmt) > p->sz ) {
+                // Error if exceeds allocation
+                if( (iOfst+iAmt) > p->szMax ) {
+                    return SQLITE_FULL;
+                }
+                // Pre-allocate space with memset
+                if( iOfst > p->sz ) {
+                    memset(p->aData + p->sz, 0, iOfst - p->sz);
+                }
+                p->sz = iOfst + iAmt;
+            }
+            // append buf to memory
+            memcpy(p->aData + iOfst, buf, iAmt);
+            return SQLITE_OK;
+        */
     }
 
     fn truncate(&mut self, size: sqlite3_int64) -> Result<()> {
+        // TODO error if allocation is full
+        // original:
+        /*
+            if( size > p->sz ) {
+                if( size > p->szMax ) {
+                    return SQLITE_FULL;
+                }
+                memset(p->aData + p->sz, 0, size-p->sz); // double the size
+            }
+            p->sz = size; 
+            return SQLITE_OK;        
+        */
         Ok(())
     }
 
@@ -111,6 +182,7 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()> {
+        // TODO *p_size = self.file_content.len()
         Ok(())
     }
 
@@ -123,27 +195,50 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn check_reserved_lock(&mut self, p_res_out: *mut c_int) -> Result<()> {
+        // TODO OK(()) -> *pResOut = 0
+        // TODO consider putting this in a struct
         Ok(())
     }
 
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
         Ok(())
+        // TODO change type to support this:
+        /*
+            int rc = SQLITE_NOTFOUND;
+            if( op==SQLITE_FCNTL_VFSNAME ){
+                *(char**)pArg = sqlite3_mprintf("mem(%p,%lld)", p->aData, p->sz);
+                rc = SQLITE_OK;
+            }
+            // TODO use rust formatting and then create pointers
+            return rc;
+        */
     }
 
     fn sector_size(&mut self) -> Result<()> {
         Ok(())
+        // TODO change type to support this: 1024
+        // TODO consider putting this in a struct
     }
 
     fn device_characteristics(&mut self) -> Result<()> {
         Ok(())
+        // TODO change type to support this
+        // TODO consider putting this in a struct
+        /*
+        SQLITE_IOCAP_ATOMIC | 
+         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
+         SQLITE_IOCAP_SAFE_APPEND |
+         SQLITE_IOCAP_SEQUENTIAL
+        */
     }
 
     fn shm_map(&mut self, i_pg: c_int, pgsz: c_int, arg2: c_int, arg3: *mut *mut c_void) -> Result<()> {
-        Ok(())
+        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
     }
 
     fn shm_lock(&mut self, offset: c_int, n: c_int, flags: c_int) -> Result<()> {
-        Ok(())
+        // SQLITE_IOERR_SHMLOCK is deprecated
+        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
     }
 
     fn shm_barrier(&mut self) -> Result<()> {
@@ -155,6 +250,8 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn fetch(&mut self, i_ofst: sqlite3_int64, i_amt: c_int, pp: *mut *mut c_void) -> Result<()> {
+        // unsafe { *pp = self.file_content + }
+        // TODO provide memory location
         Ok(())
     }
 

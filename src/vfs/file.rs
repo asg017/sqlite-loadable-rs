@@ -1,5 +1,5 @@
-#![ allow(non_snake_case)] 
-#![ allow(unused)] 
+#![allow(non_snake_case)] 
+#![allow(unused)] 
 
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_io_methods};
 use std::os::raw::{c_int, c_void};
@@ -8,8 +8,8 @@ use crate::vfs::traits::SqliteIoMethods;
 
 /// Let Box go out of scope, thus drop // TODO valgrind
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.close() {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).close() {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -18,6 +18,9 @@ pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) ->
             // }
         }
     }
+    // gc
+    let rusty_methods = Box::from_raw(b.oxidizedMethods);
+    let p_methods = Box::from_raw(b.pMethods.cast_mut());
     0 // TODO figure out what to do here
 }
 
@@ -27,8 +30,8 @@ pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
     iAmt: c_int,
     iOfst: sqlite3_int64,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.read(buf, iAmt, iOfst) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).read(buf, iAmt, iOfst) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -47,8 +50,8 @@ pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     iAmt: c_int,
     iOfst: sqlite3_int64,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.write(buf, iAmt, iOfst) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).write(buf, iAmt, iOfst) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -65,8 +68,8 @@ pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     size: sqlite3_int64,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.truncate(size) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).truncate(size) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -83,8 +86,8 @@ pub unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file, // TODO convert
     flags: c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.sync(flags) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).sync(flags) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -101,8 +104,8 @@ pub unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     pSize: *mut sqlite3_int64,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.file_size(pSize) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).file_size(pSize) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -120,8 +123,8 @@ pub unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     arg2: c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.lock(arg2) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).lock(arg2) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -138,8 +141,8 @@ pub unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     arg2: c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.unlock(arg2) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).unlock(arg2) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -156,8 +159,8 @@ pub unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     pResOut: *mut c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.check_reserved_lock(pResOut) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).check_reserved_lock(pResOut) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -175,8 +178,8 @@ pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
     op: c_int,
     pArg: *mut c_void,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.file_control(op, pArg) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).file_control(op, pArg) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -190,8 +193,8 @@ pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
 }
 
 pub unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.sector_size() {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).sector_size() {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -205,8 +208,8 @@ pub unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(arg1: *mut sqlite3_fi
 }
 
 pub unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.device_characteristics() {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).device_characteristics() {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -226,8 +229,8 @@ pub unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
     arg2: c_int,
     arg3: *mut *mut c_void,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.shm_map(iPg, pgsz, arg2, arg3) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).shm_map(iPg, pgsz, arg2, arg3) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -246,8 +249,8 @@ pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
     n: c_int,
     flags: c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.shm_lock(offset, n, flags) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).shm_lock(offset, n, flags) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -261,8 +264,8 @@ pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
 }
 
 pub unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(arg1: *mut sqlite3_file) {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.shm_barrier() {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).shm_barrier() {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -278,8 +281,8 @@ pub unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
     arg1: *mut sqlite3_file,
     deleteFlag: c_int,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.shm_unmap(deleteFlag) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).shm_unmap(deleteFlag) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -298,8 +301,8 @@ pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
     iAmt: c_int,
     pp: *mut *mut c_void,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.fetch(iOfst, iAmt, pp) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).fetch(iOfst, iAmt, pp) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -317,8 +320,8 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
     iOfst: sqlite3_int64,
     p: *mut c_void,
 ) -> c_int {
-    let mut b = Box::<dyn SqliteIoMethods>::from_raw(arg1.cast::<T>());
-    match b.unfetch(iOfst, p) {
+    let mut b = Box::<sqlite3_file_polymorph<T>>::from_raw(arg1.cast::<sqlite3_file_polymorph<T>>());
+    match (*b.oxidizedMethods).unfetch(iOfst, p) {
         Ok(()) => (),
         Err(e) => {
             // TODO define error handling
@@ -329,6 +332,15 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
     }
     Box::into_raw(b); // Drop in close
     0 // TODO figure out what to do here
+}
+
+// C struct polymorphism, given the alignment and field sequence
+// remain the same, then again, T might ruin the party
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct sqlite3_file_polymorph<T: SqliteIoMethods> {
+    pub pMethods: *const sqlite3_io_methods,
+    pub oxidizedMethods: *mut T,
 }
 
 unsafe fn create_io_methods<T: SqliteIoMethods>() -> sqlite3_io_methods {
@@ -355,13 +367,17 @@ unsafe fn create_io_methods<T: SqliteIoMethods>() -> sqlite3_io_methods {
     }
 }
 
-pub fn create_file_ptr<T: SqliteIoMethods>() -> sqlite3_file {
+pub fn create_file_ptr<T: SqliteIoMethods>(o2_methods: T) -> *mut sqlite3_file {
     unsafe {
         let methods = create_io_methods::<T>();
         let methods_ptr = Box::into_raw(Box::new(methods));
-        sqlite3_file {
+        let methods_boxed_ptr = Box::into_raw(Box::new(o2_methods));
+        let p = sqlite3_file_polymorph::<T> {
             pMethods: methods_ptr,
-        }
+            oxidizedMethods: methods_boxed_ptr,
+        };
+        let p = Box::into_raw(Box::new(p));
+        p.cast()
     }
 }
 
