@@ -144,13 +144,13 @@ pub trait SqliteVfs {
     fn current_time_int64(
         &mut self,
         arg2: *mut sqlite3_int64,
-    ) -> Result<()>;
+    ) -> c_int;
 
     fn set_system_call(
         &mut self,
         z_name: *const c_char,
         arg2: sqlite3_syscall_ptr,
-    ) -> Result<()>;
+    ) -> c_int;
 
     fn get_system_call(
         &mut self,

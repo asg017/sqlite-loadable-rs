@@ -273,18 +273,13 @@ impl SqliteVfs for DefaultVfs {
     fn current_time_int64(
         &mut self,
         arg2: *mut sqlite3_int64,
-    ) -> Result<()> {
+    ) -> c_int {
         unsafe {
             if let Some(xCurrentTimeInt64) = ((*self.default_vfs_ptr).xCurrentTimeInt64) {
-                let result = xCurrentTimeInt64(self.default_vfs_ptr, arg2);
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                xCurrentTimeInt64(self.default_vfs_ptr, arg2)
             } else {
-                Err(Error::new_message("Missing function"))
+                // Err(Error::new_message("Missing function"))
+                -1
             }
         }
     }
@@ -293,22 +288,18 @@ impl SqliteVfs for DefaultVfs {
         &mut self,
         z_name: *const c_char,
         arg2: sqlite3_syscall_ptr,
-    ) -> Result<()> {
+    ) -> c_int {
         unsafe {
             if let Some(xSetSystemCall) = ((*self.default_vfs_ptr).xSetSystemCall) {
-                let result = xSetSystemCall(
+                xSetSystemCall(
                     self.default_vfs_ptr,
                     z_name,
                     arg2,
-                );
+                )
 
-                if result == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
             } else {
-                Err(Error::new_message("Missing function"))
+                // Err(Error::new_message("Missing function"))
+                -1
             }
         }
     }

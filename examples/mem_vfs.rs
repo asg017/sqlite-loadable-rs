@@ -6,7 +6,7 @@ use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_ptr, register_vfs, Error, ErrorKind};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind};
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 
 use std::os::raw::{c_int, c_void, c_char};
@@ -51,7 +51,8 @@ impl SqliteVfs for MemVfs {
         // This is implemented with traits
         pFile->pMethods = &mem_io_methods;
         */
-        unsafe { *p_file = *create_file_ptr( rust_file ); }
+        // TODO figure out how to drop this, store a pointer to the vfs?
+        unsafe { *p_file = *create_file_pointer( rust_file ); }
     
         Ok(())
     }
@@ -68,53 +69,53 @@ impl SqliteVfs for MemVfs {
         Ok(())
     }
 
+    // From here onwards, only calls to the default vfs
     fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
-        std::ptr::null_mut()
+        self.default_vfs.dl_open(z_filename)
     }
 
     fn dl_error(&mut self, n_byte: c_int, z_err_msg: *mut c_char) {
+        self.default_vfs.dl_error(n_byte, z_err_msg)
     }
 
     fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char) -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
-        None
+        self.default_vfs.dl_sym(arg2, z_symbol)
     }
 
     fn dl_close(&mut self, arg2: *mut c_void) {
+        self.default_vfs.dl_close(arg2)
     }
 
     fn randomness(&mut self, n_byte: c_int, z_out: *mut c_char) -> Result<()> {
-        Ok(())
+        self.default_vfs.randomness(n_byte, z_out)
     }
 
     fn sleep(&mut self, microseconds: c_int) -> Result<()> {
-        Ok(())
+        self.default_vfs.sleep(microseconds)
     }
 
     fn current_time(&mut self, arg2: *mut f64) -> Result<()> {
-        Ok(())
+        self.default_vfs.current_time(arg2)
     }
 
     fn get_last_error(&mut self, arg2: c_int, arg3: *mut c_char) -> Result<()> {
-        Ok(())
+        self.default_vfs.get_last_error(arg2, arg3)
     }
 
-    fn current_time_int64(&mut self, arg2: *mut sqlite3_int64) -> Result<()> {
-        Ok(())
+    fn current_time_int64(&mut self, arg2: *mut sqlite3_int64) -> i32 {
+        self.default_vfs.current_time_int64(arg2)
     }
 
-    fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> Result<()> {
-        Ok(())
+    fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> i32 {
+        self.default_vfs.set_system_call(z_name, arg2)
     }
 
     fn get_system_call(&mut self, z_name: *const c_char) -> sqlite3_syscall_ptr {
-        unsafe extern "C"
-        fn meh() {}
-
-        Some(meh)
+        self.default_vfs.get_system_call(z_name)
     }
 
     fn next_system_call(&mut self, z_name: *const c_char) -> *const c_char {
-        std::ptr::null()
+        self.default_vfs.next_system_call(z_name)
     }
 }
 
@@ -263,7 +264,7 @@ impl SqliteIoMethods for MemFile {
 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
-    let vfs: sqlite3_vfs = create_vfs::<MemVfs>(
+    let vfs: sqlite3_vfs = create_vfs(
         MemVfs { default_vfs: DefaultVfs::new() }, "memvfs", 1024);
     register_vfs(vfs, true)?;
     Ok(())
