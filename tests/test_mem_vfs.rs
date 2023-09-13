@@ -419,3 +419,32 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rusqlite::{ffi::sqlite3_auto_extension, Connection};
+
+    #[test]
+    fn test_rusqlite_auto_extension() {
+        unsafe {
+            sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite3_memvfs_init as *const (),
+            )));
+        }
+
+        let conn = Connection::open_in_memory().unwrap();
+
+        conn.prepare("ATTACH memvfs_from_file('from.db') AS inmem;");
+
+        // let result: Vec<i32> = conn
+        //     .prepare("select value from generate_series_rs(?, ?)")
+        //     .unwrap()
+        //     .query_map([1, 10], |r| r.get(0))
+        //     .unwrap()
+        //     .collect::<rusqlite::Result<Vec<_>, _>>()
+        //     .unwrap();
+        // assert_eq!(result, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
+}
