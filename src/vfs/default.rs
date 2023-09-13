@@ -16,7 +16,7 @@ pub struct DefaultVfs {
 
 impl DefaultVfs {
     pub fn new() -> Self {
-        let vfs = unsafe { sqlite3_vfs_find(ptr::null::<i8>()) };
+        let vfs = unsafe { sqlite3_vfs_find(ptr::null()) };
         Self {
             default_vfs_ptr: vfs,
         }

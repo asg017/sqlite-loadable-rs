@@ -1,20 +1,21 @@
 //! cargo build --example mem_vfs
-//! sqlite3 :memory: '.read examples/test.sql'
 #![allow(unused)]
 
 use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api};
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 use url::Url;
 
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs::{File, self};
+use std::io::{Write, Read};
 use std::os::raw::{c_int, c_void, c_char};
 use std::ptr;
-use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find};
+use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find, sqlite3_context_db_handle, sqlite3_file_control};
 use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
@@ -25,20 +26,15 @@ struct MemVfs {
     default_vfs: DefaultVfs,
 }
 
-// const MAX_LABEL: &str = "max";
 const SIZE_LABEL: &str = "size";
 const POINTER_LABEL: &str = "pointer";
 
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
         let rust_file = MemFile {
-            size: 0,
-            max_size: 0,
-            file_contents: Vec::new(),
+            file_contents: Vec::new()
         };
         
-        // TODO finish implementation
-
         /*
         memset(p, 0, sizeof(*p));
 
@@ -73,28 +69,27 @@ impl SqliteVfs for MemVfs {
             */
 
             if let Ok(url) = parsed_uri {
+                let mut size: usize = 0;
+
                 let mut query_map: HashMap<String, String> = HashMap::new();
                 for (key, value) in url.query_pairs() {
                     query_map.insert(key.to_string(), value.to_string());
-                    // if key == MAX_LABEL {
-                    //     rust_file.max_size = value.parse().expect("should be an int");
-                    // }
+
                     if key == SIZE_LABEL {
-                        rust_file.size = value.parse().expect("should be an int");
+                        size = value.parse().expect("should be an int");
                     }
                     if key == POINTER_LABEL {
                         // Parse the ptr value as a u64 hexadecimal address
                         if let Ok(ptr_address) = u64::from_str_radix(&value, 16) {
                             // Assuming ptr_address is a valid memory address, you can read its contents here.
                             let buffer = 
-                                std::slice::from_raw_parts(ptr_address as *const u8, rust_file.size);
+                                std::slice::from_raw_parts(ptr_address as *const u8, size);
 
                             rust_file.file_contents = buffer.to_vec();
                         }
                     }
                 }
 
-                // !query_map.contains_key(MAX_LABEL) &&
                 if 
                     !query_map.contains_key(SIZE_LABEL) &&
                     !query_map.contains_key(POINTER_LABEL) {
@@ -190,8 +185,6 @@ impl SqliteVfs for MemVfs {
 }
 
 struct MemFile {
-    size: usize, // TODO consider losing this
-    max_size: usize, // TODO consider losing this
     file_contents: Vec<u8>,
 }
 
@@ -204,22 +197,18 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn read(&mut self, buf: *mut c_void, i_amt: usize, i_ofst: usize) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, size: usize, offset: usize) -> Result<()> {
         /*
-        // TODO write requested data to buf
         memcpy(buf, p->aData+iOfst, iAmt);
         */
 
         let source = &mut self.file_contents;
 
-        let offset = i_ofst;
-        let size = i_amt;
-    
         // TODO do not assume alignment is correct, check
         unsafe {
             let src_ptr = source.as_ptr().offset(offset as isize);
             let dst_ptr = buf;
-            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), size.try_into().unwrap());
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), size);
         }
 
         Ok(())
@@ -259,7 +248,6 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    /// This is unnecessary, since we allocate precisely what we need
     fn truncate(&mut self, size: usize) -> Result<()> {
         // original:
         /*
@@ -267,11 +255,14 @@ impl SqliteIoMethods for MemFile {
                 if( size > p->szMax ) {
                     return SQLITE_FULL;
                 }
-                memset(p->aData + p->sz, 0, size-p->sz); // double the size
+                memset(p->aData + p->sz, 0, size-p->sz); // extend to what is required
             }
             p->sz = size; 
             return SQLITE_OK;        
         */
+
+        self.file_contents.resize(size, 0);
+
         Ok(())
     }
 
@@ -362,11 +353,70 @@ impl SqliteIoMethods for MemFile {
     }
 }
 
+/// Usage: "ATTACH memvfs_from_file('test.db') AS inmem;"
+fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
+    
+    let metadata = fs::metadata(path).map_err(|_| Error::new_message("can't determine file size"))?;
+    let file_size = metadata.len() as usize;
+
+    let mut file = File::open(path).map_err(|_| Error::new_message("can't open file"))?;
+    let mut file_contents: Vec<u8> = Vec::with_capacity(file_size);
+    file.read_to_end(&mut file_contents).map_err(|_| Error::new_message("can't read to the end"))?;
+    
+    let mut heap_buffer: Box<[u8]> = vec![0; file_size].into_boxed_slice();
+    unsafe {
+        ptr::copy_nonoverlapping(file_contents.as_ptr(), heap_buffer.as_mut_ptr(), file_size);
+    }
+
+    let address_str = format!("0x{:p}", &*heap_buffer as *const [u8]);
+
+    // TODO memory passed here might leak
+    Box::into_raw(heap_buffer);
+
+    let text_output = format!("file:/mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
+
+    api::result_text(context, text_output);
+
+    Ok(())
+}
+
+fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
+    
+    let mut file = File::create(path).map_err(|_| Error::new_message("can't create file"))?;
+    let mut vfs_file_ptr: *mut MemFile = ptr::null_mut();
+
+    unsafe {
+        let db = sqlite3_context_db_handle(context);
+
+        // ? is more idiomatic, but this shouldn't fail
+        let schema = CString::new("memvfs").expect("should be a valid name");
+        let schema_ptr = schema.as_ptr();
+
+        // workaround for bindings.rs generated with the wrong type
+        const SQLITE_FCNTL_FILE_POINTER: i32 = 7;
+
+        sqlite3_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast());
+
+        file.write_all(&(*vfs_file_ptr).file_contents).map_err(|_| Error::new_message("can't write to file"))?;
+    }
+
+    file.flush().map_err(|_| Error::new_message("can't flush file"))?;
+
+    // TODO really check for memory leaks
+    Ok(())
+}
 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs: sqlite3_vfs = create_vfs(
         MemVfs { default_vfs: DefaultVfs::new() }, "memvfs", 1024);
     register_vfs(vfs, true)?;
+
+    let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
+    define_scalar_function(db, "memvfs_from_file", 1, vfs_from_file, flags)?;
+    define_scalar_function(db, "memvfs_to_file", 1, vfs_to_file, flags)?;
+
     Ok(())
 }
