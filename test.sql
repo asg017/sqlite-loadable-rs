@@ -1,8 +1,8 @@
 .mode box
 .header on
 
-.load target/debug/examples/libin
+.load target/debug/examples/libmem_vfs
 
-select *
-from vtab_in('xxx')
-where y in (select value from json_each('[1,2,"alex", "puppy"]'));
+ATTACH memvfs_from_file('from.db') AS inmem;
+
+memvfs_to_file("to.db")
