@@ -8,21 +8,33 @@ use sqlite_loadable::vfs::vfs::create_vfs;
 
 use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind};
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
+use url::Url;
 
+use std::collections::HashMap;
+use std::ffi::CString;
 use std::os::raw::{c_int, c_void, c_char};
+use std::ptr;
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find};
+use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
+use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
+    SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
+use libsqlite3_sys::{sqlite3_snprintf, sqlite3_mprintf};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
     default_vfs: DefaultVfs,
 }
 
+// const MAX_LABEL: &str = "max";
+const SIZE_LABEL: &str = "size";
+const POINTER_LABEL: &str = "pointer";
+
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
         let rust_file = MemFile {
             size: 0,
             max_size: 0,
-            file_content: Vec::new(),
+            file_contents: Vec::new(),
         };
         
         // TODO finish implementation
@@ -31,26 +43,78 @@ impl SqliteVfs for MemVfs {
         memset(p, 0, sizeof(*p));
 
         if( (flags & SQLITE_OPEN_MAIN_DB) == 0 ) return SQLITE_CANTOPEN;
+        */
 
-        p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
+        let cant_open = return Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
 
-        if( p->aData == 0 ) return SQLITE_CANTOPEN;
+        unsafe {
+            let uri_ptr = z_name.cast_mut();
+            let uri_cstr = CString::from_raw(uri_ptr);
+            let uri_str = uri_cstr.to_str();
+            let parsed_uri = Url::parse(uri_str.expect("should be a valid uri"));
+    
+            if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
+                cant_open
+            }
 
-        p->sz = sqlite3_uri_int64(zName,"sz",0);
+            /*
+                p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
+
+                if( p->aData == 0 ) return SQLITE_CANTOPEN;
+
+                p->sz = sqlite3_uri_int64(zName,"sz",0);
+                
+                if( p->sz < 0 ) return SQLITE_CANTOPEN;
+                
+                // Set MemFile parameter
+                p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
+                
+                if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
+            */
+
+            if let Ok(url) = parsed_uri {
+                let mut query_map: HashMap<String, String> = HashMap::new();
+                for (key, value) in url.query_pairs() {
+                    query_map.insert(key.to_string(), value.to_string());
+                    // if key == MAX_LABEL {
+                    //     rust_file.max_size = value.parse().expect("should be an int");
+                    // }
+                    if key == SIZE_LABEL {
+                        rust_file.size = value.parse().expect("should be an int");
+                    }
+                    if key == POINTER_LABEL {
+                        // Parse the ptr value as a u64 hexadecimal address
+                        if let Ok(ptr_address) = u64::from_str_radix(&value, 16) {
+                            // Assuming ptr_address is a valid memory address, you can read its contents here.
+                            let buffer = 
+                                std::slice::from_raw_parts(ptr_address as *const u8, rust_file.size);
+
+                            rust_file.file_contents = buffer.to_vec();
+                        }
+                    }
+                }
+
+                // !query_map.contains_key(MAX_LABEL) &&
+                if 
+                    !query_map.contains_key(SIZE_LABEL) &&
+                    !query_map.contains_key(POINTER_LABEL) {
+                    cant_open
+                }
+
+            } else {
+                cant_open
+            }
+        }
         
-        if( p->sz < 0 ) return SQLITE_CANTOPEN;
-        
-        // Set MemFile parameter
-        p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
-        
-        if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
-
-        // This is implemented and active by default
+        // Skipped 'freeonclose' parameter', dropping is more idiomatic
+        /*
+        // This is implemented and active buy default
         p->bFreeOnClose = sqlite3_uri_boolean(zName,"freeonclose",0);
 
         // This is implemented with traits
         pFile->pMethods = &mem_io_methods;
         */
+
         // TODO figure out how to drop this, store a pointer to the vfs?
         unsafe { *p_file = *create_file_pointer( rust_file ); }
     
@@ -58,18 +122,24 @@ impl SqliteVfs for MemVfs {
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: c_int) -> Result<()> {
-        Ok(())
+        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_DELETE)))
     }
 
     fn access(&mut self, z_name: *const c_char, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
+        unsafe {
+            *p_res_out = 0;
+        }
         Ok(())
     }
 
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
+        // TODO see if format! is actually easier and less unsafe:
+        // ...format!("{}", CString::new())...
+        unsafe { sqlite3_snprintf(n_out, z_out, CString::new("%s").expect("should be  fine").clone().as_ptr(), z_name); }
         Ok(())
     }
 
-    // From here onwards, only calls to the default vfs
+    /// From here onwards, all calls are redirected to the default vfs
     fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
         self.default_vfs.dl_open(z_filename)
     }
@@ -120,30 +190,42 @@ impl SqliteVfs for MemVfs {
 }
 
 struct MemFile {
-    size: sqlite3_int64, // equal to self.data.len()
-    max_size: sqlite3_int64,
-    file_content: Vec<u8>,
+    size: usize, // TODO consider losing this
+    max_size: usize, // TODO consider losing this
+    file_contents: Vec<u8>,
 }
 
 impl SqliteIoMethods for MemFile {
+    /// The original example contains an explicit deallocation,
+    /// but the base implementation takes care of that already
+    /// with a Box::from_raw, that forces the datastructure
+    /// to drop at the end of the scope
     fn close(&mut self) -> Result<()> {
-        // The example contains an explicit deallocation,
-        // but the base implementation takes care of that already
-        // with a Box::from_raw, that forces the datastructure
-        // to drop at the end of the scope
         Ok(())
     }
 
-    fn read(&mut self, buf: *mut c_void, i_amt: c_int, i_ofst: sqlite3_int64) -> Result<()> {
-        Ok(())
+    fn read(&mut self, buf: *mut c_void, i_amt: usize, i_ofst: usize) -> Result<()> {
         /*
         // TODO write requested data to buf
         memcpy(buf, p->aData+iOfst, iAmt);
         */
+
+        let source = &mut self.file_contents;
+
+        let offset = i_ofst;
+        let size = i_amt;
+    
+        // TODO do not assume alignment is correct, check
+        unsafe {
+            let src_ptr = source.as_ptr().offset(offset as isize);
+            let dst_ptr = buf;
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), size.try_into().unwrap());
+        }
+
+        Ok(())
     }
 
-    fn write(&mut self, buf: *const c_void, i_amt: c_int, i_ofst: sqlite3_int64) -> Result<()> {
-        Ok(())
+    fn write(&mut self, buf: *const c_void, size: usize, offset: usize) -> Result<()> {
         /*
             if( (iOfst + iAmt) > p->sz ) {
                 // Error if exceeds allocation
@@ -160,10 +242,25 @@ impl SqliteIoMethods for MemFile {
             memcpy(p->aData + iOfst, buf, iAmt);
             return SQLITE_OK;
         */
+        let new_length = size + offset;
+        if new_length > self.file_contents.len() {
+            self.file_contents.resize(new_length, 0);
+        }
+
+        // Get a mutable pointer to the destination data
+        let dest_ptr = self.file_contents.as_mut_ptr();
+
+        // Use copy_from_nonoverlapping to copy data from source to dest
+        unsafe {
+            ptr::copy_nonoverlapping(buf.offset(offset as isize), dest_ptr.cast(), size);
+            self.file_contents.set_len(new_length)
+        };
+
+        Ok(())
     }
 
-    fn truncate(&mut self, size: sqlite3_int64) -> Result<()> {
-        // TODO error if allocation is full
+    /// This is unnecessary, since we allocate precisely what we need
+    fn truncate(&mut self, size: usize) -> Result<()> {
         // original:
         /*
             if( size > p->sz ) {
@@ -183,7 +280,7 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()> {
-        // TODO *p_size = self.file_content.len()
+        unsafe { *p_size = self.file_contents.len().try_into().unwrap(); }
         Ok(())
     }
 
@@ -196,14 +293,13 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn check_reserved_lock(&mut self, p_res_out: *mut c_int) -> Result<()> {
-        // TODO OK(()) -> *pResOut = 0
+        // *pResOut = 0
+        unsafe{ *p_res_out = 0; }
         // TODO consider putting this in a struct
         Ok(())
     }
 
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
-        Ok(())
-        // TODO change type to support this:
         /*
             int rc = SQLITE_NOTFOUND;
             if( op==SQLITE_FCNTL_VFSNAME ){
@@ -213,24 +309,28 @@ impl SqliteIoMethods for MemFile {
             // TODO use rust formatting and then create pointers
             return rc;
         */
+        // TODO see if format! is actually easier and less unsafe:
+        // ...format!("{}", CString::new())...
+        unsafe {
+            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be  fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
+            let out: *mut *mut char = p_arg.cast();
+            *out = new_args.cast(); // TODO test with scalar functions
+        }
+
+        Ok(())
     }
 
-    fn sector_size(&mut self) -> Result<()> {
-        Ok(())
-        // TODO change type to support this: 1024
+    fn sector_size(&mut self) -> c_int {
+        1024
         // TODO consider putting this in a struct
     }
 
-    fn device_characteristics(&mut self) -> Result<()> {
-        Ok(())
-        // TODO change type to support this
+    fn device_characteristics(&mut self) -> c_int {
         // TODO consider putting this in a struct
-        /*
         SQLITE_IOCAP_ATOMIC | 
-         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
-         SQLITE_IOCAP_SAFE_APPEND |
-         SQLITE_IOCAP_SEQUENTIAL
-        */
+        SQLITE_IOCAP_POWERSAFE_OVERWRITE |
+        SQLITE_IOCAP_SAFE_APPEND |
+        SQLITE_IOCAP_SEQUENTIAL
     }
 
     fn shm_map(&mut self, i_pg: c_int, pgsz: c_int, arg2: c_int, arg3: *mut *mut c_void) -> Result<()> {
@@ -238,7 +338,7 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn shm_lock(&mut self, offset: c_int, n: c_int, flags: c_int) -> Result<()> {
-        // SQLITE_IOERR_SHMLOCK is deprecated
+        // SQLITE_IOERR_SHMLOCK is deprecated?
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
     }
 
@@ -250,13 +350,14 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn fetch(&mut self, i_ofst: sqlite3_int64, i_amt: c_int, pp: *mut *mut c_void) -> Result<()> {
-        // unsafe { *pp = self.file_content + }
-        // TODO provide memory location
+    fn fetch(&mut self, offset: usize, size: usize, pp: *mut *mut c_void) -> Result<()> {
+        // orig: *pp = (void*)(p->aData + iOfst);
+        let memory_location = self.file_contents.as_mut_ptr();
+        unsafe { *pp = memory_location.add(offset).cast(); }
         Ok(())
     }
 
-    fn unfetch(&mut self, i_ofst: sqlite3_int64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: usize, p: *mut c_void) -> Result<()> {
         Ok(())
     }
 }

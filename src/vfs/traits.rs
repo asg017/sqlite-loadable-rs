@@ -11,16 +11,16 @@ pub trait SqliteIoMethods {
     fn read(
         &mut self,
         buf: *mut c_void,
-        i_amt: c_int,
-        i_ofst: sqlite3_int64,
+        i_amt: usize,
+        i_ofst: usize,
     ) -> Result<()>;
     fn write(
         &mut self,
         buf: *const c_void,
-        i_amt: c_int,
-        i_ofst: sqlite3_int64,
+        i_amt: usize,
+        i_ofst: usize,
     ) -> Result<()>;
-    fn truncate(&mut self, size: sqlite3_int64) -> Result<()>;
+    fn truncate(&mut self, size: usize) -> Result<()>;
     fn sync(&mut self, flags: c_int) -> Result<()>;
     fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()>;
     fn lock(&mut self, arg2: c_int) -> Result<()>;
@@ -34,8 +34,8 @@ pub trait SqliteIoMethods {
         op: c_int,
         p_arg: *mut c_void,
     ) -> Result<()>;
-    fn sector_size(&mut self) -> Result<()>;
-    fn device_characteristics(&mut self) -> Result<()>;
+    fn sector_size(&mut self) -> c_int;
+    fn device_characteristics(&mut self) -> c_int;
     fn shm_map(
         &mut self,
         i_pg: c_int,
@@ -56,13 +56,13 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn fetch(
         &mut self,
-        i_ofst: sqlite3_int64,
-        i_amt: c_int,
+        i_ofst: usize,
+        i_amt: usize,
         pp: *mut *mut c_void,
     ) -> Result<()>;
     fn unfetch(
         &mut self,
-        i_ofst: sqlite3_int64,
+        i_ofst: usize,
         p: *mut c_void,
     ) -> Result<()>;
 }
