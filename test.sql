@@ -5,4 +5,4 @@
 
 ATTACH memvfs_from_file('from.db') AS inmem;
 
-memvfs_to_file("to.db")
+#memvfs_to_file("to.db")

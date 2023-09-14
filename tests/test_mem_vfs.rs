@@ -438,5 +438,10 @@ mod tests {
         let conn = Connection::open_in_memory().unwrap();
 
         conn.execute("ATTACH memvfs_from_file('from.db') AS inmem;", ());
+
+        conn.execute("CREATE TABLE t3(x, y)", ());
+        conn.execute("INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)", ());
+
+        conn.execute("memvfs_to_file('to.db')", ());
     }
 }
