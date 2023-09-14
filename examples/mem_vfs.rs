@@ -384,7 +384,7 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 
     // TODO memory passed here might leak
 
-    let text_output = format!("file:/mem?vfs={}&{}={}&{}={}", EXTENSION_NAME, POINTER_LABEL, address_str, SIZE_LABEL, file_size);
+    let text_output = format!("file:{}?vfs={}&{}={}&{}={}", path, EXTENSION_NAME, POINTER_LABEL, address_str, SIZE_LABEL, file_size);
 
     api::result_text(context, text_output);
 
