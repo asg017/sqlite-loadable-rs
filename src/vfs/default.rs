@@ -192,22 +192,16 @@ impl SqliteVfs for DefaultVfs {
         &mut self,
         n_byte: c_int,
         z_out: *mut c_char,
-    ) -> Result<()> {
+    ) -> c_int {
         unsafe {
             if let Some(xRandomness) = ((*self.default_vfs_ptr).xRandomness) {
-                let result = xRandomness(
+                xRandomness(
                     self.default_vfs_ptr,
                     n_byte,
                     z_out,
-                );
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                )
             } else {
-                Err(Error::new_message("Missing function"))
+                -1
             }
         }
     }
@@ -215,37 +209,25 @@ impl SqliteVfs for DefaultVfs {
     fn sleep(
         &mut self,
         microseconds: c_int,
-    ) -> Result<()> {
+    ) -> c_int {
         unsafe {
             if let Some(xSleep) = ((*self.default_vfs_ptr).xSleep) {
-                let result = xSleep(
+                xSleep(
                     self.default_vfs_ptr,
                     microseconds,
-                );
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                )
             } else {
-                Err(Error::new_message("Missing function"))
+                -1
             }
         }
     }
 
-    fn current_time(&mut self, arg2: *mut f64) -> Result<()> {
+    fn current_time(&mut self, arg2: *mut f64) -> c_int {
         unsafe {
             if let Some(xCurrentTime) = ((*self.default_vfs_ptr).xCurrentTime) {
-                let result = xCurrentTime(self.default_vfs_ptr, arg2);
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                xCurrentTime(self.default_vfs_ptr, arg2)
             } else {
-                Err(Error::new_message("Missing function"))
+                -1
             }
         }
     }

@@ -9,7 +9,7 @@ use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 use url::Url;
 
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use std::fs::{File, self};
 use std::io::{Write, Read};
 use std::os::raw::{c_int, c_void, c_char};
@@ -30,7 +30,7 @@ const POINTER_LABEL: &str = "pointer";
 
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
-        let rust_file = MemFile {
+        let mut rust_file = MemFile {
             file_contents: Vec::new()
         };
         
@@ -40,64 +40,61 @@ impl SqliteVfs for MemVfs {
         if( (flags & SQLITE_OPEN_MAIN_DB) == 0 ) return SQLITE_CANTOPEN;
         */
 
-        let cant_open = return Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
+        let cant_open = Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
 
-        unsafe {
-            let uri_ptr = z_name.cast_mut();
-            let uri_cstr = CString::from_raw(uri_ptr);
-            let uri_str = uri_cstr.to_str();
-            let parsed_uri = Url::parse(uri_str.expect("should be a valid uri"));
-    
-            if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
-                cant_open
-            }
+        let uri_cstr = unsafe { CStr::from_ptr(z_name) };
+        let uri_str = uri_cstr.to_str();
+        let parsed_uri = Url::parse(uri_str.expect("should be a valid uri"));
 
-            /*
-                p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
+        if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
+            return cant_open;
+        }
 
-                if( p->aData == 0 ) return SQLITE_CANTOPEN;
+        /*
+            p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
 
-                p->sz = sqlite3_uri_int64(zName,"sz",0);
-                
-                if( p->sz < 0 ) return SQLITE_CANTOPEN;
-                
-                // Set MemFile parameter
-                p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
-                
-                if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
-            */
+            if( p->aData == 0 ) return SQLITE_CANTOPEN;
 
-            if let Ok(url) = parsed_uri {
-                let mut size: usize = 0;
+            p->sz = sqlite3_uri_int64(zName,"sz",0);
+            
+            if( p->sz < 0 ) return SQLITE_CANTOPEN;
+            
+            // Set MemFile parameter
+            p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
+            
+            if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
+        */
 
-                let mut query_map: HashMap<String, String> = HashMap::new();
-                for (key, value) in url.query_pairs() {
-                    query_map.insert(key.to_string(), value.to_string());
+        if let Ok(url) = parsed_uri {
+            let mut size: usize = 0;
 
-                    if key == SIZE_LABEL {
-                        size = value.parse().expect("should be an int");
-                    }
-                    if key == POINTER_LABEL {
-                        // Parse the ptr value as a u64 hexadecimal address
-                        if let Ok(ptr_address) = u64::from_str_radix(&value, 16) {
-                            // Assuming ptr_address is a valid memory address, you can read its contents here.
-                            let buffer = 
-                                std::slice::from_raw_parts(ptr_address as *const u8, size);
+            let mut query_map: HashMap<String, String> = HashMap::new();
+            for (key, value) in url.query_pairs() {
+                query_map.insert(key.to_string(), value.to_string());
 
-                            rust_file.file_contents = buffer.to_vec();
-                        }
+                if key == SIZE_LABEL {
+                    size = value.parse().expect("should be an int");
+                }
+                if key == POINTER_LABEL {
+                    // Parse the ptr value as a u64 hexadecimal address
+                    if let Ok(ptr_address) = u64::from_str_radix(&value, 16) {
+                        // Assuming ptr_address is a valid memory address, you can read its contents here.
+                        let buffer = 
+                            unsafe { std::slice::from_raw_parts(ptr_address as *const u8, size) };
+
+                        rust_file.file_contents = buffer.to_vec();
                     }
                 }
-
-                if 
-                    !query_map.contains_key(SIZE_LABEL) &&
-                    !query_map.contains_key(POINTER_LABEL) {
-                    cant_open
-                }
-
-            } else {
-                cant_open
             }
+
+            if 
+                !query_map.contains_key(SIZE_LABEL) &&
+                !query_map.contains_key(POINTER_LABEL) {
+                return cant_open;
+            }
+
+        } else {
+            return cant_open;
         }
         
         // Skipped 'freeonclose' parameter', dropping is more idiomatic
@@ -150,15 +147,15 @@ impl SqliteVfs for MemVfs {
         self.default_vfs.dl_close(arg2)
     }
 
-    fn randomness(&mut self, n_byte: c_int, z_out: *mut c_char) -> Result<()> {
-        self.default_vfs.randomness(n_byte, z_out)
+    fn randomness(&mut self, n_byte: c_int, z_out: *mut c_char) -> c_int {
+         self.default_vfs.randomness(n_byte, z_out)
     }
 
-    fn sleep(&mut self, microseconds: c_int) -> Result<()> {
+    fn sleep(&mut self, microseconds: c_int) -> c_int {
         self.default_vfs.sleep(microseconds)
     }
 
-    fn current_time(&mut self, arg2: *mut f64) -> Result<()> {
+    fn current_time(&mut self, arg2: *mut f64) -> c_int {
         self.default_vfs.current_time(arg2)
     }
 
@@ -374,7 +371,7 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 
     // TODO memory passed here might leak
 
-    let text_output = format!("file:/mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
+    let text_output = format!("file://mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
 
     api::result_text(context, text_output);
 
@@ -387,20 +384,20 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
     let mut file = File::create(path).map_err(|_| Error::new_message("can't create file"))?;
     let mut vfs_file_ptr: *mut MemFile = ptr::null_mut();
 
-    unsafe {
-        let db = sqlite3_context_db_handle(context);
+    let db = unsafe { sqlite3_context_db_handle(context) };
 
-        // ? is more idiomatic, but this shouldn't fail
-        let schema = CString::new("memvfs").expect("should be a valid name");
-        let schema_ptr = schema.as_ptr();
+    // ? is more idiomatic, but this shouldn't fail
+    let schema = CString::new("memvfs").expect("should be a valid name");
+    let schema_ptr = schema.as_ptr();
 
-        // workaround for bindings.rs generated with the wrong type
-        const SQLITE_FCNTL_FILE_POINTER: i32 = 7;
+    // workaround for bindings.rs generated with the wrong type
+    const SQLITE_FCNTL_FILE_POINTER: i32 = 7;
 
-        sqlite3_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast());
+    unsafe { sqlite3_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast()) };
 
-        file.write_all(&(*vfs_file_ptr).file_contents).map_err(|_| Error::new_message("can't write to file"))?;
-    }
+    let file_contents = &(unsafe { &*vfs_file_ptr }).file_contents;
+
+    file.write_all(&file_contents).map_err(|_| Error::new_message("can't write to file"))?;
 
     file.flush().map_err(|_| Error::new_message("can't flush file"))?;
 

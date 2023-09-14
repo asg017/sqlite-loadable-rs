@@ -126,14 +126,14 @@ pub trait SqliteVfs {
         &mut self,
         n_byte: c_int,
         z_out: *mut c_char,
-    ) -> Result<()>;
+    ) -> c_int;
 
     fn sleep(
         &mut self,
         microseconds: c_int,
-    ) -> Result<()>;
+    ) -> c_int;
 
-    fn current_time(&mut self, arg2: *mut f64) -> Result<()>;
+    fn current_time(&mut self, arg2: *mut f64) -> c_int;
 
     fn get_last_error(
         &mut self,

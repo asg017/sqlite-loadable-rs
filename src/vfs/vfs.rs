@@ -113,50 +113,23 @@ pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, p_han
 
 pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, n_byte: c_int, z_out: *mut c_char) -> c_int {
     let mut b = Box::<T>::from_raw(p_vfs.cast::<T>());
-    match b.randomness(n_byte, z_out) {
-        Ok(()) => (),
-        Err(e) => {
-            if let ErrorKind::DefineVfs(i) = *e.kind() {
-                return i;
-            }else {
-                return -1;
-            }
-        }
-    }
+    let result = b.randomness(n_byte, z_out);
     Box::into_raw(b); // Drop in close
-    0
+    result
 }
 
 pub unsafe extern "C" fn x_sleep<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, microseconds: c_int) -> c_int {
     let mut b = Box::<T>::from_raw(p_vfs.cast::<T>());
-    match b.sleep(microseconds) {
-        Ok(()) => (),
-        Err(e) => {
-            if let ErrorKind::DefineVfs(i) = *e.kind() {
-                return i;
-            }else {
-                return -1;
-            }
-        }
-    }
+    let result = b.sleep(microseconds);
     Box::into_raw(b); // Drop in close
-    0
+    result
 }
 
 pub unsafe extern "C" fn x_current_time<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, p_time: *mut f64) -> c_int {
     let mut b = Box::<T>::from_raw(p_vfs.cast::<T>());
-    match b.current_time(p_time) {
-        Ok(()) => (),
-        Err(e) => {
-            if let ErrorKind::DefineVfs(i) = *e.kind() {
-                return i;
-            }else {
-                return -1;
-            }
-        }
-    }
+    let result = b.current_time(p_time);
     Box::into_raw(b); // Drop in close
-    0
+    result
 }
 
 pub unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
