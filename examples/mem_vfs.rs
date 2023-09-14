@@ -368,10 +368,11 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
         ptr::copy_nonoverlapping(file_contents.as_ptr(), heap_buffer.as_mut_ptr(), file_size);
     }
 
-    let address_str = format!("0x{:p}", &*heap_buffer as *const [u8]);
+    let box_ptr = Box::into_raw(heap_buffer);
+
+    let address_str = format!("{:p}", ptr::addr_of!(box_ptr));
 
     // TODO memory passed here might leak
-    Box::into_raw(heap_buffer);
 
     let text_output = format!("file:/mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
 

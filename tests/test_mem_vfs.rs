@@ -368,10 +368,11 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
         ptr::copy_nonoverlapping(file_contents.as_ptr(), heap_buffer.as_mut_ptr(), file_size);
     }
 
-    let address_str = format!("0x{:p}", &*heap_buffer as *const [u8]);
+    let box_ptr = Box::into_raw(heap_buffer);
+
+    let address_str = format!("{:p}", ptr::addr_of!(box_ptr));
 
     // TODO memory passed here might leak
-    Box::into_raw(heap_buffer);
 
     let text_output = format!("file:/mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
 
@@ -436,15 +437,6 @@ mod tests {
 
         let conn = Connection::open_in_memory().unwrap();
 
-        conn.prepare("ATTACH memvfs_from_file('from.db') AS inmem;");
-
-        // let result: Vec<i32> = conn
-        //     .prepare("select value from generate_series_rs(?, ?)")
-        //     .unwrap()
-        //     .query_map([1, 10], |r| r.get(0))
-        //     .unwrap()
-        //     .collect::<rusqlite::Result<Vec<_>, _>>()
-        //     .unwrap();
-        // assert_eq!(result, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        conn.execute("ATTACH memvfs_from_file('from.db') AS inmem;", ());
     }
 }
