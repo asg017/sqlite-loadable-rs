@@ -3,7 +3,7 @@
 
 pub mod api;
 pub mod collation;
-mod constants;
+pub mod constants;
 pub mod entrypoints;
 pub mod errors;
 

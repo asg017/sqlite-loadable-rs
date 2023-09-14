@@ -1,28 +1,21 @@
 #![ allow(unused)]
 #![ allow(non_snake_case)]
 
+use crate::constants::{SQLITE_OKAY, SQLITE_ERROR};
+
 use crate::{Error, SqliteIoMethods};
 
 use super::super::{Result, vfs::traits::SqliteVfs};
 
 use std::{os::raw::{c_int, c_void, c_char}, ptr};
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, SQLITE_OK, sqlite3_vfs, sqlite3_vfs_find};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find};
 
-
-pub struct DefaultVfs {
-    default_vfs_ptr: *mut sqlite3_vfs,
+unsafe fn default_vfs() -> *mut sqlite3_vfs {
+    sqlite3_vfs_find(ptr::null())
 }
 
-impl DefaultVfs {
-    pub fn new() -> Self {
-        let vfs = unsafe { sqlite3_vfs_find(ptr::null()) };
-        Self {
-            default_vfs_ptr: vfs,
-        }
-    }
-}
-
+pub struct DefaultVfs {}
 
 impl SqliteVfs for DefaultVfs {
     fn open(
@@ -32,29 +25,18 @@ impl SqliteVfs for DefaultVfs {
         flags: c_int,
         p_out_flags: *mut c_int,
     ) -> Result<()> {
-        // This won't be used probably
-        /*
         unsafe {
-            if let Some(xOpen) = ((*self.default_vfs_ptr).xOpen) {
-                let result = xOpen(
-                    self.default_vfs_ptr,
-                    z_name,
-                    p_file,
-                    flags,
-                    p_out_flags,
-                );
-
-                if result == 0 {
+            if let Some(xOpen) = (*default_vfs()).xOpen {
+                let result = xOpen(default_vfs(), z_name, p_file, flags, p_out_flags);
+                if result == SQLITE_OKAY {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Ok(())
             }
         }
-        */
-        Ok(())
     }
 
     fn delete(
@@ -63,20 +45,15 @@ impl SqliteVfs for DefaultVfs {
         sync_dir: c_int,
     ) -> Result<()> {
         unsafe {
-            if let Some(xDelete) = ((*self.default_vfs_ptr).xDelete) {
-                let result = xDelete(
-                    self.default_vfs_ptr,
-                    z_name,
-                    sync_dir,
-                );
-
-                if result == 0 {
+            if let Some(xDelete) = (*default_vfs()).xDelete {
+                let result = xDelete(default_vfs(), z_name, sync_dir);
+                if result == SQLITE_OKAY {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Ok(())
             }
         }
     }
@@ -88,21 +65,15 @@ impl SqliteVfs for DefaultVfs {
         p_res_out: *mut c_int,
     ) -> Result<()> {
         unsafe {
-            if let Some(xAccess) = ((*self.default_vfs_ptr).xAccess) {
-                let result = xAccess(
-                    self.default_vfs_ptr,
-                    z_name,
-                    flags,
-                    p_res_out,
-                );
-
-                if result == 0 {
+            if let Some(xAccess) = (*default_vfs()).xAccess {
+                let result = xAccess(default_vfs(), z_name, flags, p_res_out);
+                if result == SQLITE_OKAY {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Ok(())
             }
         }
     }
@@ -114,21 +85,15 @@ impl SqliteVfs for DefaultVfs {
         z_out: *mut c_char,
     ) -> Result<()> {
         unsafe {
-            if let Some(xFullPathname) = ((*self.default_vfs_ptr).xFullPathname) {
-                let result = xFullPathname(
-                    self.default_vfs_ptr,
-                    z_name,
-                    n_out,
-                    z_out,
-                );
-
-                if result == 0 {
+            if let Some(xFullPathname) = (*default_vfs()).xFullPathname {
+                let result = xFullPathname(default_vfs(), z_name, n_out, z_out);
+                if result == SQLITE_OKAY {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Ok(())
             }
         }
     }
@@ -138,10 +103,10 @@ impl SqliteVfs for DefaultVfs {
         z_filename: *const c_char,
     ) -> *mut c_void {
         unsafe {
-            if let Some(xDlOpen) = ((*self.default_vfs_ptr).xDlOpen) {
-                xDlOpen(self.default_vfs_ptr, z_filename)
+            if let Some(xDlOpen) = (*default_vfs()).xDlOpen {
+                xDlOpen(default_vfs(), z_filename)
             } else {
-                std::ptr::null_mut() // Return null pointer or handle missing function appropriately
+                ptr::null_mut()
             }
         }
     }
@@ -152,8 +117,8 @@ impl SqliteVfs for DefaultVfs {
         z_err_msg: *mut c_char,
     ) {
         unsafe {
-            if let Some(xDlError) = ((*self.default_vfs_ptr).xDlError) {
-                xDlError(self.default_vfs_ptr, n_byte, z_err_msg);
+            if let Some(xDlError) = (*default_vfs()).xDlError {
+                xDlError(default_vfs(), n_byte, z_err_msg);
             }
         }
     }
@@ -162,28 +127,24 @@ impl SqliteVfs for DefaultVfs {
         &mut self,
         arg2: *mut c_void,
         z_symbol: *const c_char,
-    ) -> Option<
-        unsafe extern "C" fn(
-            arg1: *mut sqlite3_vfs,
-            arg2: *mut c_void,
-            z_symbol: *const c_char,
-        ),
-    > {
+    ) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
         unsafe {
-            if let Some(xDlSym) = ((*self.default_vfs_ptr).xDlSym) {
-                xDlSym(self.default_vfs_ptr, arg2, z_symbol)
+            if let Some(xDlSym) = (*default_vfs()).xDlSym {
+                // Some(xDlSym(default_vfs(), arg2, z_symbol)) // TODO
+                None
             } else {
-                None // TODO Handle missing function appropriately
+                None
             }
         }
     }
 
-    fn dl_close(&mut self, arg2: *mut c_void) {
+    fn dl_close(
+        &mut self,
+        arg2: *mut c_void,
+    ) {
         unsafe {
-            if let Some(xDlClose) = ((*self.default_vfs_ptr).xDlClose) {
-                xDlClose(self.default_vfs_ptr, arg2);
-            } else {
-                // TODO Handle missing function appropriately (e.g., log an error)
+            if let Some(xDlClose) = (*default_vfs()).xDlClose {
+                xDlClose(default_vfs(), arg2);
             }
         }
     }
@@ -194,14 +155,10 @@ impl SqliteVfs for DefaultVfs {
         z_out: *mut c_char,
     ) -> c_int {
         unsafe {
-            if let Some(xRandomness) = ((*self.default_vfs_ptr).xRandomness) {
-                xRandomness(
-                    self.default_vfs_ptr,
-                    n_byte,
-                    z_out,
-                )
+            if let Some(xRandomness) = (*default_vfs()).xRandomness {
+                xRandomness(default_vfs(), n_byte, z_out)
             } else {
-                -1
+                SQLITE_ERROR
             }
         }
     }
@@ -211,23 +168,23 @@ impl SqliteVfs for DefaultVfs {
         microseconds: c_int,
     ) -> c_int {
         unsafe {
-            if let Some(xSleep) = ((*self.default_vfs_ptr).xSleep) {
-                xSleep(
-                    self.default_vfs_ptr,
-                    microseconds,
-                )
+            if let Some(xSleep) = (*default_vfs()).xSleep {
+                xSleep(default_vfs(), microseconds)
             } else {
-                -1
+                SQLITE_ERROR
             }
         }
     }
 
-    fn current_time(&mut self, arg2: *mut f64) -> c_int {
+    fn current_time(
+        &mut self,
+        arg2: *mut f64,
+    ) -> c_int {
         unsafe {
-            if let Some(xCurrentTime) = ((*self.default_vfs_ptr).xCurrentTime) {
-                xCurrentTime(self.default_vfs_ptr, arg2)
+            if let Some(xCurrentTime) = (*default_vfs()).xCurrentTime {
+                xCurrentTime(default_vfs(), arg2)
             } else {
-                -1
+                SQLITE_ERROR
             }
         }
     }
@@ -238,20 +195,15 @@ impl SqliteVfs for DefaultVfs {
         arg3: *mut c_char,
     ) -> Result<()> {
         unsafe {
-            if let Some(xGetLastError) = ((*self.default_vfs_ptr).xGetLastError) {
-                let result = xGetLastError(
-                    self.default_vfs_ptr,
-                    arg2,
-                    arg3,
-                );
-
-                if result == 0 {
+            if let Some(xGetLastError) = (*default_vfs()).xGetLastError {
+                let result = xGetLastError(default_vfs(), arg2, arg3);
+                if result == SQLITE_OKAY {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Ok(())
             }
         }
     }
@@ -261,11 +213,10 @@ impl SqliteVfs for DefaultVfs {
         arg2: *mut sqlite3_int64,
     ) -> c_int {
         unsafe {
-            if let Some(xCurrentTimeInt64) = ((*self.default_vfs_ptr).xCurrentTimeInt64) {
-                xCurrentTimeInt64(self.default_vfs_ptr, arg2)
+            if let Some(xCurrentTimeInt64) = (*default_vfs()).xCurrentTimeInt64 {
+                xCurrentTimeInt64(default_vfs(), arg2)
             } else {
-                // Err(Error::new_message("Missing function"))
-                -1
+                SQLITE_ERROR
             }
         }
     }
@@ -276,16 +227,10 @@ impl SqliteVfs for DefaultVfs {
         arg2: sqlite3_syscall_ptr,
     ) -> c_int {
         unsafe {
-            if let Some(xSetSystemCall) = ((*self.default_vfs_ptr).xSetSystemCall) {
-                xSetSystemCall(
-                    self.default_vfs_ptr,
-                    z_name,
-                    arg2,
-                )
-
+            if let Some(xSetSystemCall) = (*default_vfs()).xSetSystemCall {
+                xSetSystemCall(default_vfs(), z_name, arg2)
             } else {
-                // Err(Error::new_message("Missing function"))
-                -1
+                SQLITE_ERROR
             }
         }
     }
@@ -295,8 +240,8 @@ impl SqliteVfs for DefaultVfs {
         z_name: *const c_char,
     ) -> sqlite3_syscall_ptr {
         unsafe {
-            if let Some(xGetSystemCall) = ((*self.default_vfs_ptr).xGetSystemCall) {
-                xGetSystemCall(self.default_vfs_ptr, z_name)
+            if let Some(xGetSystemCall) = (*default_vfs()).xGetSystemCall {
+                xGetSystemCall(default_vfs(), z_name)
             } else {
                 None
             }
@@ -308,10 +253,10 @@ impl SqliteVfs for DefaultVfs {
         z_name: *const c_char,
     ) -> *const c_char {
         unsafe {
-            if let Some(xNextSystemCall) = ((*self.default_vfs_ptr).xNextSystemCall) {
-                xNextSystemCall(self.default_vfs_ptr, z_name)
+            if let Some(xNextSystemCall) = (*default_vfs()).xNextSystemCall {
+                xNextSystemCall(default_vfs(), z_name)
             } else {
-                std::ptr::null()
+                ptr::null()
             }
         }
     }
@@ -319,6 +264,7 @@ impl SqliteVfs for DefaultVfs {
 
 
 /// See ORIGFILE https://www.sqlite.org/src/file?name=ext/misc/cksumvfs.c
+/// TODO Do the same less dynamic implementation of DefaultVfs to DefaultFile
 struct DefaultFile {
     default_methods_ptr: *mut sqlite3_io_methods,
     default_file_ptr: *mut sqlite3_file,

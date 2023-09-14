@@ -27,6 +27,7 @@ struct MemVfs {
 
 const SIZE_LABEL: &str = "size";
 const POINTER_LABEL: &str = "pointer";
+const EXTENSION_NAME: &str = "memvfs";
 
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
@@ -124,9 +125,21 @@ impl SqliteVfs for MemVfs {
     }
 
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
-        // TODO see if format! is actually easier and less unsafe:
-        // ...format!("{}", CString::new())...
-        unsafe { sqlite3_snprintf(n_out, z_out, CString::new("%s").expect("should be  fine").clone().as_ptr(), z_name); }
+        let z_path_str = unsafe { CStr::from_ptr(z_name) };
+        let z_path_rust = z_path_str.to_str().expect("Invalid UTF-8 in zPath");
+
+        let formatted = format!("{}", z_path_rust);
+        let formatted_c = CString::new(formatted).expect("Failed to create CString");
+
+        // Copy the formatted string to zOut, also endl?
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                formatted_c.as_ptr(),
+                z_out,
+                std::cmp::min(n_out as usize, formatted_c.as_bytes().len())
+            );
+        }
+
         Ok(())
     }
 
@@ -299,7 +312,7 @@ impl SqliteIoMethods for MemFile {
         // TODO see if format! is actually easier and less unsafe:
         // ...format!("{}", CString::new())...
         unsafe {
-            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be  fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
+            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
             let out: *mut *mut char = p_arg.cast();
             *out = new_args.cast(); // TODO test with scalar functions
         }
@@ -371,7 +384,7 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 
     // TODO memory passed here might leak
 
-    let text_output = format!("file://mem?vfs=memvfs&{}={}&{}={}", POINTER_LABEL, address_str, SIZE_LABEL, file_size);
+    let text_output = format!("file:/mem?vfs={}&{}={}&{}={}", EXTENSION_NAME, POINTER_LABEL, address_str, SIZE_LABEL, file_size);
 
     api::result_text(context, text_output);
 
@@ -387,7 +400,7 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
     let db = unsafe { sqlite3_context_db_handle(context) };
 
     // ? is more idiomatic, but this shouldn't fail
-    let schema = CString::new("memvfs").expect("should be a valid name");
+    let schema = CString::new(EXTENSION_NAME).expect("should be a valid name");
     let schema_ptr = schema.as_ptr();
 
     // workaround for bindings.rs generated with the wrong type
@@ -408,7 +421,7 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs: sqlite3_vfs = create_vfs(
-        MemVfs { default_vfs: DefaultVfs::new() }, "memvfs", 1024);
+        MemVfs { default_vfs: DefaultVfs {} }, EXTENSION_NAME, 1024);
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
