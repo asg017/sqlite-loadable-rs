@@ -197,7 +197,6 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
 
 pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
     unsafe {
-        let default_vfs_ptr = sqlite3_vfs_find(ptr::null());
         let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
         let size_ptr = std::mem::size_of::<*mut T>(); // this should remain the same
         let vfs_name = CString::new(name).expect("valid string");
