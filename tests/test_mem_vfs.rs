@@ -10,7 +10,7 @@ use url::Url;
 
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};
-use std::io::{Write, Read};
+use std::io::{Write, Read, self};
 use std::os::raw::{c_int, c_void, c_char};
 use std::ptr;
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find, sqlite3_context_db_handle, sqlite3_file_control};
@@ -43,8 +43,9 @@ impl SqliteVfs for MemVfs {
     // TODO re-evaluate this, don't pass pointers around
     // TODO just open and read the from.db into MemFile's memory field
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
-        let mut rust_file = MemFile {
-            file_contents: Vec::new()
+        let mut mem_file = MemFile {
+            file_contents: Vec::new(),
+            path: String::new()
         };
         
         /*
@@ -55,8 +56,9 @@ impl SqliteVfs for MemVfs {
 
         // let cant_open = Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
 
-        let uri_cstr = unsafe { CStr::from_ptr(z_name) };
-        let uri_str = uri_cstr.to_str().expect("should be fine");
+        let path_cstr = unsafe { CStr::from_ptr(z_name) };
+        let path_str = path_cstr.to_str().expect("should be fine");
+        mem_file.path = path_str.to_string();
 
         // if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
         //     return cant_open;
@@ -78,7 +80,7 @@ impl SqliteVfs for MemVfs {
         */
 
         if !z_name.is_null() {
-            write_file_to_vec_u8(uri_str, &mut rust_file.file_contents)?;
+            write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
         }
         
         // Skipped 'freeonclose' parameter', dropping is more idiomatic
@@ -91,7 +93,8 @@ impl SqliteVfs for MemVfs {
         */
 
         // TODO figure out how to drop this, store a pointer to the vfs?
-        unsafe { *p_file = *create_file_pointer( rust_file ); }
+        // TODO also implement writing output to file an close
+        unsafe { *p_file = *create_file_pointer( mem_file ); }
     
         Ok(())
     }
@@ -107,7 +110,7 @@ impl SqliteVfs for MemVfs {
         Ok(())
     }
 
-    /// n_out provides crazy big numbers
+    /// n_out provides crazy big numbers, so we rely on CString to detect the end of line char
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
         // Can't assume that the default does the same
         // self.default_vfs.full_pathname(z_name, n_out, z_out)
@@ -176,6 +179,25 @@ impl SqliteVfs for MemVfs {
 
 struct MemFile {
     file_contents: Vec<u8>,
+    path: String,
+}
+
+impl Drop for MemFile {
+    fn drop(&mut self) {
+        if !self.file_contents.is_empty() {
+            if let Err(err) = self.write_to_file() {
+                eprintln!("Error writing to file {}: {}", self.path, err);
+            }
+        }
+    }
+}
+
+impl MemFile {
+    fn write_to_file(&self) -> io::Result<()> {
+        let mut file = File::create(&self.path)?;
+        file.write_all(&self.file_contents)?;
+        Ok(())
+    }
 }
 
 impl SqliteIoMethods for MemFile {
@@ -192,27 +214,16 @@ impl SqliteIoMethods for MemFile {
         memcpy(buf, p->aData+iOfst, iAmt);
         */
 
-        // TODO replace with something more efficient
-        // the issue with copy_nonoverlapping or copy is alignment
-        /*
-        let source = &mut self.file_contents.bytes();
-        unsafe {
-            let mut idx: isize = 0;
-            for byte in source {
-                let value = byte.expect("should be a byte"); // // EXC_BAD_ACCESS
-                let new_dst_ptr = dst_ptr.offset(idx);
-                *new_dst_ptr = value;
-                // new_dst_ptr.copy_from(&value, 1);
-                idx += 1;
-            }
-        }
-        */
-
         let source = &mut self.file_contents;
-        if !source.is_empty() {
-            source.resize(offset + size, 0);
+        if source.len() < size {
+            let new_len = offset + size;
+            let prev_len = source.len();
+            source.resize(new_len, 0);
+            source.extend(vec![0; new_len - prev_len]);
         }
-        unsafe { ptr::copy_nonoverlapping(source[offset..size].as_ptr(), buf.cast(), size) }
+
+        let src_ptr = source[offset..(size-1)].as_ptr();
+        unsafe { ptr::copy_nonoverlapping(src_ptr, buf.cast(), size) }
     
         Ok(())
     }
@@ -290,6 +301,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
+    // TODO implement later, what does it do anyway?
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
         /*
             int rc = SQLITE_NOTFOUND;
@@ -303,12 +315,11 @@ impl SqliteIoMethods for MemFile {
         // TODO see if format! is actually easier and less unsafe:
         // ...format!("{}", CString::new())...
 
-        // Skip this, the following code is broken
-        // unsafe {
-        //     let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
-        //     let out: *mut *mut char = p_arg.cast();
-        //     *out = new_args.cast(); // TODO test with scalar functions
-        // }
+        unsafe {
+            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
+            let out: *mut *mut char = p_arg.cast();
+            *out = new_args.cast(); // TODO test with scalar functions
+        }
 
         Ok(())
     }

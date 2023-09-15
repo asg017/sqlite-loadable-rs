@@ -2,14 +2,14 @@
 #![allow(unused)] 
 
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_io_methods};
-use std::os::raw::{c_int, c_void};
+use std::{os::raw::{c_int, c_void}};
 
 use crate::{vfs::traits::SqliteIoMethods, ErrorKind};
 
 /// Let Box go out of scope, thus drop // TODO valgrind
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).close() {
+    match (b.rust_methods_ptr).close() {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -19,10 +19,8 @@ pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) ->
             }
         }
     }
-    // gc
-    let rusty_methods = Box::from_raw(b.o_methods);
-    let p_methods = Box::from_raw(b.pMethods.cast_mut());
-    0 // TODO figure out what to do here
+    Box::from_raw(b.methods_ptr.cast_mut());
+    0 
 }
 
 pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
@@ -32,7 +30,7 @@ pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
     iOfst: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).read(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap()) {
+    match (b.rust_methods_ptr).read(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap()) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -43,7 +41,7 @@ pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0 
 }
 
 pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
@@ -53,7 +51,7 @@ pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     iOfst: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).write(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap()) {
+    match (b.rust_methods_ptr).write(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap()) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -64,7 +62,7 @@ pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
@@ -72,7 +70,7 @@ pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     size: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).truncate(size.try_into().unwrap()) {
+    match (b.rust_methods_ptr).truncate(size.try_into().unwrap()) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -83,7 +81,7 @@ pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
@@ -91,7 +89,7 @@ pub unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
     flags: c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).sync(flags) {
+    match (b.rust_methods_ptr).sync(flags) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -102,7 +100,7 @@ pub unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
@@ -110,7 +108,7 @@ pub unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
     pSize: *mut sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).file_size(pSize) {
+    match (b.rust_methods_ptr).file_size(pSize) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -121,7 +119,7 @@ pub unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 
@@ -130,7 +128,7 @@ pub unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
     arg2: c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).lock(arg2) {
+    match (b.rust_methods_ptr).lock(arg2) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -141,7 +139,7 @@ pub unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
@@ -149,7 +147,7 @@ pub unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
     arg2: c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).unlock(arg2) {
+    match (b.rust_methods_ptr).unlock(arg2) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -160,7 +158,7 @@ pub unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
@@ -168,7 +166,7 @@ pub unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
     pResOut: *mut c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).check_reserved_lock(pResOut) {
+    match (b.rust_methods_ptr).check_reserved_lock(pResOut) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -179,7 +177,7 @@ pub unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
@@ -188,7 +186,7 @@ pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
     pArg: *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).file_control(op, pArg) {
+    match (b.rust_methods_ptr).file_control(op, pArg) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -199,19 +197,19 @@ pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (*b.o_methods).sector_size();
+    let result = (b.rust_methods_ptr).sector_size();
     Box::into_raw(b); // Drop in close
     result
 }
 
 pub unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (*b.o_methods).device_characteristics();
+    let result = (b.rust_methods_ptr).device_characteristics();
     Box::into_raw(b); // Drop in close
     result
 }
@@ -224,7 +222,7 @@ pub unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
     arg3: *mut *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).shm_map(iPg, pgsz, arg2, arg3) {
+    match (b.rust_methods_ptr).shm_map(iPg, pgsz, arg2, arg3) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -235,7 +233,7 @@ pub unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
@@ -245,7 +243,7 @@ pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
     flags: c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).shm_lock(offset, n, flags) {
+    match (b.rust_methods_ptr).shm_lock(offset, n, flags) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -256,12 +254,12 @@ pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(arg1: *mut sqlite3_file) {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    (*b.o_methods).shm_barrier();
+    (b.rust_methods_ptr).shm_barrier();
     Box::into_raw(b); // Drop in close
 }
 
@@ -270,7 +268,7 @@ pub unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
     deleteFlag: c_int,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).shm_unmap(deleteFlag) {
+    match (b.rust_methods_ptr).shm_unmap(deleteFlag) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -281,7 +279,7 @@ pub unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
@@ -291,7 +289,7 @@ pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
     pp: *mut *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).fetch(iOfst.try_into().unwrap(), iAmt.try_into().unwrap(), pp) {
+    match (b.rust_methods_ptr).fetch(iOfst.try_into().unwrap(), iAmt.try_into().unwrap(), pp) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -302,7 +300,7 @@ pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
@@ -311,7 +309,7 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
     p: *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    match (*b.o_methods).unfetch(iOfst.try_into().unwrap(), p) {
+    match (b.rust_methods_ptr).unfetch(iOfst.try_into().unwrap(), p) {
         Ok(()) => (),
         Err(e) => {
             if let ErrorKind::DefineVfs(i) = *e.kind() {
@@ -322,16 +320,15 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
         }
     }
     Box::into_raw(b); // Drop in close
-    0 // TODO figure out what to do here
+    0
 }
 
 // C struct polymorphism, given the alignment and field sequence
 // remain the same, then again, T might ruin the party
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
 pub struct FilePolymorph<T: SqliteIoMethods> {
-    pub pMethods: *const sqlite3_io_methods,
-    pub o_methods: *mut T,
+    pub methods_ptr: *const sqlite3_io_methods,
+    pub rust_methods_ptr: T,
 }
 
 unsafe fn create_io_methods<T: SqliteIoMethods>() -> sqlite3_io_methods {
@@ -358,25 +355,18 @@ unsafe fn create_io_methods<T: SqliteIoMethods>() -> sqlite3_io_methods {
     }
 }
 
-pub fn create_file_pointer<T: SqliteIoMethods>(o2_methods: T) -> *mut sqlite3_file {
+pub fn create_file_pointer<T: SqliteIoMethods>(actual_methods: T) -> *mut sqlite3_file {
     unsafe {
         let methods = create_io_methods::<T>();
         let methods_ptr = Box::into_raw(Box::new(methods));
-        let methods_boxed_ptr = Box::into_raw(Box::new(o2_methods));
+
         let p = FilePolymorph::<T> {
-            pMethods: methods_ptr,
-            o_methods: methods_boxed_ptr,
+            methods_ptr,
+            rust_methods_ptr: actual_methods,
         };
+
         let p = Box::into_raw(Box::new(p));
+        
         p.cast()
     }
 }
-
-
-
-
-
-
-
-
-
