@@ -210,8 +210,9 @@ impl SqliteIoMethods for MemFile {
 
         let source = &mut self.file_contents;
         if !source.is_empty() {
-            unsafe { ptr::copy_nonoverlapping(source[offset..size].as_ptr(), buf.cast(), size) }
+            source.resize(offset + size, 0);
         }
+        unsafe { ptr::copy_nonoverlapping(source[offset..size].as_ptr(), buf.cast(), size) }
     
         Ok(())
     }
