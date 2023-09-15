@@ -2,10 +2,10 @@ TODO
 
 - aggregate functions
   - `scalar.rs` -> `functions.rs`
-  - `Aggregate` and `Window` structs?
-  - should it use `sqlite3_aggregate_context` or something else?
-  - `create_aggregate_function`
-  - `create_window_function`
+  + `Aggregate` and `Window` structs? -> same thing, just a matter of invocation, aggregate if no 'OVER'
+  + should it use `sqlite3_aggregate_context` or something else? -> No, not necessary
+  + `create_aggregate_function` -> current design is closer to the actual sqlite design
+  + `create_window_function` -> closer to the sqlite design
 - vtab_in
   - `IndexInfo.is_in_operator(i32 constraint_idx)`
   - `IndexInfo.process_in_operator(constraint_idx: i32, value: bool)`
