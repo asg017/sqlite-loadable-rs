@@ -118,6 +118,7 @@ impl SqliteVfs for MemVfs {
             let dst_ptr = z_out;
             // TODO review if we need the nul
             ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), name.as_bytes().len());
+            name.into_raw();
         }
 
         Ok(())
@@ -191,15 +192,23 @@ impl SqliteIoMethods for MemFile {
         memcpy(buf, p->aData+iOfst, iAmt);
         */
 
-        let source = &mut self.file_contents;
+        
+        let dst_ptr: *mut u8 = buf.cast();
 
-        // TODO do not assume alignment is correct, check
+        // TODO replace with something more efficient
+        // the issue with copy_nonoverlapping or copy is alignment
+        
+        let source = &mut self.file_contents.bytes();
         unsafe {
-            let src_ptr = source.as_ptr().offset(offset as isize);
-            let dst_ptr = buf;
-            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), size);
-        }
-
+            let mut idx: isize = 0;
+            for byte in source {
+                let value = byte.expect("should be a byte");
+                let new_dst_ptr = dst_ptr.offset(idx);
+                *new_dst_ptr = value; // EXC_BAD_ACCESS
+                idx += 1;
+            }
+        } 
+        
         Ok(())
     }
 
@@ -225,14 +234,11 @@ impl SqliteIoMethods for MemFile {
             self.file_contents.resize(new_length, 0);
         }
 
-        // Get a mutable pointer to the destination data
-        let dest_ptr = self.file_contents.as_mut_ptr();
+        let dest = &mut self.file_contents;
 
-        // Use copy_from_nonoverlapping to copy data from source to dest
-        unsafe {
-            ptr::copy_nonoverlapping(buf.offset(offset as isize), dest_ptr.cast(), size);
-            self.file_contents.set_len(new_length)
-        };
+        let src_slice = unsafe { std::slice::from_raw_parts(buf as *const u8, size) };
+
+        dest[offset..offset + src_slice.len()].copy_from_slice(src_slice);
 
         Ok(())
     }
@@ -291,11 +297,13 @@ impl SqliteIoMethods for MemFile {
         */
         // TODO see if format! is actually easier and less unsafe:
         // ...format!("{}", CString::new())...
-        unsafe {
-            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
-            let out: *mut *mut char = p_arg.cast();
-            *out = new_args.cast(); // TODO test with scalar functions
-        }
+
+        // Skip this, the following code is broken
+        // unsafe {
+        //     let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
+        //     let out: *mut *mut char = p_arg.cast();
+        //     *out = new_args.cast(); // TODO test with scalar functions
+        // }
 
         Ok(())
     }
@@ -383,7 +391,12 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs: sqlite3_vfs = create_vfs(
-        MemVfs { default_vfs: DefaultVfs {} }, EXTENSION_NAME, 1024);
+        MemVfs {
+            default_vfs: unsafe {
+                // pass thru
+                DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
+            }
+        }, EXTENSION_NAME, 1024);
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;

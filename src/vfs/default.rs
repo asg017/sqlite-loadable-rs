@@ -11,12 +11,15 @@ use std::{os::raw::{c_int, c_void, c_char}, ptr};
 
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find};
 
-unsafe fn default_vfs() -> *mut sqlite3_vfs {
-    // sqlite3_vfs_find(ptr::null())
-    sqlite3_vfs_find(ptr::null())
+pub struct DefaultVfs {
+    default_vfs: *mut sqlite3_vfs,
 }
 
-pub struct DefaultVfs {}
+impl DefaultVfs {
+    pub fn from_ptr(vfs: *mut sqlite3_vfs) -> Self {
+        DefaultVfs { default_vfs: vfs }
+    }
+}
 
 impl SqliteVfs for DefaultVfs {
     fn open(
@@ -27,8 +30,8 @@ impl SqliteVfs for DefaultVfs {
         p_out_flags: *mut c_int,
     ) -> Result<()> {
         unsafe {
-            if let Some(xOpen) = (*default_vfs()).xOpen {
-                let result = xOpen(default_vfs(), z_name, p_file, flags, p_out_flags);
+            if let Some(xOpen) = (*self.default_vfs).xOpen {
+                let result = xOpen(self.default_vfs, z_name, p_file, flags, p_out_flags);
                 if result == SQLITE_OKAY {
                     Ok(())
                 } else {
@@ -46,8 +49,8 @@ impl SqliteVfs for DefaultVfs {
         sync_dir: c_int,
     ) -> Result<()> {
         unsafe {
-            if let Some(xDelete) = (*default_vfs()).xDelete {
-                let result = xDelete(default_vfs(), z_name, sync_dir);
+            if let Some(xDelete) = (*self.default_vfs).xDelete {
+                let result = xDelete(self.default_vfs, z_name, sync_dir);
                 if result == SQLITE_OKAY {
                     Ok(())
                 } else {
@@ -66,8 +69,8 @@ impl SqliteVfs for DefaultVfs {
         p_res_out: *mut c_int,
     ) -> Result<()> {
         unsafe {
-            if let Some(xAccess) = (*default_vfs()).xAccess {
-                let result = xAccess(default_vfs(), z_name, flags, p_res_out);
+            if let Some(xAccess) = (*self.default_vfs).xAccess {
+                let result = xAccess(self.default_vfs, z_name, flags, p_res_out);
                 if result == SQLITE_OKAY {
                     Ok(())
                 } else {
@@ -86,8 +89,8 @@ impl SqliteVfs for DefaultVfs {
         z_out: *mut c_char,
     ) -> Result<()> {
         unsafe {
-            if let Some(xFullPathname) = (*default_vfs()).xFullPathname {
-                let result = xFullPathname(default_vfs(), z_name, n_out, z_out);
+            if let Some(xFullPathname) = (*self.default_vfs).xFullPathname {
+                let result = xFullPathname(self.default_vfs, z_name, n_out, z_out);
                 if result == SQLITE_OKAY {
                     Ok(())
                 } else {
@@ -104,8 +107,8 @@ impl SqliteVfs for DefaultVfs {
         z_filename: *const c_char,
     ) -> *mut c_void {
         unsafe {
-            if let Some(xDlOpen) = (*default_vfs()).xDlOpen {
-                xDlOpen(default_vfs(), z_filename)
+            if let Some(xDlOpen) = (*self.default_vfs).xDlOpen {
+                xDlOpen(self.default_vfs, z_filename)
             } else {
                 ptr::null_mut()
             }
@@ -118,8 +121,8 @@ impl SqliteVfs for DefaultVfs {
         z_err_msg: *mut c_char,
     ) {
         unsafe {
-            if let Some(xDlError) = (*default_vfs()).xDlError {
-                xDlError(default_vfs(), n_byte, z_err_msg);
+            if let Some(xDlError) = (*self.default_vfs).xDlError {
+                xDlError(self.default_vfs, n_byte, z_err_msg);
             }
         }
     }
@@ -130,8 +133,8 @@ impl SqliteVfs for DefaultVfs {
         z_symbol: *const c_char,
     ) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
         unsafe {
-            if let Some(xDlSym) = (*default_vfs()).xDlSym {
-                // Some(xDlSym(default_vfs(), arg2, z_symbol)) // TODO
+            if let Some(xDlSym) = (*self.default_vfs).xDlSym {
+                // Some(xDlSym(self.default_vfs, arg2, z_symbol)) // TODO
                 None
             } else {
                 None
@@ -144,8 +147,8 @@ impl SqliteVfs for DefaultVfs {
         arg2: *mut c_void,
     ) {
         unsafe {
-            if let Some(xDlClose) = (*default_vfs()).xDlClose {
-                xDlClose(default_vfs(), arg2);
+            if let Some(xDlClose) = (*self.default_vfs).xDlClose {
+                xDlClose(self.default_vfs, arg2);
             }
         }
     }
@@ -156,8 +159,8 @@ impl SqliteVfs for DefaultVfs {
         z_out: *mut c_char,
     ) -> c_int {
         unsafe {
-            if let Some(xRandomness) = (*default_vfs()).xRandomness {
-                xRandomness(default_vfs(), n_byte, z_out)
+            if let Some(xRandomness) = (*self.default_vfs).xRandomness {
+                xRandomness(self.default_vfs, n_byte, z_out)
             } else {
                 SQLITE_ERROR
             }
@@ -169,8 +172,8 @@ impl SqliteVfs for DefaultVfs {
         microseconds: c_int,
     ) -> c_int {
         unsafe {
-            if let Some(xSleep) = (*default_vfs()).xSleep {
-                xSleep(default_vfs(), microseconds)
+            if let Some(xSleep) = (*self.default_vfs).xSleep {
+                xSleep(self.default_vfs, microseconds)
             } else {
                 SQLITE_ERROR
             }
@@ -182,8 +185,8 @@ impl SqliteVfs for DefaultVfs {
         arg2: *mut f64,
     ) -> c_int {
         unsafe {
-            if let Some(xCurrentTime) = (*default_vfs()).xCurrentTime {
-                xCurrentTime(default_vfs(), arg2)
+            if let Some(xCurrentTime) = (*self.default_vfs).xCurrentTime {
+                xCurrentTime(self.default_vfs, arg2)
             } else {
                 SQLITE_ERROR
             }
@@ -196,8 +199,8 @@ impl SqliteVfs for DefaultVfs {
         arg3: *mut c_char,
     ) -> Result<()> {
         unsafe {
-            if let Some(xGetLastError) = (*default_vfs()).xGetLastError {
-                let result = xGetLastError(default_vfs(), arg2, arg3);
+            if let Some(xGetLastError) = (*self.default_vfs).xGetLastError {
+                let result = xGetLastError(self.default_vfs, arg2, arg3);
                 if result == SQLITE_OKAY {
                     Ok(())
                 } else {
@@ -214,8 +217,8 @@ impl SqliteVfs for DefaultVfs {
         arg2: *mut sqlite3_int64,
     ) -> c_int {
         unsafe {
-            if let Some(xCurrentTimeInt64) = (*default_vfs()).xCurrentTimeInt64 {
-                xCurrentTimeInt64(default_vfs(), arg2)
+            if let Some(xCurrentTimeInt64) = (*self.default_vfs).xCurrentTimeInt64 {
+                xCurrentTimeInt64(self.default_vfs, arg2)
             } else {
                 SQLITE_ERROR
             }
@@ -228,8 +231,8 @@ impl SqliteVfs for DefaultVfs {
         arg2: sqlite3_syscall_ptr,
     ) -> c_int {
         unsafe {
-            if let Some(xSetSystemCall) = (*default_vfs()).xSetSystemCall {
-                xSetSystemCall(default_vfs(), z_name, arg2)
+            if let Some(xSetSystemCall) = (*self.default_vfs).xSetSystemCall {
+                xSetSystemCall(self.default_vfs, z_name, arg2)
             } else {
                 SQLITE_ERROR
             }
@@ -241,8 +244,8 @@ impl SqliteVfs for DefaultVfs {
         z_name: *const c_char,
     ) -> sqlite3_syscall_ptr {
         unsafe {
-            if let Some(xGetSystemCall) = (*default_vfs()).xGetSystemCall {
-                xGetSystemCall(default_vfs(), z_name)
+            if let Some(xGetSystemCall) = (*self.default_vfs).xGetSystemCall {
+                xGetSystemCall(self.default_vfs, z_name)
             } else {
                 None
             }
@@ -254,8 +257,8 @@ impl SqliteVfs for DefaultVfs {
         z_name: *const c_char,
     ) -> *const c_char {
         unsafe {
-            if let Some(xNextSystemCall) = (*default_vfs()).xNextSystemCall {
-                xNextSystemCall(default_vfs(), z_name)
+            if let Some(xNextSystemCall) = (*self.default_vfs).xNextSystemCall {
+                xNextSystemCall(self.default_vfs, z_name)
             } else {
                 ptr::null()
             }
