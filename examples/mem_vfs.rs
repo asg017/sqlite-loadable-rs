@@ -8,7 +8,6 @@ use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register
 use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
 use url::Url;
 
-use std::collections::HashMap;
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};
 use std::io::{Write, Read};
@@ -25,11 +24,24 @@ struct MemVfs {
     default_vfs: DefaultVfs,
 }
 
-const SIZE_LABEL: &str = "size";
-const POINTER_LABEL: &str = "pointer";
 const EXTENSION_NAME: &str = "memvfs";
 
+fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
+    let metadata = fs::metadata(path).map_err(|_| Error::new_message("can't determine file size"))?;
+    let file_size = metadata.len() as usize;
+
+    let mut file = File::open(path).map_err(|_| Error::new_message("can't open file"))?;
+
+    unsafe { dest.set_len(file_size) };
+
+    file.read_to_end(dest).map_err(|_| Error::new_message("can't read to the end"))?;
+    
+    Ok(())
+}
+
 impl SqliteVfs for MemVfs {
+    // TODO re-evaluate this, don't pass pointers around
+    // TODO just open and read the from.db into MemFile's memory field
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
         let mut rust_file = MemFile {
             file_contents: Vec::new()
@@ -41,15 +53,14 @@ impl SqliteVfs for MemVfs {
         if( (flags & SQLITE_OPEN_MAIN_DB) == 0 ) return SQLITE_CANTOPEN;
         */
 
-        let cant_open = Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
+        // let cant_open = Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
 
         let uri_cstr = unsafe { CStr::from_ptr(z_name) };
-        let uri_str = uri_cstr.to_str();
-        let parsed_uri = Url::parse(uri_str.expect("should be a valid uri"));
+        let uri_str = uri_cstr.to_str().expect("should be fine");
 
-        if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
-            return cant_open;
-        }
+        // if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
+        //     return cant_open;
+        // }
 
         /*
             p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
@@ -66,36 +77,8 @@ impl SqliteVfs for MemVfs {
             if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
         */
 
-        if let Ok(url) = parsed_uri {
-            let mut size: usize = 0;
-
-            let mut query_map: HashMap<String, String> = HashMap::new();
-            for (key, value) in url.query_pairs() {
-                query_map.insert(key.to_string(), value.to_string());
-
-                if key == SIZE_LABEL {
-                    size = value.parse().expect("should be an int");
-                }
-                if key == POINTER_LABEL {
-                    // Parse the ptr value as a u64 hexadecimal address
-                    if let Ok(ptr_address) = u64::from_str_radix(&value, 16) {
-                        // Assuming ptr_address is a valid memory address, you can read its contents here.
-                        let buffer = 
-                            unsafe { std::slice::from_raw_parts(ptr_address as *const u8, size) };
-
-                        rust_file.file_contents = buffer.to_vec();
-                    }
-                }
-            }
-
-            if 
-                !query_map.contains_key(SIZE_LABEL) &&
-                !query_map.contains_key(POINTER_LABEL) {
-                return cant_open;
-            }
-
-        } else {
-            return cant_open;
+        if !z_name.is_null() {
+            write_file_to_vec_u8(uri_str, &mut rust_file.file_contents)?;
         }
         
         // Skipped 'freeonclose' parameter', dropping is more idiomatic
@@ -124,20 +107,17 @@ impl SqliteVfs for MemVfs {
         Ok(())
     }
 
+    /// n_out provides crazy big numbers
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
-        let z_path_str = unsafe { CStr::from_ptr(z_name) };
-        let z_path_rust = z_path_str.to_str().expect("Invalid UTF-8 in zPath");
+        // Can't assume that the default does the same
+        // self.default_vfs.full_pathname(z_name, n_out, z_out)
 
-        let formatted = format!("{}", z_path_rust);
-        let formatted_c = CString::new(formatted).expect("Failed to create CString");
-
-        // Copy the formatted string to zOut, also endl?
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                formatted_c.as_ptr(),
-                z_out,
-                std::cmp::min(n_out as usize, formatted_c.as_bytes().len())
-            );
+            let name = CString::from_raw(z_name.cast_mut());
+            let src_ptr = name.as_ptr();
+            let dst_ptr = z_out;
+            // TODO review if we need the nul
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), name.as_bytes().len());
         }
 
         Ok(())
@@ -365,26 +345,8 @@ impl SqliteIoMethods for MemFile {
 /// Usage: "ATTACH memvfs_from_file('test.db') AS inmem;"
 fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
-    
-    let metadata = fs::metadata(path).map_err(|_| Error::new_message("can't determine file size"))?;
-    let file_size = metadata.len() as usize;
 
-    let mut file = File::open(path).map_err(|_| Error::new_message("can't open file"))?;
-    let mut file_contents: Vec<u8> = Vec::with_capacity(file_size);
-    file.read_to_end(&mut file_contents).map_err(|_| Error::new_message("can't read to the end"))?;
-    
-    let mut heap_buffer: Box<[u8]> = vec![0; file_size].into_boxed_slice();
-    unsafe {
-        ptr::copy_nonoverlapping(file_contents.as_ptr(), heap_buffer.as_mut_ptr(), file_size);
-    }
-
-    let box_ptr = Box::into_raw(heap_buffer);
-
-    let address_str = format!("{:p}", ptr::addr_of!(box_ptr));
-
-    // TODO memory passed here might leak
-
-    let text_output = format!("file:{}?vfs={}&{}={}&{}={}", path, EXTENSION_NAME, POINTER_LABEL, address_str, SIZE_LABEL, file_size);
+    let text_output = format!("file:{}?vfs={}", path, EXTENSION_NAME);
 
     api::result_text(context, text_output);
 

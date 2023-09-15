@@ -12,6 +12,7 @@ use std::{os::raw::{c_int, c_void, c_char}, ptr};
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find};
 
 unsafe fn default_vfs() -> *mut sqlite3_vfs {
+    // sqlite3_vfs_find(ptr::null())
     sqlite3_vfs_find(ptr::null())
 }
 
