@@ -40,7 +40,7 @@ pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0 
 }
 
@@ -61,7 +61,7 @@ pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -80,7 +80,7 @@ pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -118,7 +118,7 @@ pub unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -157,7 +157,7 @@ pub unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -176,7 +176,7 @@ pub unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -196,21 +196,21 @@ pub unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
 pub unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     let result = (b.rust_methods_ptr).sector_size();
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     result
 }
 
 pub unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     let result = (b.rust_methods_ptr).device_characteristics();
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     result
 }
 
@@ -232,7 +232,7 @@ pub unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -253,14 +253,14 @@ pub unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
 pub unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(arg1: *mut sqlite3_file) {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     (b.rust_methods_ptr).shm_barrier();
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
 }
 
 pub unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
@@ -278,7 +278,7 @@ pub unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -299,7 +299,7 @@ pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 
@@ -319,7 +319,7 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
+    Box::into_raw(b);
     0
 }
 

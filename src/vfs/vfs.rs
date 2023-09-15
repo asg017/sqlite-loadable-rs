@@ -30,8 +30,8 @@ pub unsafe extern "C" fn x_open<T: SqliteVfs>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     0
 }
 
@@ -48,8 +48,8 @@ pub unsafe extern "C" fn x_delete<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, z_name:
             }
         }
     }
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     0
 }
 
@@ -66,8 +66,8 @@ pub unsafe extern "C" fn x_access<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, z_name:
             }
         }
     }
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     0
 }
 
@@ -84,8 +84,8 @@ pub unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, 
             }
         }
     }
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     0
 }
 
@@ -93,8 +93,8 @@ pub unsafe extern "C" fn x_dl_open<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, z_file
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let out = b.dl_open(z_filename);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     out
 }
 
@@ -102,8 +102,8 @@ pub unsafe extern "C" fn x_dl_error<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, n_byt
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     b.dl_error(n_byte, z_err_msg);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
 }
 
 pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
@@ -114,8 +114,8 @@ pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     b.dl_sym(p_handle, z_symbol);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     None
 }
 
@@ -130,8 +130,8 @@ pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, n_b
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.randomness(n_byte, z_out);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -139,8 +139,8 @@ pub unsafe extern "C" fn x_sleep<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, microsec
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.sleep(microseconds);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -148,8 +148,8 @@ pub unsafe extern "C" fn x_current_time<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, p
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.current_time(p_time);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -170,8 +170,8 @@ pub unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
             }
         }
     }
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     0
 }
 
@@ -182,8 +182,8 @@ pub unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.current_time_int64(p_time);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -195,8 +195,8 @@ pub unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.set_system_call(z_name, p_call);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -207,8 +207,8 @@ pub unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.get_system_call(z_name);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -219,8 +219,8 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     let result = b.next_system_call(z_name);
-    Box::into_raw(b); // Drop in close
-    Box::into_raw(vfs); // Drop in close
+    Box::into_raw(b);
+    Box::into_raw(vfs);
     result
 }
 
@@ -231,15 +231,14 @@ pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> 
         let vfs_name = CString::new(name).expect("valid string");
     
         sqlite3_vfs {
-            iVersion: 3, // this library targets version 3?
-            pNext: ptr::null_mut(), // sqlite3 will change this
+            iVersion: 3,
+            pNext: ptr::null_mut(),
             pAppData: vfs_ptr.cast(),
-            szOsFile: size_ptr as i32, // raw box pointers sizes are all the same
+            // raw box pointers sizes are all the same
+            szOsFile: size_ptr as i32,
             mxPathname: max_path_name_size,
             zName: vfs_name.into_raw(),
     
-            // TODO some are optional, break down to multiple traits?
-            // TODO investigate: maybe use attribute to generate a static dispatch type, if it's too slow
             xOpen: Some(x_open::<T>),
             xDelete: Some(x_delete::<T>),
             xAccess: Some(x_access::<T>),

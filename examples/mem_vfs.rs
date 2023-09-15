@@ -40,60 +40,21 @@ fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
 }
 
 impl SqliteVfs for MemVfs {
-    // TODO re-evaluate this, don't pass pointers around
-    // TODO just open and read the from.db into MemFile's memory field
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
         let mut mem_file = MemFile {
             file_contents: Vec::new(),
             path: String::new()
         };
         
-        /*
-        memset(p, 0, sizeof(*p));
-
-        if( (flags & SQLITE_OPEN_MAIN_DB) == 0 ) return SQLITE_CANTOPEN;
-        */
-
-        // let cant_open = Err(Error::new(ErrorKind::DefineVfs(SQLITE_CANTOPEN)));
-
         let path_cstr = unsafe { CStr::from_ptr(z_name) };
         let path_str = path_cstr.to_str().expect("should be fine");
         mem_file.path = path_str.to_string();
-
-        // if (flags & SQLITE_OPEN_MAIN_DB) == 0 {
-        //     return cant_open;
-        // }
-
-        /*
-            p->aData = (unsigned char*)sqlite3_uri_int64(zName,"ptr",0);
-
-            if( p->aData == 0 ) return SQLITE_CANTOPEN;
-
-            p->sz = sqlite3_uri_int64(zName,"sz",0);
-            
-            if( p->sz < 0 ) return SQLITE_CANTOPEN;
-            
-            // Set MemFile parameter
-            p->szMax = sqlite3_uri_int64(zName,"max",p->sz);
-            
-            if( p->szMax<p->sz ) return SQLITE_CANTOPEN;
-        */
 
         if !z_name.is_null() {
             write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
         }
         
-        // Skipped 'freeonclose' parameter', dropping is more idiomatic
-        /*
-        // This is implemented and active buy default
-        p->bFreeOnClose = sqlite3_uri_boolean(zName,"freeonclose",0);
-
-        // This is implemented with traits
-        pFile->pMethods = &mem_io_methods;
-        */
-
         // TODO figure out how to drop this, store a pointer to the vfs?
-        // TODO also implement writing output to file an close
         unsafe { *p_file = *create_file_pointer( mem_file ); }
     
         Ok(())
@@ -112,9 +73,6 @@ impl SqliteVfs for MemVfs {
 
     /// n_out provides crazy big numbers, so we rely on CString to detect the end of line char
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
-        // Can't assume that the default does the same
-        // self.default_vfs.full_pathname(z_name, n_out, z_out)
-
         unsafe {
             let name = CString::from_raw(z_name.cast_mut());
             let src_ptr = name.as_ptr();
@@ -229,22 +187,6 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn write(&mut self, buf: *const c_void, size: usize, offset: usize) -> Result<()> {
-        /*
-            if( (iOfst + iAmt) > p->sz ) {
-                // Error if exceeds allocation
-                if( (iOfst+iAmt) > p->szMax ) {
-                    return SQLITE_FULL;
-                }
-                // Pre-allocate space with memset
-                if( iOfst > p->sz ) {
-                    memset(p->aData + p->sz, 0, iOfst - p->sz);
-                }
-                p->sz = iOfst + iAmt;
-            }
-            // append buf to memory
-            memcpy(p->aData + iOfst, buf, iAmt);
-            return SQLITE_OK;
-        */
         let new_length = size + offset;
         if new_length > self.file_contents.len() {
             self.file_contents.resize(new_length, 0);
@@ -260,18 +202,6 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn truncate(&mut self, size: usize) -> Result<()> {
-        // original:
-        /*
-            if( size > p->sz ) {
-                if( size > p->szMax ) {
-                    return SQLITE_FULL;
-                }
-                memset(p->aData + p->sz, 0, size-p->sz); // extend to what is required
-            }
-            p->sz = size; 
-            return SQLITE_OK;        
-        */
-
         self.file_contents.resize(size, 0);
 
         Ok(())
@@ -295,26 +225,11 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn check_reserved_lock(&mut self, p_res_out: *mut c_int) -> Result<()> {
-        // *pResOut = 0
         unsafe{ *p_res_out = 0; }
-        // TODO consider putting this in a struct
         Ok(())
     }
 
-    // TODO implement later, what does it do anyway?
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
-        /*
-            int rc = SQLITE_NOTFOUND;
-            if( op==SQLITE_FCNTL_VFSNAME ){
-                *(char**)pArg = sqlite3_mprintf("mem(%p,%lld)", p->aData, p->sz);
-                rc = SQLITE_OK;
-            }
-            // TODO use rust formatting and then create pointers
-            return rc;
-        */
-        // TODO see if format! is actually easier and less unsafe:
-        // ...format!("{}", CString::new())...
-
         unsafe {
             let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
             let out: *mut *mut char = p_arg.cast();
@@ -326,11 +241,9 @@ impl SqliteIoMethods for MemFile {
 
     fn sector_size(&mut self) -> c_int {
         1024
-        // TODO consider putting this in a struct
     }
 
     fn device_characteristics(&mut self) -> c_int {
-        // TODO consider putting this in a struct
         SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
@@ -355,8 +268,8 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn fetch(&mut self, offset: usize, size: usize, pp: *mut *mut c_void) -> Result<()> {
-        // orig: *pp = (void*)(p->aData + iOfst);
         let memory_location = self.file_contents.as_mut_ptr();
+        // TODO alignment might be messed up
         unsafe { *pp = memory_location.add(offset).cast(); }
         Ok(())
     }

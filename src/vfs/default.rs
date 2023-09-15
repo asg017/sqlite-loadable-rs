@@ -268,15 +268,13 @@ impl SqliteVfs for DefaultVfs {
 
 
 /// See ORIGFILE https://www.sqlite.org/src/file?name=ext/misc/cksumvfs.c
-/// TODO Do the same less dynamic implementation of DefaultVfs to DefaultFile
 struct DefaultFile {
     default_methods_ptr: *mut sqlite3_io_methods,
     default_file_ptr: *mut sqlite3_file,
 }
 
 impl DefaultFile {
-    /// See sqlite3_vfs::x_open sqlite3_file parameter
-    fn from_file_ptr(file_ptr: *mut sqlite3_file) -> Self {
+    fn from_ptr(file_ptr: *mut sqlite3_file) -> Self {
         Self {
             default_file_ptr: file_ptr,
             default_methods_ptr: (unsafe { *file_ptr }).pMethods.cast_mut()
@@ -286,8 +284,6 @@ impl DefaultFile {
 
 impl SqliteIoMethods for DefaultFile {
     fn close(&mut self) -> Result<()> {
-        // This won't be used probably
-        /*
         unsafe {
             if let Some(xClose) = ((*self.default_methods_ptr).xClose) {
                 let result = xClose(self.default_file_ptr);
@@ -300,13 +296,9 @@ impl SqliteIoMethods for DefaultFile {
                 Err(Error::new_message("Missing function"))
             }
         }
-        */
-        Ok(())
     }
 
     fn read(&mut self, buf: *mut c_void, i_amt: usize, i_ofst: usize) -> Result<()> {
-        // This won't be used probably
-        /*
         unsafe {
             if let Some(xRead) = ((*self.default_methods_ptr).xRead) {
                 let result = xRead(self.default_file_ptr, buf, i_amt.try_into().unwrap(), i_ofst.try_into().unwrap());
@@ -319,8 +311,6 @@ impl SqliteIoMethods for DefaultFile {
                 Err(Error::new_message("Missing function"))
             }
         }
-        */
-        Ok(())
     }
 
     fn write(
@@ -329,7 +319,6 @@ impl SqliteIoMethods for DefaultFile {
         i_amt: usize,
         i_ofst: usize,
     ) -> Result<()> {
-        /* 
         unsafe {
             if let Some(xWrite) = ((*self.default_methods_ptr).xWrite) {
                 let result = xWrite(self.default_file_ptr, buf, i_amt.try_into().unwrap(), i_ofst.try_into().unwrap());
@@ -342,8 +331,6 @@ impl SqliteIoMethods for DefaultFile {
                 Err(Error::new_message("Missing function"))
             }
         }
-        */
-        Ok(())
     }
     
     fn truncate(&mut self, size: usize) -> Result<()> {
@@ -528,10 +515,9 @@ impl SqliteIoMethods for DefaultFile {
     }
 
     fn fetch(&mut self, i_ofst: usize, i_amt: usize, pp: *mut *mut c_void) -> Result<()> {
-        /*
         unsafe {
             if let Some(xFetch) = ((*self.default_methods_ptr).xFetch) {
-                let result = xFetch(self.default_file_ptr,i_ofst, i_amt, pp);
+                let result = xFetch(self.default_file_ptr, i_ofst.try_into().unwrap(), i_amt.try_into().unwrap(), pp);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -541,15 +527,12 @@ impl SqliteIoMethods for DefaultFile {
                 Err(Error::new_message("Missing function"))
             }
         }
-        */
-        Ok(())
     }
 
     fn unfetch(&mut self, i_ofst: usize, p: *mut c_void) -> Result<()> {
-        /*
         unsafe {
             if let Some(xUnfetch) = ((*self.default_methods_ptr).xUnfetch) {
-                let result = xUnfetch(self.default_file_ptr,i_ofst, p);
+                let result = xUnfetch(self.default_file_ptr,i_ofst.try_into().unwrap(), p);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -559,8 +542,6 @@ impl SqliteIoMethods for DefaultFile {
                 Err(Error::new_message("Missing function"))
             }
         }
-        */
-        Ok(())
     }
 }
     
