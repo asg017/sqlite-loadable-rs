@@ -12,7 +12,6 @@ use std::ffi::{CString, CStr};
 use std::fs::{File, self};
 use std::io::{Write, Read, self};
 use std::os::raw::{c_int, c_void, c_char};
-use std::rc::Rc;
 use std::{ptr, mem};
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find, sqlite3_context_db_handle, sqlite3_file_control};
 use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
@@ -22,7 +21,6 @@ use libsqlite3_sys::{sqlite3_snprintf, sqlite3_mprintf};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
-    name: Rc<CString>,
     default_vfs: DefaultVfs,
 }
 
@@ -320,9 +318,8 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
-    let name = Rc::new(CString::new(EXTENSION_NAME).expect("should be fine"));
+    let name = CString::new(EXTENSION_NAME).expect("should be fine");
     let mem_vfs = MemVfs {
-        name: name.clone(),
         default_vfs: unsafe {
             // pass thru
             DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
