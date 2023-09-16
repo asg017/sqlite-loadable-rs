@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
+use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK, SQLITE_FCNTL_VFSNAME};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
@@ -230,12 +230,12 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
-        unsafe {
-            let new_args: *mut c_char = sqlite3_mprintf(CString::new("%p,%lld").expect("should be fine").clone().as_ptr(), self.file_contents.as_ptr(), self.file_contents.len());
-            let out: *mut *mut char = p_arg.cast();
-            *out = new_args.cast(); // TODO test with scalar functions
-        }
-
+        // Don't use this
+        // if op == SQLITE_FCNTL_VFSNAME {
+        //     Ok(())    
+        // }else {
+        //     Err(Error::new_message("Can't find vfs"))
+        // }
         Ok(())
     }
 
