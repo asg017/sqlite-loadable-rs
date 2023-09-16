@@ -26,11 +26,11 @@ use sqlite3ext_sys::{
     sqlite3_result_pointer, sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt,
     sqlite3_value, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double,
     sqlite3_value_int, sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_subtype,
-    sqlite3_value_text, sqlite3_value_type,
+    sqlite3_value_text, sqlite3_value_type, sqlite3_vfs_unregister, sqlite3_vfs_register, sqlite3_vfs_find, sqlite3_vfs, sqlite3_file_control,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
-/// to a proper sqlite3_api_rountines module (from a entrypoint function).
+/// to a proper sqlite3_api_routines module (from a entrypoint function).
 /// The "sqlite_entrypoint" macro will do this for you usually.
 static mut SQLITE3_API: *mut sqlite3_api_routines = std::ptr::null_mut();
 
@@ -400,7 +400,7 @@ pub unsafe fn sqlite3ext_vtab_in_next(
     ((*SQLITE3_API).vtab_in_next.expect(EXPECT_MESSAGE))(value_list, value_out)
 }
 
-pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
+pub unsafe fn sqlite3ext_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
     if SQLITE3_API.is_null() {
         return sqlite3_declare_vtab(db, s);
     }
@@ -418,3 +418,40 @@ pub unsafe fn sqlite3ext_context_db_handle(context: *mut sqlite3_context) -> *mu
     }
     ((*SQLITE3_API).context_db_handle.expect(EXPECT_MESSAGE))(context)
 }
+
+pub unsafe fn sqlite3ext_vfs_unregister(vfs_ptr: *mut sqlite3_vfs) -> i32 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_vfs_unregister(vfs_ptr);
+    }
+    ((*SQLITE3_API).vfs_unregister.expect(EXPECT_MESSAGE))(vfs_ptr)    
+}
+
+pub unsafe fn sqlite3ext_vfs_register(
+    vfs_ptr: *mut sqlite3_vfs,
+    make_default: i32,
+) -> i32 {
+    if SQLITE3_API.is_null() {
+        return sqlite3_vfs_register(vfs_ptr, make_default);
+    }
+    ((*SQLITE3_API).vfs_register.expect(EXPECT_MESSAGE))(vfs_ptr, make_default)
+}
+
+pub unsafe fn sqlite3ext_vfs_find(name: *const c_char) -> *mut sqlite3_vfs {
+    if SQLITE3_API.is_null() {
+        return sqlite3_vfs_find(name);
+    }
+    ((*SQLITE3_API).vfs_find.expect(EXPECT_MESSAGE))(name)
+}
+
+pub unsafe fn sqlite3ext_file_control (
+    db: *mut sqlite3,
+    name: *const c_char,
+    option: c_int,
+    data: *mut c_void,
+) -> c_int {
+    if SQLITE3_API.is_null() {
+        return sqlite3_file_control(db, name, option, data);
+    }
+    ((*SQLITE3_API).file_control.expect(EXPECT_MESSAGE))(db, name, option, data)
+}
+

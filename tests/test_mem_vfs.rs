@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK, SQLITE_FCNTL_VFSNAME, SQLITE_FCNTL_FILE_POINTER};
+use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
@@ -13,11 +14,10 @@ use std::fs::{File, self};
 use std::io::{Write, Read, self};
 use std::os::raw::{c_int, c_void, c_char};
 use std::{ptr, mem};
-use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find, sqlite3_context_db_handle, sqlite3_file_control};
+use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
 use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
-use libsqlite3_sys::{sqlite3_snprintf, sqlite3_mprintf};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
@@ -283,12 +283,12 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
     let mut file = File::create(path).map_err(|_| Error::new_message("can't create file"))?;
     let mut vfs_file_ptr: *mut MemFile = ptr::null_mut();
 
-    let db = unsafe { sqlite3_context_db_handle(context) };
+    let db = unsafe { sqlite3ext_context_db_handle(context) };
 
     let schema = CString::new(EXTENSION_NAME).expect("should be a valid name");
     let schema_ptr = schema.as_ptr();
 
-    unsafe { sqlite3_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast()) };
+    unsafe { sqlite3ext_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast()) };
 
     let file_contents = &(unsafe { &*vfs_file_ptr }).file_contents;
 
@@ -305,7 +305,7 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     let mem_vfs = MemVfs {
         default_vfs: unsafe {
             // pass thru
-            DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
+            DefaultVfs::from_ptr(sqlite3ext_vfs_find(ptr::null()))
         },
         name: name
     };

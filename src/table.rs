@@ -24,7 +24,7 @@ use crate::ext::{
     sqlite3ext_create_module_v2, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in_first,
     sqlite3ext_vtab_in_next,
 };
-use crate::ext::{sqlite3ext_vtab_in, sqlitex_declare_vtab};
+use crate::ext::{sqlite3ext_vtab_in, sqlite3ext_declare_vtab};
 use serde::{Deserialize, Serialize};
 
 /// Possible operators for a given constraint, found and used in xBestIndex and xFilter.
@@ -826,7 +826,7 @@ where
     match T::create(db, aux.as_ref(), args) {
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
-                let rc = sqlitex_declare_vtab(db, c_sql.as_ptr());
+                let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
                 if rc == SQLITE_OKAY {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
@@ -869,7 +869,7 @@ where
     match T::connect(db, aux.as_ref(), args) {
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
-                let rc = sqlitex_declare_vtab(db, c_sql.as_ptr());
+                let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
                 if rc == SQLITE_OKAY {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();

@@ -12,6 +12,7 @@ use crate::vfs::vfs::handle_error;
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     let result = (b.rust_methods_ptr).close();
+    // Box::into_raw(b); // TODO check segfault when loading extension
     handle_error(result)
 }
 

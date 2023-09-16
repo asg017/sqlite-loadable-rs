@@ -1,12 +1,13 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, sqlite3_vfs_register, sqlite3_vfs_find};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr};
 use std::ffi::{CString, CStr};
 use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
 use std::rc::Rc;
 
+use crate::ext::sqlite3ext_vfs_register;
 use crate::{ErrorKind, Error};
 
 use super::traits::SqliteVfs;
@@ -137,8 +138,9 @@ pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
 ) {
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
-
     b.dl_close(p_handle);
+    // Box::into_raw(vfs); // TODO check segfault when loading extension
+    // Box::into_raw(b); // TODO check segfault when loading extension
 }
 
 pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(
@@ -312,7 +314,7 @@ pub fn create_vfs<T: SqliteVfs>(vfs: T, name_ptr: *const c_char, max_path_name_s
 pub fn register_vfs(vfs: sqlite3_vfs, make_default: bool) -> crate::Result<()> {
     let translate_to_int = if make_default { 1 } else { 0 };
 
-    let result = unsafe { sqlite3_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
+    let result = unsafe { sqlite3ext_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
     
     if result == 0 {
         Ok(())
