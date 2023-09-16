@@ -53,7 +53,7 @@ impl SqliteVfs for MemVfs {
             write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
         }
         
-        unsafe { *p_file = *create_file_pointer( mem_file ); } // TODO valgrind: this leaks
+        unsafe { *p_file = *create_file_pointer( mem_file ); }
     
         Ok(())
     }
@@ -69,9 +69,9 @@ impl SqliteVfs for MemVfs {
         Ok(())
     }
 
-    /// n_out provides crazy big numbers, so we rely on CString to detect the end of line char
     fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
         unsafe {
+            // don't rely on type conversion of n_out to determine the end line char
             let name = CString::from_raw(z_name.cast_mut());
             let src_ptr = name.as_ptr();
             let dst_ptr = z_out;
@@ -156,21 +156,19 @@ impl MemFile {
 }
 
 impl SqliteIoMethods for MemFile {
-    /// The original example contains an explicit deallocation,
-    /// but the base implementation takes care of that already
-    /// with a Box::from_raw, that forces the datastructure
-    /// to drop at the end of the scope
     fn close(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn read(&mut self, buf: *mut c_void, size: usize, offset: usize) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+        let size: usize = s.try_into().unwrap();
+        let offset = ofst.try_into().unwrap();
         let source = &mut self.file_contents;
         if source.len() < size {
             let new_len = offset + size;
             let prev_len = source.len();
             source.resize(new_len, 0);
-            source.extend(vec![0; new_len - prev_len]); // TODO valgrind: this leaks
+            source.extend(vec![0; new_len - prev_len]);
         }
 
         let src_ptr = source[offset..(size-1)].as_ptr();
@@ -179,7 +177,9 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn write(&mut self, buf: *const c_void, size: usize, offset: usize) -> Result<()> {
+    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
+        let size = s.try_into().unwrap();
+        let offset = ofst.try_into().unwrap();
         let new_length = size + offset;
         if new_length > self.file_contents.len() {
             self.file_contents.resize(new_length, 0);
@@ -194,8 +194,8 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn truncate(&mut self, size: usize) -> Result<()> {
-        self.file_contents.resize(size, 0);
+    fn truncate(&mut self, size: i64) -> Result<()> {
+        self.file_contents.resize(size.try_into().unwrap(), 0);
 
         Ok(())
     }
@@ -222,13 +222,8 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
+    // it's probably easier to pass parameters via the uri in the custom function
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
-        // Don't use this
-        // if op == SQLITE_FCNTL_VFSNAME {
-        //     Ok(())    
-        // }else {
-        //     Err(Error::new_message("Can't find vfs"))
-        // }
         Ok(())
     }
 
@@ -260,14 +255,13 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn fetch(&mut self, offset: usize, size: usize, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
         let memory_location = self.file_contents.as_mut_ptr();
-        // TODO determine alignment might be messed up
-        unsafe { *pp = memory_location.add(offset).cast(); }
+        unsafe { *pp = memory_location.add(ofst.try_into().unwrap()).cast(); }
         Ok(())
     }
 
-    fn unfetch(&mut self, i_ofst: usize, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
         Ok(())
     }
 }
@@ -316,9 +310,8 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
         name: name
     };
     let name_ptr = mem_vfs.name.as_ptr();
-    // let mem_file_size = mem::size_of::<MemFile>().try_into().unwrap();
-    let mem_file_size = 0;
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, mem_file_size);
+
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, None);
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;

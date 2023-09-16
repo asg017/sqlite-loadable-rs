@@ -130,7 +130,7 @@ pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
     None
 }
 
-/// Let Box go out of scope, thus drop // TODO valgrind
+/// Let Boxes go out of scope, thus drop
 pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_handle: *mut c_void,
@@ -139,8 +139,6 @@ pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
 
     b.dl_close(p_handle);
-    Box::into_raw(b);
-    Box::into_raw(vfs);
 }
 
 pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(
@@ -258,20 +256,25 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     result
 }
 
-pub fn create_vfs<T: SqliteVfs>(vfs: T, name_ptr: *const c_char, max_path_name_size: i32, vfs_file_size: i32) -> sqlite3_vfs {
+pub fn create_vfs<T: SqliteVfs>(vfs: T, name_ptr: *const c_char, max_path_name_size: i32, vfs_file_size: Option<i32>) -> sqlite3_vfs {
     unsafe {
         let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
 
+        /// According to the documentation:
         /// At least vfs_file_size bytes of memory are allocated by SQLite to hold the sqlite3_file
         /// structure passed as the third argument to xOpen. The xOpen method does not have to
         /// allocate the structure; it should just fill it in.
+        /// 
+        /// But dropping seems to work without any leaks, double frees etc.
     
+        let min_vfs_file_size = vfs_file_size.unwrap_or(0);
+
         sqlite3_vfs {
             iVersion: 3,
             pNext: ptr::null_mut(),
             pAppData: vfs_ptr.cast(),
             // raw box pointers sizes are all the same
-            szOsFile: vfs_file_size,
+            szOsFile: min_vfs_file_size,
             mxPathname: max_path_name_size,
             zName: name_ptr,
 

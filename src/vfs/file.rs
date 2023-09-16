@@ -8,13 +8,10 @@ use crate::{vfs::traits::SqliteIoMethods};
 use crate::{Error, Result, ErrorKind};
 use crate::vfs::vfs::handle_error;
 
+/// Let Boxes go out of scope, thus drop
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     let result = (b.rust_methods_ptr).close();
-    // We let sqlite3 free the File, but it will leak if the Box<XFile>
-    // is bigger than we suggested when registering the vfs
-    // TODO Set the value required, as reported by valgrind, do this dynamically later
-    Box::into_raw(b);
     handle_error(result)
 }
 
@@ -25,7 +22,7 @@ pub unsafe extern "C" fn x_read<T: SqliteIoMethods>(
     iOfst: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (b.rust_methods_ptr).read(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap());
+    let result = (b.rust_methods_ptr).read(buf, iAmt, iOfst);
     Box::into_raw(b);
     handle_error(result)
 }
@@ -38,7 +35,7 @@ pub unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     iOfst: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (b.rust_methods_ptr).write(buf, iAmt.try_into().unwrap(), iOfst.try_into().unwrap());
+    let result = (b.rust_methods_ptr).write(buf, iAmt, iOfst);
     Box::into_raw(b);
     handle_error(result)
 }
@@ -49,7 +46,7 @@ pub unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     size: sqlite3_int64,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (b.rust_methods_ptr).truncate(size.try_into().unwrap());
+    let result = (b.rust_methods_ptr).truncate(size);
     Box::into_raw(b);
     handle_error(result)
 }
@@ -181,7 +178,7 @@ pub unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
     pp: *mut *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (b.rust_methods_ptr).fetch(iOfst.try_into().unwrap(), iAmt.try_into().unwrap(), pp);
+    let result = (b.rust_methods_ptr).fetch(iOfst, iAmt, pp);
     Box::into_raw(b);
     handle_error(result)
 }
@@ -192,13 +189,12 @@ pub unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
     p: *mut c_void,
 ) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
-    let result = (b.rust_methods_ptr).unfetch(iOfst.try_into().unwrap(), p);
+    let result = (b.rust_methods_ptr).unfetch(iOfst, p);
     Box::into_raw(b);
     handle_error(result)
 }
 
-// C struct polymorphism, given the alignment and field sequence
-// remain the same, then again, T might ruin the party
+// C struct polymorphism, given the alignment and field sequence are the same
 #[repr(C)]
 pub struct FilePolymorph<T: SqliteIoMethods> {
     pub methods_ptr: *const sqlite3_io_methods,

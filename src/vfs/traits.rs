@@ -4,23 +4,23 @@ use std::os::raw::{c_int, c_void, c_char};
 
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
 
-// TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks)
+// TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
 /// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
 pub trait SqliteIoMethods {
     fn close(&mut self) -> Result<()>;
     fn read(
         &mut self,
         buf: *mut c_void,
-        i_amt: usize,
-        i_ofst: usize,
+        i_amt: i32,
+        i_ofst: i64,
     ) -> Result<()>;
     fn write(
         &mut self,
         buf: *const c_void,
-        i_amt: usize,
-        i_ofst: usize,
+        i_amt: i32,
+        i_ofst: i64,
     ) -> Result<()>;
-    fn truncate(&mut self, size: usize) -> Result<()>;
+    fn truncate(&mut self, size: i64) -> Result<()>;
     fn sync(&mut self, flags: c_int) -> Result<()>;
     fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()>;
     fn lock(&mut self, arg2: c_int) -> Result<()>;
@@ -56,13 +56,13 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn fetch(
         &mut self,
-        i_ofst: usize,
-        i_amt: usize,
+        i_ofst: sqlite3_int64,
+        i_amt: c_int,
         pp: *mut *mut c_void,
     ) -> Result<()>;
     fn unfetch(
         &mut self,
-        i_ofst: usize,
+        i_ofst: sqlite3_int64,
         p: *mut c_void,
     ) -> Result<()>;
 }

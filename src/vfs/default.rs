@@ -298,7 +298,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn read(&mut self, buf: *mut c_void, i_amt: usize, i_ofst: usize) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, i_amt: i32, i_ofst: i64) -> Result<()> {
         unsafe {
             if let Some(xRead) = ((*self.default_methods_ptr).xRead) {
                 let result = xRead(self.default_file_ptr, buf, i_amt.try_into().unwrap(), i_ofst.try_into().unwrap());
@@ -316,8 +316,8 @@ impl SqliteIoMethods for DefaultFile {
     fn write(
         &mut self,
         buf: *const c_void,
-        i_amt: usize,
-        i_ofst: usize,
+        i_amt: i32,
+        i_ofst: i64,
     ) -> Result<()> {
         unsafe {
             if let Some(xWrite) = ((*self.default_methods_ptr).xWrite) {
@@ -333,7 +333,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
     
-    fn truncate(&mut self, size: usize) -> Result<()> {
+    fn truncate(&mut self, size: i64) -> Result<()> {
         unsafe {
             if let Some(xTruncate) = ((*self.default_methods_ptr).xTruncate) {
                 let result = xTruncate(self.default_file_ptr, size.try_into().unwrap());
@@ -514,7 +514,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn fetch(&mut self, i_ofst: usize, i_amt: usize, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, i_ofst: i64, i_amt: i32, pp: *mut *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xFetch) = ((*self.default_methods_ptr).xFetch) {
                 let result = xFetch(self.default_file_ptr, i_ofst.try_into().unwrap(), i_amt.try_into().unwrap(), pp);
@@ -529,7 +529,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn unfetch(&mut self, i_ofst: usize, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xUnfetch) = ((*self.default_methods_ptr).xUnfetch) {
                 let result = xUnfetch(self.default_file_ptr,i_ofst.try_into().unwrap(), p);
