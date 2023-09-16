@@ -6,9 +6,11 @@ use std::{os::raw::{c_int, c_void}};
 
 use crate::{vfs::traits::SqliteIoMethods, ErrorKind};
 
-/// Let Box go out of scope, thus drop // TODO valgrind
+/// Let Box go out of scope, thus drop whatever it's carrying
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
+    Box::from_raw(b.methods_ptr.cast_mut());
+    
     match (b.rust_methods_ptr).close() {
         Ok(()) => (),
         Err(e) => {
@@ -19,7 +21,7 @@ pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) ->
             }
         }
     }
-    Box::from_raw(b.methods_ptr.cast_mut());
+
     0 
 }
 

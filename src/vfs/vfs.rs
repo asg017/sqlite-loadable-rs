@@ -2,9 +2,10 @@
 #![ allow(unused)]
 
 use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, sqlite3_vfs_register, sqlite3_vfs_find};
-use std::ffi::CString;
+use std::ffi::{CString, CStr};
 use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
+use std::rc::Rc;
 
 use crate::{ErrorKind, Error};
 
@@ -102,6 +103,7 @@ pub unsafe extern "C" fn x_dl_error<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, n_byt
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     b.dl_error(n_byte, z_err_msg);
+
     Box::into_raw(b);
     Box::into_raw(vfs);
 }
@@ -123,6 +125,7 @@ pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
 pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, p_handle: *mut c_void) {
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
+
     b.dl_close(p_handle);
 }
 
@@ -224,29 +227,42 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     result
 }
 
-pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> sqlite3_vfs {
+pub fn create_vfs<T: SqliteVfs>(vfs: T, name: Rc<CString>, max_path_name_size: i32, vfs_file_size: i32) -> sqlite3_vfs {
     unsafe {
         let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
-        let size_ptr = std::mem::size_of::<*mut T>(); // this should remain the same
-        let vfs_name = CString::new(name).expect("valid string");
+
+        /// At least vfs_file_size bytes of memory are allocated by SQLite to hold the sqlite3_file
+        /// structure passed as the third argument to xOpen. The xOpen method does not have to
+        /// allocate the structure; it should just fill it in.
     
         sqlite3_vfs {
             iVersion: 3,
             pNext: ptr::null_mut(),
             pAppData: vfs_ptr.cast(),
             // raw box pointers sizes are all the same
-            szOsFile: size_ptr as i32,
+            szOsFile: vfs_file_size,
             mxPathname: max_path_name_size,
-            zName: vfs_name.into_raw(),
-    
+            zName: name.clone().as_ptr(),
+
             xOpen: Some(x_open::<T>),
             xDelete: Some(x_delete::<T>),
             xAccess: Some(x_access::<T>),
             xFullPathname: Some(x_full_pathname::<T>),
+    
+            /// The following four VFS methods:
+            ///
+            ///   xDlOpen
+            ///   xDlError
+            ///   xDlSym
+            ///   xDlClose
+            ///
+            /// are supposed to implement the functionality needed by SQLite to load
+            /// extensions compiled as shared objects.
             xDlOpen: Some(x_dl_open::<T>),
             xDlError: Some(x_dl_error::<T>),
             xDlSym: Some(x_dl_sym::<T>),
             xDlClose: Some(x_dl_close::<T>),
+
             xRandomness: Some(x_randomness::<T>),
             xSleep: Some(x_sleep::<T>),
             xCurrentTime: Some(x_current_time::<T>),
@@ -256,7 +272,6 @@ pub fn create_vfs<T: SqliteVfs>(vfs: T, name: &str, max_path_name_size: i32) -> 
             xGetSystemCall: Some(x_get_system_call::<T>),
             xNextSystemCall: Some(x_next_system_call::<T>),
         }
-    
     }
 }
 

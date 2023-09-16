@@ -12,7 +12,8 @@ use std::ffi::{CString, CStr};
 use std::fs::{File, self};
 use std::io::{Write, Read, self};
 use std::os::raw::{c_int, c_void, c_char};
-use std::ptr;
+use std::rc::Rc;
+use std::{ptr, mem};
 use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_vfs_register, sqlite3_io_methods, sqlite3_vfs_find, sqlite3_context_db_handle, sqlite3_file_control};
 use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
@@ -21,6 +22,7 @@ use libsqlite3_sys::{sqlite3_snprintf, sqlite3_mprintf};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
+    name: Rc<CString>,
     default_vfs: DefaultVfs,
 }
 
@@ -54,7 +56,6 @@ impl SqliteVfs for MemVfs {
             write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
         }
         
-        // TODO figure out how to drop this, store a pointer to the vfs?
         unsafe { *p_file = *create_file_pointer( mem_file ); }
     
         Ok(())
@@ -319,13 +320,15 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
-    let vfs: sqlite3_vfs = create_vfs(
-        MemVfs {
-            default_vfs: unsafe {
-                // pass thru
-                DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
-            }
-        }, EXTENSION_NAME, 1024);
+    let name = Rc::new(CString::new(EXTENSION_NAME).expect("should be fine"));
+    let mem_vfs = MemVfs {
+        name: name.clone(),
+        default_vfs: unsafe {
+            // pass thru
+            DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
+        }
+    };
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name.clone(), 1024, mem::size_of::<MemFile>().try_into().unwrap());
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
