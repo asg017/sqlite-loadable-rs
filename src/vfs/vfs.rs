@@ -227,7 +227,7 @@ pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     result
 }
 
-pub fn create_vfs<T: SqliteVfs>(vfs: T, name: CString, max_path_name_size: i32, vfs_file_size: i32) -> sqlite3_vfs {
+pub fn create_vfs<T: SqliteVfs>(vfs: T, name_ptr: *const c_char, max_path_name_size: i32, vfs_file_size: i32) -> sqlite3_vfs {
     unsafe {
         let vfs_ptr = Box::into_raw(Box::<T>::new(vfs));
 
@@ -242,7 +242,7 @@ pub fn create_vfs<T: SqliteVfs>(vfs: T, name: CString, max_path_name_size: i32, 
             // raw box pointers sizes are all the same
             szOsFile: vfs_file_size,
             mxPathname: max_path_name_size,
-            zName: name.clone().as_ptr(),
+            zName: name_ptr,
 
             xOpen: Some(x_open::<T>),
             xDelete: Some(x_delete::<T>),

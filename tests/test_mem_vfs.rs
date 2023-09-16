@@ -22,6 +22,7 @@ use libsqlite3_sys::{sqlite3_snprintf, sqlite3_mprintf};
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
     default_vfs: DefaultVfs,
+    name: CString,
 }
 
 const EXTENSION_NAME: &str = "memvfs";
@@ -323,9 +324,11 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
         default_vfs: unsafe {
             // pass thru
             DefaultVfs::from_ptr(sqlite3_vfs_find(ptr::null()))
-        }
+        },
+        name: name
     };
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name.clone(), 1024, mem::size_of::<MemFile>().try_into().unwrap());
+    let name_ptr = mem_vfs.name.as_ptr();
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, mem::size_of::<MemFile>().try_into().unwrap());
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
