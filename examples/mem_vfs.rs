@@ -1,12 +1,12 @@
 #![allow(unused)]
 
-use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK, SQLITE_FCNTL_VFSNAME, SQLITE_FCNTL_FILE_POINTER};
+use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
 use sqlite_loadable::vfs::default::DefaultVfs;
+use sqlite_loadable::vfs::file::FilePolymorph;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api};
-use sqlite_loadable::{Result, vfs::traits::SqliteVfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
 use url::Url;
 
 use std::ffi::{CString, CStr};
@@ -91,7 +91,8 @@ impl SqliteVfs for MemVfs {
         self.default_vfs.dl_error(n_byte, z_err_msg)
     }
 
-    fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char) -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
+    fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char)
+        -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
         self.default_vfs.dl_sym(arg2, z_symbol)
     }
 
@@ -222,7 +223,6 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    // it's probably easier to pass parameters via the uri in the custom function
     fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
@@ -277,28 +277,6 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
     Ok(())
 }
 
-fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
-    let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
-    
-    let mut file = File::create(path).map_err(|_| Error::new_message("can't create file"))?;
-    let mut vfs_file_ptr: *mut MemFile = ptr::null_mut();
-
-    let db = unsafe { sqlite3ext_context_db_handle(context) };
-
-    let schema = CString::new(EXTENSION_NAME).expect("should be a valid name");
-    let schema_ptr = schema.as_ptr();
-
-    unsafe { sqlite3ext_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast()) };
-
-    let file_contents = &(unsafe { &*vfs_file_ptr }).file_contents;
-
-    file.write_all(&file_contents).map_err(|_| Error::new_message("can't write to file"))?;
-
-    file.flush().map_err(|_| Error::new_message("can't flush file"))?;
-
-    Ok(())
-}
-
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     let name = CString::new(EXTENSION_NAME).expect("should be fine");
@@ -316,7 +294,6 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "memvfs_from_file", 1, vfs_from_file, flags)?;
-    define_scalar_function(db, "memvfs_to_file", 1, vfs_to_file, flags)?;
 
     Ok(())
 }

@@ -14,5 +14,3 @@ INSERT INTO t3 VALUES('a', 4),
                      ('c', 3),
                      ('d', 8),
                      ('e', 1);
-
-select memvfs_to_file("to.db");

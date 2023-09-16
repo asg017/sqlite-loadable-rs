@@ -139,8 +139,6 @@ pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     b.dl_close(p_handle);
-    // Box::into_raw(vfs); // TODO check segfault when loading extension
-    // Box::into_raw(b); // TODO check segfault when loading extension
 }
 
 pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(

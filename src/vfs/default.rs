@@ -133,12 +133,10 @@ impl SqliteVfs for DefaultVfs {
         z_symbol: *const c_char,
     ) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
         unsafe {
-            if let Some(xDlSym) = (*self.default_vfs).xDlSym {
-                // Some(xDlSym(self.default_vfs, arg2, z_symbol)) // TODO
-                None
-            } else {
-                None
+            if let Some(func) = (*self.default_vfs).xDlSym {
+                func(self.default_vfs, arg2, z_symbol);
             }
+            None
         }
     }
 
