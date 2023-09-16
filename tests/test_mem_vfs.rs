@@ -356,6 +356,13 @@ mod tests {
         conn.execute("CREATE TABLE t3(x, y)", ());
         conn.execute("INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)", ());
 
+        let result: String = conn
+        .query_row("select x from t3 where y = 4", (), |x| x.get(0))
+        .unwrap();
+
+        assert_eq!(result, "a");
+
+        // TODO there's no evidence this is working at all
         conn.execute("memvfs_to_file('to.db')", ());
     }
 }
