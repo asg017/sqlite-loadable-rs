@@ -8,10 +8,13 @@ use crate::{vfs::traits::SqliteIoMethods};
 use crate::{Error, Result, ErrorKind};
 use crate::vfs::vfs::handle_error;
 
-/// Let Box go out of scope, thus drop whatever it's carrying
 pub unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
     let mut b = Box::<FilePolymorph<T>>::from_raw(arg1.cast::<FilePolymorph<T>>());
     let result = (b.rust_methods_ptr).close();
+    // We let sqlite3 free the File, but it will leak if the Box<XFile>
+    // is bigger than we suggested when registering the vfs
+    // TODO Set the value required, as reported by valgrind, do this dynamically later
+    Box::into_raw(b);
     handle_error(result)
 }
 

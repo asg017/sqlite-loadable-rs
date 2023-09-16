@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK, SQLITE_FCNTL_VFSNAME};
+use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK, SQLITE_FCNTL_VFSNAME, SQLITE_FCNTL_FILE_POINTER};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
@@ -55,7 +55,7 @@ impl SqliteVfs for MemVfs {
             write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
         }
         
-        unsafe { *p_file = *create_file_pointer( mem_file ); }
+        unsafe { *p_file = *create_file_pointer( mem_file ); } // TODO valgrind: this leaks
     
         Ok(())
     }
@@ -77,7 +77,6 @@ impl SqliteVfs for MemVfs {
             let name = CString::from_raw(z_name.cast_mut());
             let src_ptr = name.as_ptr();
             let dst_ptr = z_out;
-            // TODO review if we need the nul
             ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), name.as_bytes().len());
             name.into_raw();
         }
@@ -168,16 +167,12 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn read(&mut self, buf: *mut c_void, size: usize, offset: usize) -> Result<()> {
-        /*
-        memcpy(buf, p->aData+iOfst, iAmt);
-        */
-
         let source = &mut self.file_contents;
         if source.len() < size {
             let new_len = offset + size;
             let prev_len = source.len();
             source.resize(new_len, 0);
-            source.extend(vec![0; new_len - prev_len]);
+            source.extend(vec![0; new_len - prev_len]); // TODO valgrind: this leaks
         }
 
         let src_ptr = source[offset..(size-1)].as_ptr();
@@ -269,7 +264,7 @@ impl SqliteIoMethods for MemFile {
 
     fn fetch(&mut self, offset: usize, size: usize, pp: *mut *mut c_void) -> Result<()> {
         let memory_location = self.file_contents.as_mut_ptr();
-        // TODO alignment might be messed up
+        // TODO determine alignment might be messed up
         unsafe { *pp = memory_location.add(offset).cast(); }
         Ok(())
     }
@@ -298,12 +293,8 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 
     let db = unsafe { sqlite3_context_db_handle(context) };
 
-    // ? is more idiomatic, but this shouldn't fail
     let schema = CString::new(EXTENSION_NAME).expect("should be a valid name");
     let schema_ptr = schema.as_ptr();
-
-    // workaround for bindings.rs generated with the wrong type
-    const SQLITE_FCNTL_FILE_POINTER: i32 = 7;
 
     unsafe { sqlite3_file_control(db, schema_ptr, SQLITE_FCNTL_FILE_POINTER, vfs_file_ptr.cast()) };
 
@@ -313,7 +304,6 @@ fn vfs_to_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> 
 
     file.flush().map_err(|_| Error::new_message("can't flush file"))?;
 
-    // TODO really check for memory leaks
     Ok(())
 }
 
@@ -328,7 +318,9 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
         name: name
     };
     let name_ptr = mem_vfs.name.as_ptr();
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, mem::size_of::<MemFile>().try_into().unwrap());
+    // let mem_file_size = mem::size_of::<MemFile>().try_into().unwrap();
+    let mem_file_size = 0;
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, mem_file_size);
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
