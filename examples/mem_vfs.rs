@@ -33,8 +33,6 @@ fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
 
     let mut file = File::open(path).map_err(|_| Error::new_message("can't open file"))?;
 
-    unsafe { dest.set_len(file_size) };
-
     file.read_to_end(dest).map_err(|_| Error::new_message("can't read to the end"))?;
     
     Ok(())
