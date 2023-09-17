@@ -25,7 +25,7 @@ pub(crate) fn handle_error(result: Result<(), Error>) -> c_int {
     }
 }
 
-pub unsafe extern "C" fn x_open<T: SqliteVfs>(
+unsafe extern "C" fn x_open<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
     p_file: *mut sqlite3_file,
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn x_open<T: SqliteVfs>(
     handle_error(result)
 }
 
-pub unsafe extern "C" fn x_delete<T: SqliteVfs>(
+unsafe extern "C" fn x_delete<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
     sync_dir: c_int,
@@ -57,7 +57,7 @@ pub unsafe extern "C" fn x_delete<T: SqliteVfs>(
     handle_error(result)
 }
 
-pub unsafe extern "C" fn x_access<T: SqliteVfs>(
+unsafe extern "C" fn x_access<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
     flags: c_int,
@@ -73,7 +73,7 @@ pub unsafe extern "C" fn x_access<T: SqliteVfs>(
     handle_error(result)
 }
 
-pub unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
+unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
     n_out: c_int,
@@ -89,7 +89,7 @@ pub unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
     handle_error(result)
 }
 
-pub unsafe extern "C" fn x_dl_open<T: SqliteVfs>(
+unsafe extern "C" fn x_dl_open<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_filename: *const c_char,
 ) -> *mut c_void {
@@ -103,7 +103,7 @@ pub unsafe extern "C" fn x_dl_open<T: SqliteVfs>(
     out
 }
 
-pub unsafe extern "C" fn x_dl_error<T: SqliteVfs>(
+unsafe extern "C" fn x_dl_error<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     n_byte: c_int,
     z_err_msg: *mut c_char,
@@ -116,7 +116,7 @@ pub unsafe extern "C" fn x_dl_error<T: SqliteVfs>(
     Box::into_raw(vfs);
 }
 
-pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
+unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_handle: *mut c_void,
     z_symbol: *const c_char,
@@ -132,7 +132,7 @@ pub unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
 }
 
 /// Let Boxes go out of scope, thus drop
-pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
+unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_handle: *mut c_void,
 ) {
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     b.dl_close(p_handle);
 }
 
-pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(
+unsafe extern "C" fn x_randomness<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     n_byte: c_int,
     z_out: *mut c_char,
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn x_randomness<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_sleep<T: SqliteVfs>(
+unsafe extern "C" fn x_sleep<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     microseconds: c_int,
 ) -> c_int {
@@ -170,7 +170,7 @@ pub unsafe extern "C" fn x_sleep<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_current_time<T: SqliteVfs>(
+unsafe extern "C" fn x_current_time<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_time: *mut f64,
 ) -> c_int {
@@ -184,7 +184,7 @@ pub unsafe extern "C" fn x_current_time<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
+unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     err_code: c_int,
     z_err_msg: *mut c_char,
@@ -199,7 +199,7 @@ pub unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
     handle_error(result)
 }
 
-pub unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
+unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_time: *mut sqlite3_int64,
 ) -> c_int {
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
+unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
     p_call: sqlite3_syscall_ptr,
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
+unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
 ) -> sqlite3_syscall_ptr {
@@ -242,7 +242,7 @@ pub unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
     result
 }
 
-pub unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
+unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
 ) -> *const c_char {
