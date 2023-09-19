@@ -2,7 +2,7 @@ use crate::errors::Result;
 
 use std::os::raw::{c_int, c_void, c_char};
 
-use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
+use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
 
 // TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
 /// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
@@ -22,7 +22,7 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn truncate(&mut self, size: i64) -> Result<()>;
     fn sync(&mut self, flags: c_int) -> Result<()>;
-    fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()>;
+    fn file_size(&mut self, p_size: *mut i64) -> Result<()>;
     fn lock(&mut self, arg2: c_int) -> Result<()>;
     fn unlock(&mut self, arg2: c_int) -> Result<()>;
     fn check_reserved_lock(
@@ -56,13 +56,13 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn fetch(
         &mut self,
-        i_ofst: sqlite3_int64,
+        i_ofst: i64,
         i_amt: c_int,
         pp: *mut *mut c_void,
     ) -> Result<()>;
     fn unfetch(
         &mut self,
-        i_ofst: sqlite3_int64,
+        i_ofst: i64,
         p: *mut c_void,
     ) -> Result<()>;
 }
@@ -143,7 +143,7 @@ pub trait SqliteVfs {
 
     fn current_time_int64(
         &mut self,
-        arg2: *mut sqlite3_int64,
+        arg2: *mut i64,
     ) -> c_int;
 
     fn set_system_call(

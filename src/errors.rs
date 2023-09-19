@@ -2,7 +2,6 @@
 use std::{
     ffi::NulError,
     fmt,
-    os::raw::{c_int, c_uint},
     result,
 };
 
@@ -32,10 +31,10 @@ impl Error {
         *self.0
     }
 
-    pub fn code(self) -> c_int {
+    pub fn code(self) -> i32 {
         1
     }
-    pub fn code_extended(self) -> c_uint {
+    pub fn code_extended(self) -> i32 {
         1
     }
     pub fn result_error_message(self) -> String {
@@ -53,11 +52,11 @@ impl Error {
 /// The specific type of an error.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErrorKind {
-    DefineVfs(c_int),
-    DefineScalarFunction(c_int),
+    DefineVfs(i32),
+    DefineScalarFunction(i32),
     CStringError(NulError),
     CStringUtf8Error(std::str::Utf8Error),
-    TableFunction(c_int),
+    TableFunction(i32),
     Message(String),
 }
 

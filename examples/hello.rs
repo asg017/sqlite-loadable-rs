@@ -3,6 +3,7 @@
 
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{api, define_scalar_function, Result};
+use std::os::raw::c_int;
 
 // This function will be registered as a scalar function named "hello", and will be called on
 // every invocation. It's goal is to return a string of "hello, NAME!" where NAME is the

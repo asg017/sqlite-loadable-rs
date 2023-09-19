@@ -16,6 +16,7 @@ fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
 
     let bindings = bindgen::Builder::default()
+        .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
         .header("sqlite3/sqlite3ext.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()

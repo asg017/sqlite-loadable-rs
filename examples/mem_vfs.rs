@@ -1,6 +1,5 @@
 #![allow(unused)]
 
-use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::file::FilePolymorph;
@@ -12,12 +11,23 @@ use url::Url;
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};
 use std::io::{Write, Read, self};
-use std::os::raw::{c_int, c_void, c_char};
+use std::os::raw::{c_void, c_char};
 use std::{ptr, mem};
-use sqlite3ext_sys::{sqlite3_int64, sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
+
+use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
+use libsqlite3_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use libsqlite3_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
+
+/// There is some duplication between rusqlite / sqlite3ext / libsqlite3
+/// sqlite3ext has wrong constants, e.g. uint values that should be int values
+/// 
+/// The following dependency has to be copied by users to use this vfs implementation:
+/// sqlite3ext-sys = {version="0.0.1", path="./sqlite3ext-sys"}
+// TODO This lib should be released 0.0.2 version, with the previously missing
+// .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
+// parameter
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 struct MemVfs {
@@ -39,7 +49,7 @@ fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
 }
 
 impl SqliteVfs for MemVfs {
-    fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
+    fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: i32, p_res_out: *mut i32) -> Result<()> {
         let mut mem_file = MemFile {
             file_contents: Vec::new(),
             path: String::new()
@@ -58,18 +68,18 @@ impl SqliteVfs for MemVfs {
         Ok(())
     }
 
-    fn delete(&mut self, z_name: *const c_char, sync_dir: c_int) -> Result<()> {
+    fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_DELETE)))
     }
 
-    fn access(&mut self, z_name: *const c_char, flags: c_int, p_res_out: *mut c_int) -> Result<()> {
+    fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
         unsafe {
             *p_res_out = 0;
         }
         Ok(())
     }
 
-    fn full_pathname(&mut self, z_name: *const c_char, n_out: c_int, z_out: *mut c_char) -> Result<()> {
+    fn full_pathname(&mut self, z_name: *const c_char, n_out: i32, z_out: *mut c_char) -> Result<()> {
         unsafe {
             // don't rely on type conversion of n_out to determine the end line char
             let name = CString::from_raw(z_name.cast_mut());
@@ -87,7 +97,7 @@ impl SqliteVfs for MemVfs {
         self.default_vfs.dl_open(z_filename)
     }
 
-    fn dl_error(&mut self, n_byte: c_int, z_err_msg: *mut c_char) {
+    fn dl_error(&mut self, n_byte: i32, z_err_msg: *mut c_char) {
         self.default_vfs.dl_error(n_byte, z_err_msg)
     }
 
@@ -100,23 +110,23 @@ impl SqliteVfs for MemVfs {
         self.default_vfs.dl_close(arg2)
     }
 
-    fn randomness(&mut self, n_byte: c_int, z_out: *mut c_char) -> c_int {
+    fn randomness(&mut self, n_byte: i32, z_out: *mut c_char) -> i32 {
          self.default_vfs.randomness(n_byte, z_out)
     }
 
-    fn sleep(&mut self, microseconds: c_int) -> c_int {
+    fn sleep(&mut self, microseconds: i32) -> i32 {
         self.default_vfs.sleep(microseconds)
     }
 
-    fn current_time(&mut self, arg2: *mut f64) -> c_int {
+    fn current_time(&mut self, arg2: *mut f64) -> i32 {
         self.default_vfs.current_time(arg2)
     }
 
-    fn get_last_error(&mut self, arg2: c_int, arg3: *mut c_char) -> Result<()> {
+    fn get_last_error(&mut self, arg2: i32, arg3: *mut c_char) -> Result<()> {
         self.default_vfs.get_last_error(arg2, arg3)
     }
 
-    fn current_time_int64(&mut self, arg2: *mut sqlite3_int64) -> i32 {
+    fn current_time_int64(&mut self, arg2: *mut i64) -> i32 {
         self.default_vfs.current_time_int64(arg2)
     }
 
@@ -201,48 +211,48 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn sync(&mut self, flags: c_int) -> Result<()> {
+    fn sync(&mut self, flags: i32) -> Result<()> {
         Ok(())
     }
 
-    fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()> {
+    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
         unsafe { *p_size = self.file_contents.len().try_into().unwrap(); }
         Ok(())
     }
 
-    fn lock(&mut self, arg2: c_int) -> Result<()> {
+    fn lock(&mut self, arg2: i32) -> Result<()> {
         Ok(())
     }
 
-    fn unlock(&mut self, arg2: c_int) -> Result<()> {
+    fn unlock(&mut self, arg2: i32) -> Result<()> {
         Ok(())
     }
 
-    fn check_reserved_lock(&mut self, p_res_out: *mut c_int) -> Result<()> {
+    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
         unsafe{ *p_res_out = 0; }
         Ok(())
     }
 
-    fn file_control(&mut self, op: c_int, p_arg: *mut c_void) -> Result<()> {
+    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
 
-    fn sector_size(&mut self) -> c_int {
+    fn sector_size(&mut self) -> i32 {
         1024
     }
 
-    fn device_characteristics(&mut self) -> c_int {
+    fn device_characteristics(&mut self) -> i32 {
         SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
         SQLITE_IOCAP_SEQUENTIAL
     }
 
-    fn shm_map(&mut self, i_pg: c_int, pgsz: c_int, arg2: c_int, arg3: *mut *mut c_void) -> Result<()> {
+    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
     }
 
-    fn shm_lock(&mut self, offset: c_int, n: c_int, flags: c_int) -> Result<()> {
+    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
         // SQLITE_IOERR_SHMLOCK is deprecated?
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
     }
@@ -251,7 +261,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn shm_unmap(&mut self, delete_flag: c_int) -> Result<()> {
+    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
         Ok(())
     }
 

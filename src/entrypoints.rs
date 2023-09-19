@@ -4,7 +4,7 @@ use crate::{errors::Result, ext::faux_sqlite_extension_init2};
 
 use sqlite3ext_sys::{sqlite3, sqlite3_api_routines, SQLITE_OK};
 
-use std::os::raw::{c_char, c_uint};
+use std::os::raw::c_char;
 
 /// Low-level wrapper around a typical entrypoint to a SQLite extension.
 /// You shouldn't have to use this directly - the sqlite_entrypoint
@@ -14,7 +14,7 @@ pub fn register_entrypoint<F>(
     _pz_err_msg: *mut *mut c_char,
     p_api: *mut sqlite3_api_routines,
     callback: F,
-) -> c_uint
+) -> i32
 where
     F: Fn(*mut sqlite3) -> Result<()>,
 {
@@ -35,7 +35,7 @@ pub fn register_entrypoint_load_permanently<F>(
     _pz_err_msg: *mut *mut c_char,
     p_api: *mut sqlite3_api_routines,
     callback: F,
-) -> c_uint
+) -> i32
 where
     F: Fn(*mut sqlite3) -> Result<()>,
 {

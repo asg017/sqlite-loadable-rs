@@ -2,6 +2,7 @@
 //! sqlite3 :memory: '.read examples/test.sql'
 
 use sqlite_loadable::prelude::*;
+
 use sqlite_loadable::{
     api, define_table_function,
     table::{BestIndexError, ConstraintOperator, IndexInfo, VTab, VTabArguments, VTabCursor},
