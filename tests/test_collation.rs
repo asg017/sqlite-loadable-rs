@@ -1,7 +1,6 @@
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{define_collation, Result};
 use std::cmp::Ordering;
-use std::os::raw::c_int;
 
 fn compare(a: &[u8], b: &[u8]) -> i32 {
     let a: Vec<u8> = a.iter().rev().cloned().collect();
