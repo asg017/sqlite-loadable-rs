@@ -21,7 +21,6 @@ use libsqlite3_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
 
 /// There is some duplication between rusqlite / sqlite3ext / libsqlite3
-/// sqlite3ext has wrong constants, e.g. uint values that should be int values
 /// 
 /// The following dependency has to be copied by users to use this vfs implementation:
 /// sqlite3ext-sys = {version="0.0.1", path="./sqlite3ext-sys"}
