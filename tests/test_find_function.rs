@@ -2,7 +2,7 @@
 //! sqlite3 :memory: '.read examples/test.sql'
 
 use sqlite_loadable::{
-    api, define_table_function,
+    api,
     scalar::scalar_function_raw,
     table::{
         define_table_function_with_find, BestIndexError, IndexInfo, VTab, VTabArguments,
@@ -10,7 +10,7 @@ use sqlite_loadable::{
     },
     Result,
 };
-use sqlite_loadable::{prelude::*, Error};
+use sqlite_loadable::prelude::*;
 
 use std::{mem, os::raw::c_int};
 

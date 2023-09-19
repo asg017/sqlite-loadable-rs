@@ -1,6 +1,3 @@
-use sqlite_loadable::prelude::*;
-use sqlite_loadable::{api, define_scalar_function, Result};
-
 #[cfg(feature = "exec")]
 use sqlite_loadable::ext;
 

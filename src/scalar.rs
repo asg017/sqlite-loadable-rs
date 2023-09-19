@@ -216,7 +216,7 @@ where
     F: Fn(*mut sqlite3_context, &[*mut sqlite3_value]) -> Result<()>,
 {
     // TODO: how does x_func even get called here???
-    let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
+    // let function_pointer: *mut F = Box::into_raw(Box::new(x_func));
 
     unsafe extern "C" fn x_func_wrapper<F>(
         context: *mut sqlite3_context,

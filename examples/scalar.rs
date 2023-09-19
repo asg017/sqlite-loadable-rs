@@ -3,7 +3,6 @@
 
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{api, define_scalar_function, Result};
-use std::os::raw::c_int;
 
 // yo()
 fn yo(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
