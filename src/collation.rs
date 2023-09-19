@@ -2,11 +2,10 @@
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 use crate::{
-    constants::SQLITE_OKAY,
     errors::{Error, ErrorKind, Result},
     ext::sqlite3ext_collation_v2,
 };
-use sqlite3ext_sys::sqlite3;
+use sqlite3ext_sys::{sqlite3, SQLITE_OK};
 use std::{ffi::CString, os::raw::c_void};
 
 use sqlite3ext_sys::SQLITE_UTF8;
@@ -45,7 +44,7 @@ where
         )
     };
 
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         Err(Error::new(ErrorKind::DefineScalarFunction(result)))
     } else {
         Ok(())

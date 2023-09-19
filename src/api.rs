@@ -5,7 +5,6 @@
 //! Useful when working with sqlite3_value or sqlite3_context.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use crate::constants::SQLITE_OKAY;
 use crate::ext::{
     sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_overload_function,
     sqlite3ext_result_blob, sqlite3ext_result_double, sqlite3ext_result_error,
@@ -19,7 +18,7 @@ use crate::ext::{
 use crate::Error;
 use sqlite3ext_sys::{
     sqlite3, sqlite3_context, sqlite3_mprintf, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT,
-    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT,
+    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT, SQLITE_OK,
 };
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
@@ -400,7 +399,7 @@ pub fn context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
 pub fn overload_function(db: *mut sqlite3, func_name: &str, n_args: i32) -> crate::Result<()> {
     let cname = CString::new(func_name)?;
     let result = unsafe { sqlite3ext_overload_function(db, cname.as_ptr(), n_args) };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new_message("TODO"));
     }
     Ok(())

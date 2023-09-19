@@ -2,14 +2,13 @@
 
 // ![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use sqlite3ext_sys::sqlite3_index_info_sqlite3_index_constraint_usage;
+use sqlite3ext_sys::{sqlite3_index_info_sqlite3_index_constraint_usage, SQLITE_DONE, SQLITE_ERROR, SQLITE_OK, SQLITE_CONSTRAINT};
 use sqlite3ext_sys::{
     sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
     sqlite3_index_info_sqlite3_index_orderby, sqlite3_module, sqlite3_value, sqlite3_vtab,
     sqlite3_vtab_cursor,
 };
 
-use crate::constants::*;
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::marker::Sync;
@@ -373,7 +372,7 @@ pub fn define_table_function<'vtab, T: VTab<'vtab> + 'vtab>(
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -429,7 +428,7 @@ pub fn define_table_function_with_find<'vtab, T: VTabFind<'vtab> + 'vtab>(
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -492,7 +491,7 @@ pub fn define_virtual_table<'vtab, T: VTab<'vtab> + 'vtab>(
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -549,7 +548,7 @@ pub fn define_virtual_table_writeable<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -609,7 +608,7 @@ pub fn define_virtual_table_writeable_with_transactions<
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -666,7 +665,7 @@ pub fn define_virtual_table_writeablex<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             Some(destroy_aux::<T::Aux>),
         )
     };
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         return Err(Error::new(ErrorKind::TableFunction(result)));
     }
     Ok(())
@@ -827,10 +826,10 @@ where
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
                 let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
-                if rc == SQLITE_OKAY {
+                if rc == SQLITE_OK {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
-                    SQLITE_OKAY
+                    SQLITE_OK
                 } else {
                     rc
                 }
@@ -870,10 +869,10 @@ where
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
                 let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
-                if rc == SQLITE_OKAY {
+                if rc == SQLITE_OK {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
-                    SQLITE_OKAY
+                    SQLITE_OK
                 } else {
                     rc
                 }
@@ -902,7 +901,7 @@ where
 {
     let vt = vtab.cast::<T>();
     match (*vt).best_index(IndexInfo { index_info }) {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(e) => match e {
             BestIndexError::Constraint => SQLITE_CONSTRAINT,
             BestIndexError::Error => SQLITE_ERROR,
@@ -917,11 +916,11 @@ where
     T: VTab<'vtab>,
 {
     if vtab.is_null() {
-        return SQLITE_OKAY;
+        return SQLITE_OK;
     }
     let vtab = vtab.cast::<T>();
     drop(Box::from_raw(vtab));
-    SQLITE_OKAY
+    SQLITE_OK
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xdestroy_method>
@@ -931,11 +930,11 @@ where
     T: VTab<'vtab>,
 {
     if vtab.is_null() {
-        return SQLITE_OKAY;
+        return SQLITE_OK;
     }
     let vt = vtab.cast::<T>();
     match (*vt).destroy() {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -954,7 +953,7 @@ where
         Ok(cursor) => {
             let boxed_cursor: *mut T::Cursor = Box::into_raw(Box::new(cursor));
             *pp_cursor = boxed_cursor.cast::<sqlite3_vtab_cursor>();
-            SQLITE_OKAY
+            SQLITE_OK
         }
         Err(err) => err.code(),
     }
@@ -1042,7 +1041,7 @@ where
     let vt = vtab.cast::<T>();
 
     match (*vt).update(determine_update_operation(argc, argv), p_rowid) {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -1055,7 +1054,7 @@ where
 {
     let vt = vtab.cast::<T>();
     match (*vt).begin() {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -1068,7 +1067,7 @@ where
 {
     let vt = vtab.cast::<T>();
     match (*vt).sync() {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -1081,7 +1080,7 @@ where
 {
     let vt = vtab.cast::<T>();
     match (*vt).rollback() {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -1094,7 +1093,7 @@ where
 {
     let vt = vtab.cast::<T>();
     match (*vt).commit() {
-        Ok(_) => SQLITE_OKAY,
+        Ok(_) => SQLITE_OK,
         Err(err) => err.code(),
     }
 }
@@ -1132,7 +1131,7 @@ where
 {
     let cr = cursor.cast::<C>();
     drop(Box::from_raw(cr));
-    SQLITE_OKAY
+    SQLITE_OK
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xfilter_method>
@@ -1158,7 +1157,7 @@ where
     //cursor_error(cursor, )
     let args = slice::from_raw_parts_mut(argv, argc as usize);
     match (*cr).filter(idx_num, idx_name, args) {
-        Ok(()) => SQLITE_OKAY,
+        Ok(()) => SQLITE_OK,
         Err(err) => {
             if let ErrorKind::Message(msg) = err.kind() {
                 if let Ok(err) = mprintf(msg) {
@@ -1179,7 +1178,7 @@ where
     let cr = cursor.cast::<C>();
     //cursor_error(cursor, (*cr).next())
     match (*cr).next() {
-        Ok(()) => SQLITE_OKAY,
+        Ok(()) => SQLITE_OK,
         Err(err) => {
             if let ErrorKind::Message(msg) = err.kind() {
                 if let Ok(err) = mprintf(msg) {
@@ -1214,7 +1213,7 @@ where
     let cr = cursor.cast::<C>();
     //result_error(ctx, (*cr).column(&mut ctxt, i))
     match (*cr).column(ctx, i) {
-        Ok(()) => SQLITE_OKAY,
+        Ok(()) => SQLITE_OK,
         Err(err) => {
             if let ErrorKind::Message(msg) = err.kind() {
                 if let Ok(err) = mprintf(msg) {
@@ -1228,7 +1227,7 @@ where
 
 /// "A successful invocation of this method will cause *pRowid to be filled with the rowid of row
 /// that the virtual table cursor pCur is currently pointing at.
-/// This method returns SQLITE_OKAY on success. It returns an appropriate error code on failure."
+/// This method returns SQLITE_OK on success. It returns an appropriate error code on failure."
 /// <https://www.sqlite.org/vtab.html#the_xrowid_method>
 // TODO set error message properly
 unsafe extern "C" fn rust_rowid<C>(cursor: *mut sqlite3_vtab_cursor, p_rowid: *mut i64) -> c_int
@@ -1239,7 +1238,7 @@ where
     match (*cr).rowid() {
         Ok(rowid) => {
             *p_rowid = rowid;
-            SQLITE_OKAY
+            SQLITE_OK
         }
         Err(err) => err.code(),
     }

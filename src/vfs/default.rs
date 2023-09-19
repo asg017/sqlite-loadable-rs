@@ -1,15 +1,13 @@
 #![ allow(unused)]
 #![ allow(non_snake_case)]
 
-use crate::constants::{SQLITE_OKAY, SQLITE_ERROR};
-
 use crate::{Error, SqliteIoMethods};
 
 use super::super::{Result, vfs::traits::SqliteVfs};
 
 use std::{os::raw::{c_int, c_void, c_char}, ptr};
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find, SQLITE_OK, SQLITE_ERROR};
 
 pub struct DefaultVfs {
     default_vfs: *mut sqlite3_vfs,
@@ -32,7 +30,7 @@ impl SqliteVfs for DefaultVfs {
         unsafe {
             if let Some(xOpen) = (*self.default_vfs).xOpen {
                 let result = xOpen(self.default_vfs, z_name, p_file, flags, p_out_flags);
-                if result == SQLITE_OKAY {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
@@ -51,7 +49,7 @@ impl SqliteVfs for DefaultVfs {
         unsafe {
             if let Some(xDelete) = (*self.default_vfs).xDelete {
                 let result = xDelete(self.default_vfs, z_name, sync_dir);
-                if result == SQLITE_OKAY {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
@@ -71,7 +69,7 @@ impl SqliteVfs for DefaultVfs {
         unsafe {
             if let Some(xAccess) = (*self.default_vfs).xAccess {
                 let result = xAccess(self.default_vfs, z_name, flags, p_res_out);
-                if result == SQLITE_OKAY {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
@@ -91,7 +89,7 @@ impl SqliteVfs for DefaultVfs {
         unsafe {
             if let Some(xFullPathname) = (*self.default_vfs).xFullPathname {
                 let result = xFullPathname(self.default_vfs, z_name, n_out, z_out);
-                if result == SQLITE_OKAY {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
@@ -199,7 +197,7 @@ impl SqliteVfs for DefaultVfs {
         unsafe {
             if let Some(xGetLastError) = (*self.default_vfs).xGetLastError {
                 let result = xGetLastError(self.default_vfs, arg2, arg3);
-                if result == SQLITE_OKAY {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
                     Err(Error::new(crate::ErrorKind::DefineVfs(result)))
