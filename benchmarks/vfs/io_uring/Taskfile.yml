@@ -1,0 +1,17 @@
+# https://taskfile.dev
+
+version: '3'
+
+# vars:
+#   GREETING: Hello, World!
+
+tasks:
+  load_test:
+    cmds:
+      - sqlite3 -init test.sql
+    silent: false
+  valgrind:
+    cmds:
+      - VALGRINDFLAGS="--leak-check=yes --trace-children=yes" cargo valgrind test
+    silent: false
+
