@@ -13,22 +13,24 @@ use sqlite_loadable::vfs::default::DefaultVfs;
 use io_uring::{opcode, types, IoUring};
 use std::io;
 
-pub(crate) struct Ops {
+pub struct Ops {
     ring: IoUring,
     file_path: CString,
+    file_fd: Option<i32>
 }
 
 impl Ops {
-    pub(crate) fn new(file_path: CString, ring_size: u32) -> Self {
+    pub fn new(file_path: CString, ring_size: u32) -> Self {
         let mut ring = IoUring::new(ring_size).unwrap();
 
         Ops {
-            ring, // Adjust the number of entries as needed
+            ring,
             file_path,
+            file_fd: None,
         }
     }
 
-    pub(crate) fn open_file(&mut self) -> Result<()> {
+    pub fn open_file(&mut self) -> Result<()> {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
@@ -49,20 +51,23 @@ impl Ops {
         self.ring.submit_and_wait(1).map_err(|_| Error::new_message("submit failed or timed out"))?;
     
         let cqe = self.ring.completion().next().unwrap();
+
         if cqe.result() < 0 {
             return Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
+
+        self.file_fd = Some(cqe.result());
     
         Ok(())
     }
 
-    pub(crate) unsafe fn o_read(
+    pub unsafe fn o_read(
         &mut self,
         offset: u64,
         size: u32,
         buf_out: *mut c_void,
     ) -> Result<()> {
-        let mut op = opcode::Read::new(types::Fd(self.ring.as_raw_fd()), buf_out as *mut _, size)
+        let mut op = opcode::Read::new(types::Fd(self.file_fd.unwrap()), buf_out as *mut _, size)
             .offset(offset);
         self.ring
             .submission()
@@ -75,13 +80,13 @@ impl Ops {
         Ok(())
     }
 
-    pub(crate) unsafe fn o_write(
+    pub unsafe fn o_write(
         &mut self,
         buf_in: *const c_void,
         offset: u64,
         size: u32,
     ) -> Result<()> {
-        let mut op = opcode::Write::new(types::Fd(self.ring.as_raw_fd()), buf_in as *const _, size)
+        let mut op = opcode::Write::new(types::Fd(self.file_fd.unwrap()), buf_in as *const _, size)
             .offset(offset);
         self.ring
             .submission()
@@ -95,8 +100,8 @@ impl Ops {
     }
 
     // TODO is there also a ftruncate for io_uring? fallocate?
-    pub(crate) fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let result = unsafe { libc::ftruncate(self.ring.as_raw_fd(), size) };
+    pub fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let result = unsafe { libc::ftruncate(self.file_fd.unwrap(), size) };
         if result == -1 {
             Err(Error::new_message(format!("raw os error result: {}", result)))?;
         }
@@ -106,7 +111,7 @@ impl Ops {
     // Documentation:
     // Implement this function to read data from the file at the specified offset and store it in `buf_out`.
     // You can use the same pattern as in `read_file`.
-    pub(crate) unsafe fn o_fetch(
+    pub unsafe fn o_fetch(
         &mut self,
         offset: u64,
         size: u32,
@@ -115,9 +120,9 @@ impl Ops {
         self.o_read(offset, size, *buf_out as *mut _)
     }
 
-    pub(crate) unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
+    pub unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
 
-        let file = File::from_raw_fd(self.ring.as_raw_fd());
+        let file = File::from_raw_fd(self.file_fd.unwrap());
         let size = file.metadata().unwrap().len();
 
         unsafe {
@@ -127,4 +132,3 @@ impl Ops {
         Ok(())
     }
 }
-

@@ -13,6 +13,7 @@ libc = "0.2.148"
 
 [dev-dependencies]
 rusqlite = "0.29.0"
+tempfile = "3.8.0"
 
 [lib]
 crate-type=["lib", "staticlib", "cdylib"]

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-mod ops;
+pub mod ops;
 
 use ops::Ops;
 
