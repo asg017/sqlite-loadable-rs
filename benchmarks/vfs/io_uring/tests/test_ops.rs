@@ -2,6 +2,11 @@ use sqlite3_vfs_io_uring_rs::ops::Ops;
 use std::ffi::CString;
 use std::os::raw::c_void;
 
+/// EBADF
+/// The fd field in the submission queue entry is invalid,
+/// or the IOSQE_FIXED_FILE flag was set in the submission queue entry,
+/// but no files were registered with the io_uring instance.
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -19,6 +24,10 @@ mod tests {
 
         // Check if the operation was successful
         assert!(result.is_ok());
+
+        unsafe {
+            ops.o_close();
+        }
 
         // Cleanup
         tmpfile.close().unwrap();

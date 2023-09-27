@@ -16,7 +16,7 @@ use io_uring::{opcode, types, IoUring};
 use std::io;
 
 // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
-const FALLOC_FL_KEEP_SIZE: u32 = 1;
+const FALLOC_FL_KEEP_SIZE: i32 = 1;
 
 pub struct Ops {
     ring: IoUring,
@@ -68,9 +68,8 @@ impl Ops {
 
         self.file_fd = Some(result.try_into().unwrap());
 
-        // Doesn't make a difference
-        // self.ring.submitter().register_files(&[result])
-        //     .map_err(|_| Error::new_message("failed to register file"))?;
+        self.ring.submitter().register_files(&[result])
+            .map_err(|_| Error::new_message("failed to register file"))?;
     
         Ok(())
     }
@@ -101,7 +100,7 @@ impl Ops {
         offset: u64,
         size: u32,
     ) -> Result<()> {
-        let mut op = opcode::Write::new(types::Fd(self.file_fd.unwrap()), buf_in as *const _, size)
+        let mut op = opcode::Write::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), buf_in as *const _, size)
             .offset(offset);
         self.ring
             .submission()
@@ -115,19 +114,8 @@ impl Ops {
         Ok(())
     }
 
-    /*
-    // TODO is there also a ftruncate for io_uring? fallocate?
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let result = libc::ftruncate(self.file_fd.unwrap(), size);
-        if result == -1 {
-            Err(Error::new_message(format!("raw os error result: {}", result)))?;
-        }
-        Ok(())
-    }
-    */
-
-    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let mut op = opcode::Fallocate::new(types::Fd(self.file_fd.unwrap()), size.try_into().unwrap())
+        let mut op = opcode::Fallocate::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), size.try_into().unwrap())
             .mode(FALLOC_FL_KEEP_SIZE);
         
         self.ring
@@ -168,6 +156,26 @@ impl Ops {
             *out = size;
         }
 
+        Ok(())
+    }
+
+    pub unsafe fn o_close(&mut self) -> Result<()> {
+        let mut op = opcode::Close::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()));
+    
+        self.ring
+            .submission()
+            .push(&op.build().user_data(4));
+
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+
+        let cqe = self.ring
+            .completion()
+            .next()
+            .unwrap();
+        if cqe.result() < 0 {
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+        }
         Ok(())
     }
 }
