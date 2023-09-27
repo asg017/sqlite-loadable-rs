@@ -6,12 +6,17 @@ use std::os::unix::io::{FromRawFd,AsRawFd};
 
 use sqlite_loadable::{Result, Error, ErrorKind};
 
+// IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
+
 use std::{ptr, mem};
 use sqlite_loadable::ext::sqlite3ext_vfs_find;
 use sqlite_loadable::vfs::default::DefaultVfs;
 
 use io_uring::{opcode, types, IoUring};
 use std::io;
+
+// https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
+const FALLOC_FL_KEEP_SIZE: u32 = 1;
 
 pub struct Ops {
     ring: IoUring,
@@ -21,7 +26,9 @@ pub struct Ops {
 
 impl Ops {
     pub fn new(file_path: CString, ring_size: u32) -> Self {
-        let mut ring = IoUring::new(ring_size).unwrap();
+        // Tested on kernels 5.15.49, 6.3.13
+        // let mut ring = IoUring::new(ring_size).unwrap(); // 3/5
+        let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap(); // 3/5
 
         Ops {
             ring,
@@ -34,7 +41,7 @@ impl Ops {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
-        let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64;
+        let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64;
 
         let openhow = types::OpenHow::new().flags(flags);
     
@@ -47,16 +54,23 @@ impl Ops {
                 .push(&open_e)
                 .map_err(|_| Error::new_message("submission queue is full"))?;
         }
-    
-        self.ring.submit_and_wait(1).map_err(|_| Error::new_message("submit failed or timed out"))?;
+
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
     
         let cqe = self.ring.completion().next().unwrap();
 
-        if cqe.result() < 0 {
-            return Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+        let result = cqe.result();
+
+        if result < 0 {
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
 
-        self.file_fd = Some(cqe.result());
+        self.file_fd = Some(result.try_into().unwrap());
+
+        // Doesn't make a difference
+        // self.ring.submitter().register_files(&[result])
+        //     .map_err(|_| Error::new_message("failed to register file"))?;
     
         Ok(())
     }
@@ -72,10 +86,11 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(1));
-        self.ring.submit_and_wait(1).map_err(|_| Error::new_message("submit failed or timed out"))?;
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
         if cqe.result() < 0 {
-            return Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
@@ -91,24 +106,48 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(2));
-        self.ring.submit_and_wait(1).map_err(|_| Error::new_message("submit failed or timed out"))?;
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
         if cqe.result() < 0 {
-            return Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
 
+    /*
     // TODO is there also a ftruncate for io_uring? fallocate?
-    pub fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let result = unsafe { libc::ftruncate(self.file_fd.unwrap(), size) };
+    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let result = libc::ftruncate(self.file_fd.unwrap(), size);
         if result == -1 {
             Err(Error::new_message(format!("raw os error result: {}", result)))?;
         }
         Ok(())
     }
+    */
 
-    // Documentation:
+    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let mut op = opcode::Fallocate::new(types::Fd(self.file_fd.unwrap()), size.try_into().unwrap())
+            .mode(FALLOC_FL_KEEP_SIZE);
+        
+        self.ring
+            .submission()
+            .push(&op.build().user_data(3));
+
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+
+        let cqe = self.ring
+            .completion()
+            .next()
+            .unwrap();
+        if cqe.result() < 0 {
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+        }
+        Ok(())
+    }
+
+    // SQLite Documentation:
     // Implement this function to read data from the file at the specified offset and store it in `buf_out`.
     // You can use the same pattern as in `read_file`.
     pub unsafe fn o_fetch(

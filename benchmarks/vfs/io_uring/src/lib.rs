@@ -136,7 +136,7 @@ impl SqliteIoMethods for Ops {
     }
 
     fn truncate(&mut self, size: i64) -> Result<()> {
-        self.o_truncate(size)
+        unsafe { self.o_truncate(size) }
     }
 
     fn sync(&mut self, flags: i32) -> Result<()> {

@@ -5,6 +5,7 @@ use std::os::raw::c_void;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
 
     #[test]
     fn test_open_file() {
@@ -24,7 +25,37 @@ mod tests {
     }
 
     #[test]
-    fn test_read_and_write() {
+    fn test_read() {
+        // Create a temporary file for testing
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+
+        let data_to_write = b"Hello, World!";
+        let _ = tmpfile.write(data_to_write);
+        
+        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let mut ops = Ops::new(file_path.clone(), 16);
+
+        // Perform the open operation
+        ops.open_file().unwrap();
+
+        // Read the file
+        let mut buf: [u8;13] = [0; 13];
+        let buf_ptr = buf.as_mut_ptr() as *mut c_void;
+        unsafe {
+            ops.o_read(0, 13, buf_ptr).unwrap();
+        }
+
+        // // Check if the data read matches what was written
+        for i in 0..13 {
+            assert_eq!(buf[i], data_to_write[i]);
+        }
+
+        // Cleanup
+        tmpfile.close().unwrap();
+    }
+
+    #[test]
+    fn test_write_then_read() {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new().unwrap();
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
@@ -77,7 +108,7 @@ mod tests {
     #[test]
     fn test_truncate() {
         // Create a temporary file for testing
-        let tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
         let mut ops = Ops::new(file_path.clone(), 16);
 
@@ -86,14 +117,16 @@ mod tests {
 
         // Write some data to the file
         let data_to_write = b"Hello, World!";
-        let data_len = data_to_write.len() as i64;
-        unsafe {
-            ops.o_write(data_to_write.as_ptr() as *const c_void, 0, data_len as u32).unwrap();
-        }
+        let _ = tmpfile.write(data_to_write);
+
+        // let data_len = data_to_write.len() as i64;
+        // unsafe {
+        //     ops.o_write(data_to_write.as_ptr() as *const c_void, 0, data_len as u32).unwrap();
+        // }
 
         // Truncate the file to a smaller size
         let new_size = 5; // Set the new size to 5 bytes
-        ops.o_truncate(new_size).unwrap();
+        unsafe { ops.o_truncate(new_size).unwrap(); }
 
         // Get the current file size
         let mut file_size: u64 = 0;
