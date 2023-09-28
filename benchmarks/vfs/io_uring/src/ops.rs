@@ -12,7 +12,7 @@ use std::{ptr, mem};
 use sqlite_loadable::ext::sqlite3ext_vfs_find;
 use sqlite_loadable::vfs::default::DefaultVfs;
 
-use io_uring::{opcode, types, IoUring};
+use io_uring::{register, opcode, types, IoUring};
 use std::io;
 
 // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
@@ -48,7 +48,7 @@ impl Ops {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
-        let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64;
+        let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64 | libc::O_RDWR as u64;
 
         let openhow = types::OpenHow::new().flags(flags);
     
