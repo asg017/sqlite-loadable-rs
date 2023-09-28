@@ -84,7 +84,8 @@ impl Ops {
             .offset(offset);
         self.ring
             .submission()
-            .push(&op.build().user_data(1));
+            .push(&op.build().user_data(1))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
@@ -104,7 +105,8 @@ impl Ops {
             .offset(offset);
         self.ring
             .submission()
-            .push(&op.build().user_data(2));
+            .push(&op.build().user_data(2))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
@@ -120,7 +122,8 @@ impl Ops {
         
         self.ring
             .submission()
-            .push(&op.build().user_data(3));
+            .push(&op.build().user_data(3))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
@@ -147,24 +150,13 @@ impl Ops {
         self.o_read(offset, size, *buf_out as *mut _)
     }
 
-    pub unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
-
-        let file = File::from_raw_fd(self.file_fd.unwrap());
-        let size = file.metadata().unwrap().len();
-
-        unsafe {
-            *out = size;
-        }
-
-        Ok(())
-    }
-
     pub unsafe fn o_close(&mut self) -> Result<()> {
         let mut op = opcode::Close::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()));
     
         self.ring
             .submission()
-            .push(&op.build().user_data(4));
+            .push(&op.build().user_data(4))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
@@ -178,4 +170,29 @@ impl Ops {
         }
         Ok(())
     }
+    
+    pub unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
+        let mut statx_buf: libc::statx = unsafe { std::mem::zeroed() };
+        let mut statx_buf_ptr: *mut libc::statx = &mut statx_buf;
+    
+        let dirfd = types::Fd(libc::AT_FDCWD);
+        let statx_op = opcode::Statx::new(dirfd, self.file_path.as_ptr(), statx_buf_ptr as *mut _)
+            .flags(libc::AT_EMPTY_PATH)
+            .mask(libc::STATX_ALL);
+
+        self.ring
+            .submission()
+            .push(&statx_op.build().user_data(5))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
+
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+
+        unsafe {
+            *out = statx_buf.stx_size as u64;
+        }
+    
+        Ok(())
+    }
+    
 }

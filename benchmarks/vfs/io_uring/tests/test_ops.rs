@@ -26,7 +26,7 @@ mod tests {
         assert!(result.is_ok());
 
         unsafe {
-            ops.o_close();
+            let _ = ops.o_close();
         }
 
         // Cleanup
@@ -94,8 +94,12 @@ mod tests {
     #[test]
     fn test_file_size() {
         // Create a temporary file for testing
-        let tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+
+        let data_to_write = b"Hello, World!";
+        let _ = tmpfile.write(data_to_write);
+
         let mut ops = Ops::new(file_path.clone(), 16);
     
         // Perform the open operation
@@ -108,7 +112,7 @@ mod tests {
         }
     
         // Expected file size is 0 since the file is empty
-        assert_eq!(file_size, 0);
+        assert_eq!(file_size, 13);
     
         // Cleanup
         tmpfile.close().unwrap();

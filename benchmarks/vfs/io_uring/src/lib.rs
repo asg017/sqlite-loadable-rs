@@ -124,7 +124,7 @@ impl SqliteVfs for IoUringVfs {
 
 impl SqliteIoMethods for Ops {
     fn close(&mut self) -> Result<()> {
-        Ok(())
+        unsafe { self.o_close() }
     }
 
     fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
