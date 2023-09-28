@@ -201,7 +201,7 @@ impl SqliteIoMethods for Ops {
     }
 }
 
-/// Usage: "ATTACH iouring_vfs_from_file('test.db') AS inmem;"
+/// Usage: "ATTACH iouring_vfs_from_file('test.db') AS inring;"
 fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
 
@@ -215,7 +215,7 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
-    let mem_vfs = IoUringVfs {
+    let ring_vfs = IoUringVfs {
         default_vfs: unsafe {
             // pass thru
             DefaultVfs::from_ptr(sqlite3ext_vfs_find(ptr::null()))
@@ -223,9 +223,9 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
         vfs_name
     };
 
-    let name_ptr = mem_vfs.vfs_name.as_ptr(); // allocation is bound to lifetime of struct
+    let name_ptr = ring_vfs.vfs_name.as_ptr(); // allocation is bound to lifetime of struct
 
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, None);
+    let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, None);
 
     register_vfs(vfs, true)?;
 
