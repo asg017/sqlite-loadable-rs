@@ -209,3 +209,22 @@ impl Ops {
     }
     
 }
+
+/*
+// All fail for some reason
+#[cfg(test)]
+mod tests {
+    use io_uring::{register, opcode};
+
+    #[test]
+    fn test_supported_ops() {
+        let mut probe = register::Probe::new();
+        assert!(probe.is_supported(opcode::OpenAt2::CODE));
+        assert!(probe.is_supported(opcode::Read::CODE));
+        assert!(probe.is_supported(opcode::Write::CODE));
+        assert!(probe.is_supported(opcode::Fallocate::CODE));
+        assert!(probe.is_supported(opcode::Close::CODE));
+        assert!(probe.is_supported(opcode::Statx::CODE));
+    }
+}
+*/
