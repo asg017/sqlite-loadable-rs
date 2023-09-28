@@ -16,6 +16,7 @@ rusqlite = "0.29.0"
 tempfile = "3.8.0"
 
 [lib]
-crate-type=["lib", "staticlib", "cdylib"]
+name = "_iouringvfs"
+crate-type = ["lib", "staticlib", "cdylib"]
 
 build = "build.rs"

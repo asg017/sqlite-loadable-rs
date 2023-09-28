@@ -212,6 +212,7 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
     Ok(())
 }
 
+// See Cargo.toml "[[lib]] name = ..." matches this function name
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
