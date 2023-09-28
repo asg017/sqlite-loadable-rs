@@ -131,11 +131,6 @@ mod tests {
         let data_to_write = b"Hello, World!";
         let _ = tmpfile.write(data_to_write);
 
-        // let data_len = data_to_write.len() as i64;
-        // unsafe {
-        //     ops.o_write(data_to_write.as_ptr() as *const c_void, 0, data_len as u32).unwrap();
-        // }
-
         // Truncate the file to a smaller size
         let new_size = 5; // Set the new size to 5 bytes
         unsafe { ops.o_truncate(new_size).unwrap(); }
