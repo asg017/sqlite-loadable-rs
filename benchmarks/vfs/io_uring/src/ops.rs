@@ -18,6 +18,13 @@ use std::io;
 // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
 const FALLOC_FL_KEEP_SIZE: i32 = 1;
 
+const USER_DATA_OPEN: u64 = 0x1;
+const USER_DATA_READ: u64 = 0x2;
+const USER_DATA_STATX: u64 = 0x3;
+const USER_DATA_WRITE: u64 = 0x4;
+const USER_DATA_FALLOCATE: u64 = 0x5;
+const USER_DATA_CLOSE: u64 = 0x6;
+
 pub struct Ops {
     ring: IoUring,
     file_path: CString,
@@ -47,7 +54,7 @@ impl Ops {
     
         let open_e = opcode::OpenAt2::new(dirfd, self.file_path.as_ptr(), &openhow)
             .build()
-            .user_data(0xB33F);
+            .user_data(USER_DATA_OPEN);
     
         unsafe {
             self.ring.submission()
@@ -84,7 +91,7 @@ impl Ops {
             .offset(offset);
         self.ring
             .submission()
-            .push(&op.build().user_data(1))
+            .push(&op.build().user_data(USER_DATA_READ))
             .map_err(|_| Error::new_message("submission queue is full"))?;
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
@@ -105,7 +112,7 @@ impl Ops {
             .offset(offset);
         self.ring
             .submission()
-            .push(&op.build().user_data(2))
+            .push(&op.build().user_data(USER_DATA_WRITE))
             .map_err(|_| Error::new_message("submission queue is full"))?;
         self.ring.submit_and_wait(1)
             .map_err(|_| Error::new_message("submit failed or timed out"))?;
@@ -120,9 +127,12 @@ impl Ops {
         let mut op = opcode::Fallocate::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), size.try_into().unwrap())
             .mode(FALLOC_FL_KEEP_SIZE);
         
+        // let mut op = opcode::Fallocate::new(types::Fd(self.file_fd.unwrap()), size.try_into().unwrap())
+        //     .mode(FALLOC_FL_KEEP_SIZE);
+        
         self.ring
             .submission()
-            .push(&op.build().user_data(3))
+            .push(&op.build().user_data(USER_DATA_FALLOCATE))
             .map_err(|_| Error::new_message("submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
@@ -155,7 +165,7 @@ impl Ops {
     
         self.ring
             .submission()
-            .push(&op.build().user_data(4))
+            .push(&op.build().user_data(USER_DATA_CLOSE))
             .map_err(|_| Error::new_message("submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
@@ -168,6 +178,9 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
+
+        let _ = self.ring.submitter().unregister_files();
+
         Ok(())
     }
     
@@ -182,7 +195,7 @@ impl Ops {
 
         self.ring
             .submission()
-            .push(&statx_op.build().user_data(5))
+            .push(&statx_op.build().user_data(USER_DATA_STATX))
             .map_err(|_| Error::new_message("submission queue is full"))?;
 
         self.ring.submit_and_wait(1)

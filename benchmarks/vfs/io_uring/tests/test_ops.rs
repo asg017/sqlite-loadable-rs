@@ -54,7 +54,7 @@ mod tests {
             ops.o_read(0, 13, buf_ptr).unwrap();
         }
 
-        // // Check if the data read matches what was written
+        // Check if the data read matches what was written
         for i in 0..13 {
             assert_eq!(buf[i], data_to_write[i]);
         }
@@ -82,7 +82,7 @@ mod tests {
             ops.o_read(0, 13, buf_ptr).unwrap();
         }
 
-        // // Check if the data read matches what was written
+        // Check if the data read matches what was written
         for i in 0..13 {
             assert_eq!(buf[i], data_to_write[i]);
         }
@@ -111,7 +111,6 @@ mod tests {
             ops.o_file_size(&mut file_size).unwrap();
         }
     
-        // Expected file size is 0 since the file is empty
         assert_eq!(file_size, 13);
     
         // Cleanup
