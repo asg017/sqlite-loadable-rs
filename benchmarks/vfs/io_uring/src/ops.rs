@@ -34,8 +34,8 @@ pub struct Ops {
 impl Ops {
     pub fn new(file_path: CString, ring_size: u32) -> Self {
         // Tested on kernels 5.15.49, 6.3.13
-        // let mut ring = IoUring::new(ring_size).unwrap(); // 3/5
-        let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap(); // 3/5
+        // let mut ring = IoUring::new(ring_size).unwrap();
+        let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap();
 
         Ops {
             ring,
@@ -88,7 +88,9 @@ impl Ops {
         size: u32,
         buf_out: *mut c_void,
     ) -> Result<()> {
-        let mut op = opcode::Read::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), buf_out as *mut _, size)
+        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        // let fd = types::Fd(self.file_fd.unwrap());
+        let mut op = opcode::Read::new(fd, buf_out as *mut _, size)
             .offset(offset);
         self.ring
             .submission()
@@ -109,7 +111,9 @@ impl Ops {
         offset: u64,
         size: u32,
     ) -> Result<()> {
-        let mut op = opcode::Write::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), buf_in as *const _, size)
+        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        // let fd = types::Fd(self.file_fd.unwrap());
+        let mut op = opcode::Write::new(fd, buf_in as *const _, size)
             .offset(offset);
         self.ring
             .submission()
@@ -125,7 +129,8 @@ impl Ops {
     }
 
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let mut op = opcode::Fallocate::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), size.try_into().unwrap())
+        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
             .mode(FALLOC_FL_KEEP_SIZE);
         
         // let mut op = opcode::Fallocate::new(types::Fd(self.file_fd.unwrap()), size.try_into().unwrap())

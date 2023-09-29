@@ -13,7 +13,7 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_open_file() {
+    fn test_open_and_close_file() {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new().unwrap();
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
