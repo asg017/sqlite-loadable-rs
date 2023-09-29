@@ -1,4 +1,3 @@
-use sqlite3_vfs_io_uring_rs::ops::Ops;
 use std::ffi::CString;
 use std::os::raw::c_void;
 
@@ -10,6 +9,7 @@ use std::os::raw::c_void;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use _iouringvfs::ops::Ops;
     use std::io::Write;
 
     #[test]
@@ -55,9 +55,7 @@ mod tests {
         }
 
         // Check if the data read matches what was written
-        for i in 0..13 {
-            assert_eq!(buf[i], data_to_write[i]);
-        }
+        assert_eq!(buf[..], data_to_write[..]);
 
         // Cleanup
         tmpfile.close().unwrap();
@@ -83,9 +81,7 @@ mod tests {
         }
 
         // Check if the data read matches what was written
-        for i in 0..13 {
-            assert_eq!(buf[i], data_to_write[i]);
-        }
+        assert_eq!(buf[..], data_to_write[..]);
 
         // Cleanup
         tmpfile.close().unwrap();

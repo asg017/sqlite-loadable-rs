@@ -52,13 +52,14 @@ impl Ops {
 
         let openhow = types::OpenHow::new().flags(flags);
     
-        let open_e = opcode::OpenAt2::new(dirfd, self.file_path.as_ptr(), &openhow)
-            .build()
-            .user_data(USER_DATA_OPEN);
-    
+        let open_e = opcode::OpenAt2::new(dirfd, self.file_path.as_ptr(), &openhow);
+
         unsafe {
             self.ring.submission()
-                .push(&open_e)
+                .push(
+                    &open_e.build()
+                    .user_data(USER_DATA_OPEN)
+                )
                 .map_err(|_| Error::new_message("submission queue is full"))?;
         }
 
@@ -87,7 +88,7 @@ impl Ops {
         size: u32,
         buf_out: *mut c_void,
     ) -> Result<()> {
-        let mut op = opcode::Read::new(types::Fd(self.file_fd.unwrap()), buf_out as *mut _, size)
+        let mut op = opcode::Read::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()), buf_out as *mut _, size)
             .offset(offset);
         self.ring
             .submission()
