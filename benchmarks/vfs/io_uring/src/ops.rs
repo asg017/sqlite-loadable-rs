@@ -50,7 +50,7 @@ impl Ops {
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
         let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64 | libc::O_RDWR as u64;
 
-        let openhow = types::OpenHow::new().flags(flags).mode(600);
+        let openhow = types::OpenHow::new().flags(flags).mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
     
         let open_e = opcode::OpenAt2::new(dirfd, self.file_path.as_ptr(), &openhow);
 

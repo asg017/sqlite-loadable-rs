@@ -231,7 +231,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
-    define_scalar_function(db, "iouring_vfs_from_file", 1, vfs_from_file, flags)?;
+    define_scalar_function(db, "io_uring_vfs_from_file", 1, vfs_from_file, flags)?;
 
     Ok(())
 }
