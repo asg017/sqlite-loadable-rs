@@ -15,9 +15,6 @@ use sqlite_loadable::vfs::default::DefaultVfs;
 use io_uring::{register, opcode, types, IoUring};
 use std::io;
 
-// https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
-const FALLOC_FL_KEEP_SIZE: i32 = 1;
-
 const USER_DATA_OPEN: u64 = 0x1;
 const USER_DATA_READ: u64 = 0x2;
 const USER_DATA_STATX: u64 = 0x3;
@@ -28,7 +25,8 @@ const USER_DATA_CLOSE: u64 = 0x6;
 pub struct Ops {
     ring: IoUring,
     file_path: CString,
-    file_fd: Option<i32>
+    file_fd: Option<i32>,
+    file: Option<File>,
 }
 
 impl Ops {
@@ -41,14 +39,26 @@ impl Ops {
             ring,
             file_path,
             file_fd: None,
+            file: None,
         }
     }
 
+    pub fn open_file2(&mut self) -> Result<()> {
+        let path = self.file_path.to_str();
+        let mut file = File::open(path.unwrap())
+        .map_err(|_| Error::new_message("Can't open file"))?;
+        self.file_fd = Some(file.as_raw_fd());
+        self.file = Some(file);
+        Ok(())
+    }
+
+    // TODO figure out why Read fails with OpenAt2, answer: the flags
     pub fn open_file(&mut self) -> Result<()> {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
-        let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64 | libc::O_RDWR as u64;
+        // let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64 | libc::O_RDWR as u64;
+        let flags = libc::O_CREAT as u64 | libc::O_RDWR as u64;
 
         let openhow = types::OpenHow::new().flags(flags).mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
     
@@ -76,8 +86,8 @@ impl Ops {
 
         self.file_fd = Some(result.try_into().unwrap());
 
-        self.ring.submitter().register_files(&[result])
-            .map_err(|_| Error::new_message("failed to register file"))?;
+        // self.ring.submitter().register_files(&[result])
+        //     .map_err(|_| Error::new_message("failed to register file"))?;
     
         Ok(())
     }
@@ -88,8 +98,8 @@ impl Ops {
         size: u32,
         buf_out: *mut c_void,
     ) -> Result<()> {
-        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
-        // let fd = types::Fd(self.file_fd.unwrap());
+        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size)
             .offset(offset);
         self.ring
@@ -111,8 +121,8 @@ impl Ops {
         offset: u64,
         size: u32,
     ) -> Result<()> {
-        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
-        // let fd = types::Fd(self.file_fd.unwrap());
+        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Write::new(fd, buf_in as *const _, size)
             .offset(offset);
         self.ring
@@ -129,12 +139,11 @@ impl Ops {
     }
 
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
-            .mode(FALLOC_FL_KEEP_SIZE);
-        
-        // let mut op = opcode::Fallocate::new(types::Fd(self.file_fd.unwrap()), size.try_into().unwrap())
-        //     .mode(FALLOC_FL_KEEP_SIZE);
+            // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
+            .mode(libc::FALLOC_FL_KEEP_SIZE);
         
         self.ring
             .submission()
@@ -167,7 +176,8 @@ impl Ops {
     }
 
     pub unsafe fn o_close(&mut self) -> Result<()> {
-        let mut op = opcode::Close::new(types::Fixed(self.file_fd.unwrap().try_into().unwrap()));
+        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let mut op = opcode::Close::new(fd);
     
         self.ring
             .submission()
@@ -185,7 +195,7 @@ impl Ops {
             Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
 
-        let _ = self.ring.submitter().unregister_files();
+        // let _ = self.ring.submitter().unregister_files();
 
         Ok(())
     }

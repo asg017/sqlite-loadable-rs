@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn test_truncate() {
+    fn test_truncate_then_compare_file_size() {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
