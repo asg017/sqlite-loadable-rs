@@ -666,6 +666,7 @@ version = "0.1.0"
 dependencies = [
  "io-uring",
  "libc",
+ "libsqlite3-sys",
  "mmap-rs",
  "rusqlite",
  "sqlite-loadable",

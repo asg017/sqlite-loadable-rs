@@ -26,6 +26,9 @@ use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
+// TODO generate tests based on the following article for default vfs, mem vfs and io uring vfs
+// TODO this article https://voidstar.tech/sqlite_insert_speed
+
 const EXTENSION_NAME: &str = "iouring";
 
 struct IoUringVfs {
@@ -201,7 +204,7 @@ impl SqliteIoMethods for Ops {
     }
 }
 
-/// Usage: "ATTACH iouring_vfs_from_file('test.db') AS inring;"
+/// Usage: "ATTACH io_uring_vfs_from_file('test.db') AS inring;"
 fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
 
