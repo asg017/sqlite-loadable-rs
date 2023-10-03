@@ -26,30 +26,19 @@ pub struct Ops {
     ring: IoUring,
     file_path: CString,
     file_fd: Option<i32>,
-    file: Option<File>,
 }
 
 impl Ops {
     pub fn new(file_path: CString, ring_size: u32) -> Self {
         // Tested on kernels 5.15.49, 6.3.13
-        // let mut ring = IoUring::new(ring_size).unwrap();
-        let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap();
+        let mut ring = IoUring::new(ring_size).unwrap();
+        // let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap();
 
         Ops {
             ring,
             file_path,
             file_fd: None,
-            file: None,
         }
-    }
-
-    pub fn open_file2(&mut self) -> Result<()> {
-        let path = self.file_path.to_str();
-        let mut file = File::open(path.unwrap())
-        .map_err(|_| Error::new_message("Can't open file"))?;
-        self.file_fd = Some(file.as_raw_fd());
-        self.file = Some(file);
-        Ok(())
     }
 
     // TODO figure out why Read fails with OpenAt2, answer: the flags
@@ -86,8 +75,9 @@ impl Ops {
 
         self.file_fd = Some(result.try_into().unwrap());
 
-        // self.ring.submitter().register_files(&[result])
-        //     .map_err(|_| Error::new_message("failed to register file"))?;
+        // TODO determine necessity
+        self.ring.submitter().register_files(&[result])
+            .map_err(|_| Error::new_message("failed to register file"))?;
     
         Ok(())
     }
@@ -138,10 +128,12 @@ impl Ops {
         Ok(())
     }
 
-    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+    // TODO find io_uring op, this doesn't work
+    pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
         // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
+            .offset(0)
             // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
             .mode(libc::FALLOC_FL_KEEP_SIZE);
         
@@ -159,6 +151,14 @@ impl Ops {
             .unwrap();
         if cqe.result() < 0 {
             Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+        }
+        Ok(())
+    }
+
+    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let result = libc::ftruncate(self.file_fd.unwrap(), size);
+        if result == -1 {
+            Err(Error::new_message(format!("raw os error result: {}", result)))?;
         }
         Ok(())
     }
@@ -195,7 +195,8 @@ impl Ops {
             Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
 
-        // let _ = self.ring.submitter().unregister_files();
+        // TODO determine necessity
+        let _ = self.ring.submitter().unregister_files();
 
         Ok(())
     }
@@ -225,22 +226,3 @@ impl Ops {
     }
     
 }
-
-/*
-// All fail for some reason
-#[cfg(test)]
-mod tests {
-    use io_uring::{register, opcode};
-
-    #[test]
-    fn test_supported_ops() {
-        let mut probe = register::Probe::new();
-        assert!(probe.is_supported(opcode::OpenAt2::CODE));
-        assert!(probe.is_supported(opcode::Read::CODE));
-        assert!(probe.is_supported(opcode::Write::CODE));
-        assert!(probe.is_supported(opcode::Fallocate::CODE));
-        assert!(probe.is_supported(opcode::Close::CODE));
-        assert!(probe.is_supported(opcode::Statx::CODE));
-    }
-}
-*/
