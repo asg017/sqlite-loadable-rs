@@ -4,7 +4,11 @@ use std::os::raw::c_void;
 use std::fs::File;
 use std::os::unix::io::{FromRawFd,AsRawFd};
 
-use sqlite_loadable::{Result, Error, ErrorKind};
+use sqlite_loadable::{Result, Error, ErrorKind, SqliteIoMethods};
+use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
+    SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
+use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};    
+
 
 // IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
 
@@ -76,8 +80,8 @@ impl Ops {
         self.file_fd = Some(result.try_into().unwrap());
 
         // TODO determine necessity
-        self.ring.submitter().register_files(&[result])
-            .map_err(|_| Error::new_message("failed to register file"))?;
+        // self.ring.submitter().register_files(&[result])
+        //     .map_err(|_| Error::new_message("failed to register file"))?;
     
         Ok(())
     }
@@ -196,7 +200,7 @@ impl Ops {
         }
 
         // TODO determine necessity
-        let _ = self.ring.submitter().unregister_files();
+        // let _ = self.ring.submitter().unregister_files();
 
         Ok(())
     }
@@ -225,4 +229,83 @@ impl Ops {
         Ok(())
     }
     
+}
+
+impl SqliteIoMethods for Ops {
+    fn close(&mut self) -> Result<()> {
+        unsafe { self.o_close() }
+    }
+
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+        unsafe { self.o_read(ofst as u64, s as u32, buf) }
+    }
+
+    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
+        unsafe { self.o_write(buf, ofst as u64, s as u32) }
+    }
+
+    fn truncate(&mut self, size: i64) -> Result<()> {
+        unsafe { self.o_truncate(size) }
+    }
+
+    fn sync(&mut self, flags: i32) -> Result<()> {
+        Ok(())
+    }
+
+    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
+        unsafe { self.o_file_size(p_size as *mut u64) }
+    }
+
+    fn lock(&mut self, arg2: i32) -> Result<()> {
+        Ok(())
+    }
+
+    fn unlock(&mut self, arg2: i32) -> Result<()> {
+        Ok(())
+    }
+
+    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
+        unsafe{ *p_res_out = 0; }
+        Ok(())
+    }
+
+    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
+        Ok(())
+    }
+
+    fn sector_size(&mut self) -> i32 {
+        1024
+    }
+
+    fn device_characteristics(&mut self) -> i32 {
+        SQLITE_IOCAP_ATOMIC | 
+        SQLITE_IOCAP_POWERSAFE_OVERWRITE |
+        SQLITE_IOCAP_SAFE_APPEND |
+        SQLITE_IOCAP_SEQUENTIAL
+    }
+
+    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
+        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
+    }
+
+    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
+        // SQLITE_IOERR_SHMLOCK is deprecated?
+        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
+    }
+
+    fn shm_barrier(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
+        Ok(())
+    }
+
+    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
+        unsafe { self.o_fetch(ofst as u64, size as u32, pp) }
+    }
+
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
+        Ok(())
+    }
 }

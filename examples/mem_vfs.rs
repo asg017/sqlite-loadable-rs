@@ -2,7 +2,6 @@
 
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
 use sqlite_loadable::vfs::default::DefaultVfs;
-use sqlite_loadable::vfs::file::FilePolymorph;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
 use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
