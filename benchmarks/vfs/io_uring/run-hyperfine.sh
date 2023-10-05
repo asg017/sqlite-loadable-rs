@@ -1,5 +1,7 @@
 #!/bin/sh
 
+rm -f *db *journal
+
 which hyperfine || cargo install --locked hyperfine
 cargo build --examples
 
