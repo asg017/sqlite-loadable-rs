@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
 ```
 
 ## Raw benchmark results (on Docker)
-
+```
 Benchmark 1: ./target/debug/examples/test_1
   Time (mean ± σ):       4.5 ms ±   0.1 ms    [User: 2.8 ms, System: 1.0 ms]
   Range (min … max):     4.2 ms …   5.1 ms    580 runs
@@ -318,3 +318,4 @@ Summary
   ./target/debug/examples/test_16 ran
     1.35 ± 0.06 times faster than ./target/debug/examples/test_16 test_16.ring.db
     1.36 ± 0.10 times faster than ./target/debug/examples/test_16 test_16.db
+```
