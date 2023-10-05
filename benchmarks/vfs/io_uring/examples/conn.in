@@ -14,7 +14,7 @@ fn create_test_database(args: Vec<String>) -> Connection {
     let conn = if args.len() == 2 {
         let file_path = args[1].as_str();
         let conn = Connection::open(file_path).expect("Failed to create in-file database");
-        if args[0].contains("ring") {
+        if file_path.contains("ring") {
             let stmt = format!("ATTACH io_uring_vfs_from_file('{}') AS inring", file_path);
             let stmt_str = stmt.as_str();
             let _ = conn.execute(stmt_str, ());
