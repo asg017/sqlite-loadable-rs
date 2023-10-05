@@ -17,7 +17,7 @@ ENV RUST_VERSION=stable
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain=$RUST_VERSION
 
 # Install cargo-valgrind
-RUN /bin/bash -c "source /root/.cargo/env && cargo install cargo-valgrind"
+RUN /bin/bash -c "source /root/.cargo/env && cargo install cargo-valgrind && cargo install --locked hyperfine"
 
 # Check sqlite compile options:
 RUN echo "PRAGMA compile_options;" | sqlite3

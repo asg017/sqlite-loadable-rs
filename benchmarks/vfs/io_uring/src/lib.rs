@@ -21,8 +21,9 @@ use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
-// TODO generate tests based on the following article for default vfs, mem vfs and io uring vfs
-// TODO this article https://voidstar.tech/sqlite_insert_speed
+// Based on the following article for default vfs, mem vfs and io uring vfs
+// source: https://voidstar.tech/sqlite_insert_speed
+// source: https://www.sqlite.org/speed.html
 
 const EXTENSION_NAME: &str = "iouring";
 
@@ -156,26 +157,8 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     Ok(())
 }
 
-// TODO single parameter: n for workers = files, CPU-bounded?
-// TODO parameter: one worker per db = vfs
 
-// TODO Mutex lock on path
 
-// TODO write a unit test for each operation that either vfs or file has to support
-// put them in tests/, each op must be non-copy
 
-// TODO write unit test that also benchmarks, use rusql and
-// pre-generate random values, from non-io_uring to io_uring, and vice versa
 
-// single process vs concurrent interleaving
-// CRUD
-// aggregates functions etc.
-
-// table to table, 0 = no io uring, 1 = io uring supported
-// 0 on 0
-// 1 on 0
-// 0 on 1
-// 1 on 1
-
-// TODO compare standard file vfs, mem vfs, io_uring+mmap vfs, mmap vfs
 

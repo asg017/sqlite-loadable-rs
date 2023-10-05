@@ -134,7 +134,9 @@ Some real-world non-Rust examples of traditional virtual tables in SQLite includ
 
 ### Virtual file system
 
-It's in the works, stay tuned. TODO documentation
+There are two examples of how to apply this library to create your own vfs.
+1. [io_uring_vfs](./benchmarks/vfs/io_uring/)
+2. [mem_vfs](./examples/mem_vfs.rs)
 
 ## Examples
 

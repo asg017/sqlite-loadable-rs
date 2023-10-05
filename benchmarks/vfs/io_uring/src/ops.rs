@@ -36,7 +36,6 @@ impl Ops {
     pub fn new(file_path: CString, ring_size: u32) -> Self {
         // Tested on kernels 5.15.49, 6.3.13
         let mut ring = IoUring::new(ring_size).unwrap();
-        // let mut ring = IoUring::builder().setup_sqpoll(500).build(ring_size).unwrap();
 
         Ops {
             ring,
@@ -45,7 +44,7 @@ impl Ops {
         }
     }
 
-    // TODO figure out why Read fails with OpenAt2, answer: the flags
+    // TODO add O_DIRECT and O_SYNC parameters for systems that actually support it
     pub fn open_file(&mut self) -> Result<()> {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
@@ -79,10 +78,6 @@ impl Ops {
 
         self.file_fd = Some(result.try_into().unwrap());
 
-        // TODO determine necessity
-        // self.ring.submitter().register_files(&[result])
-        //     .map_err(|_| Error::new_message("failed to register file"))?;
-    
         Ok(())
     }
 
@@ -198,9 +193,6 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
-
-        // TODO determine necessity
-        // let _ = self.ring.submitter().unregister_files();
 
         Ok(())
     }

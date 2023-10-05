@@ -1,5 +1,5 @@
 #!/bin/sh
-NAME="sqlite-loadable-rs:1.0"
+NAME="io_uring:1.0"
 docker image inspect "$NAME" || docker build -t "$NAME" .
 docker run -it -v $PWD:/tmp -w /tmp $NAME
 
