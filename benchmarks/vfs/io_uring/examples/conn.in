@@ -1,0 +1,42 @@
+use _iouringvfs::sqlite3_iouringvfs_init;
+use rusqlite::{ffi::sqlite3_auto_extension, Connection};
+
+/// Tests were derived from: https://www.sqlite.org/speed.html
+fn create_test_database(b: bool) -> Connection {
+    unsafe {
+        sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite3_iouringvfs_init as *const (),
+        )));
+    }
+
+    let conn = Connection::open_in_memory().expect("Failed to create in-memory database");
+
+    if b {
+        let _ = conn.execute("ATTACH io_uring_vfs_from_file('from.db') AS inring;", ());
+    }
+
+    let _ = conn.execute("CREATE TABLE t1(a integer, b varchar(10))", ());
+
+    let _ = conn.execute("CREATE TABLE t2(a integer, b integer, c varchar(10))", ());
+
+    let _ = conn.execute("CREATE TABLE t3(a integer, b integer, c varchar(10))", ());
+    let _ = conn.execute("CREATE INDEX i3 ON t3(c)", ());
+
+    let _ = conn.execute("CREATE TABLE t4(a integer, b integer, c varchar(10))", ());
+
+    let _ = conn.execute("CREATE TABLE t5(a integer, b integer, c varchar(10))", ());
+
+    let _ = conn.execute("CREATE TABLE t6(a integer, b integer)", ());
+
+    let _ = conn.execute("CREATE TABLE t7(a integer, b integer)", ());
+    let _ = conn.execute("CREATE INDEX i7 ON t7(b)", ());
+
+    let _ = conn.execute("CREATE TABLE t8(a integer, b integer)", ());
+
+    let _ = conn.execute("CREATE TABLE t9(a integer, b integer)", ());
+
+    let _ = conn.execute("CREATE TABLE t10(a integer, b integer, c varchar(10))", ());
+    let _ = conn.execute("CREATE INDEX i10 ON t10(a)", ());
+    
+    conn
+}

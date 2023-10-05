@@ -15,6 +15,7 @@ libc = "0.2.148"
 rusqlite = "0.29.0"
 libsqlite3-sys = {version="0.26.0", default-features = false}
 tempfile = "3.8.0"
+rand = "0.8.5"
 
 [lib]
 name = "_iouringvfs"
