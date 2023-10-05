@@ -1,0 +1,24 @@
+[package]
+name = "sqlite3_vfs_io_uring_rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+io-uring = "0.6.1"
+sqlite3ext-sys = {path="../../../sqlite3ext-sys"}
+sqlite-loadable = {path="../../../"}
+url = "2.4.1"
+mmap-rs = "0.6.0"
+libc = "0.2.148"
+
+[dev-dependencies]
+rusqlite = "0.29.0"
+libsqlite3-sys = {version="0.26.0", default-features = false}
+tempfile = "3.8.0"
+rand = "0.8.5"
+
+[lib]
+name = "_iouringvfs"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+build = "build.rs"
