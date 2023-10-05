@@ -19,6 +19,7 @@ fn main() -> rusqlite::Result<()> {
     }
     tx.commit()?;
 
+    // fails if file is already indexed, TODO fix
     conn.execute("CREATE INDEX i6a ON t6(a)", ())?;
     conn.execute("CREATE INDEX i6b ON t6(b)", ())?;
     

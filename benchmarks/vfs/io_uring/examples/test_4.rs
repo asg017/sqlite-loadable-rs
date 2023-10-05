@@ -11,10 +11,11 @@ fn main() -> rusqlite::Result<()> {
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction()?;
+    
     for _ in 0..25000 {
         let value1: i32 = rng.gen();
         let value2: i32 = rng.gen();
-        let value3: String = format!("Value{}", thread_rng().gen_range(0..25000));
+        let value3: String = format!("Value {}", thread_rng().gen_range(0..25000));
 
         tx.execute("INSERT INTO t4 (a, b, c) VALUES (?, ?, ?)",
                             (value1, value2, value3))?;

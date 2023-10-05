@@ -10,7 +10,7 @@ fn main() -> rusqlite::Result<()> {
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction()?;
-    for _ in 0..25000 {
+    for _ in 0..5000 {
         let value: i32 = rng.gen();
 
         tx.execute("INSERT INTO t9 (a, b) VALUES (?, ?)",
@@ -19,7 +19,7 @@ fn main() -> rusqlite::Result<()> {
     tx.commit()?;
 
     let tx2 = conn.transaction()?;
-    for i in 0..25000 {
+    for i in 0..5000 {
         let r: i32 = rng.gen();
         let upper_bound = i + 1;
 
