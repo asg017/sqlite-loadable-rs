@@ -24,7 +24,7 @@ fn main() -> rusqlite::Result<()> {
     let tx2 = conn.transaction()?;
     for i in 0..9 {
         let stmt = format!("SELECT count(*), avg(b) FROM t5 WHERE c LIKE '%{}%'", i).to_string();
-        let _ = tx2.execute(&stmt, ());
+        tx2.execute(&stmt, ())?;
     }
     tx2.commit()?;
     Ok(())

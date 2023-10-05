@@ -11,7 +11,7 @@ fn main() -> rusqlite::Result<()> {
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction()?;
-    
+
     for _ in 0..25000 {
         let value1: i32 = rng.gen();
         let value2: i32 = rng.gen();
@@ -27,7 +27,7 @@ fn main() -> rusqlite::Result<()> {
         let lower_bound = i * 100;
         let upper_bound = (i + 1) * 1000;
 
-        let _ = tx2.execute("SELECT count(*), avg(b) FROM t4 WHERE b >= ?1 AND b < ?2", (lower_bound, upper_bound));
+        tx2.execute("SELECT count(*), avg(b) FROM t4 WHERE b >= ?1 AND b < ?2", (lower_bound, upper_bound))?;
     }
     tx2.commit()?;
     Ok(())

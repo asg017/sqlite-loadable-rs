@@ -21,7 +21,7 @@ fn main() -> rusqlite::Result<()> {
     let tx2 = conn.transaction()?;
     for i in 0..5000 {
         let r: i32 = rng.gen();
-        let _ = tx2.execute("UPDATE t10 SET c=?1 WHERE a = ?2", (r, i + 1));
+        tx2.execute("UPDATE t10 SET c=?1 WHERE a = ?2", (r, i + 1))?;
     }
     tx2.commit()?;
     

@@ -23,7 +23,7 @@ fn main() -> rusqlite::Result<()> {
         let r: i32 = rng.gen();
         let upper_bound = i + 1;
 
-        let _ = tx2.execute("UPDATE t9 SET b=?1 WHERE a = ?2", (r, upper_bound));
+        tx2.execute("UPDATE t9 SET b=?1 WHERE a = ?2", (r, upper_bound))?;
     }
     tx2.commit()?;
     

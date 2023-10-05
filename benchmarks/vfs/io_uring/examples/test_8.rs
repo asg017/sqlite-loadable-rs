@@ -24,7 +24,7 @@ fn main() -> rusqlite::Result<()> {
         let lower_bound = i * 10;
         let upper_bound = (i + 1) + 10;
 
-        let _ = tx2.execute("UPDATE t8 SET b=b*2 WHERE a >= ?1 AND a < ?2", (lower_bound, upper_bound));
+        tx2.execute("UPDATE t8 SET b=b*2 WHERE a >= ?1 AND a < ?2", (lower_bound, upper_bound))?;
     }
     tx2.commit()?;
 
