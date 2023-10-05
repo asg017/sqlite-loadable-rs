@@ -11,13 +11,58 @@ This project was tested on Docker and VirtualBox. Your mileage will vary.
 ### What
 Tests were [derived from this archived sqlite document](https://www.sqlite.org/speed.html).
 
+16 tests are run, on in-mem, in-file and io-uring, where in-memory serves as a baseline/control.
+
+Practially, what io-uring does is circumvent multiple os system-calls to CRUD a file,
+whereas the traditional in-file way does it via system-calls.
+
 ### How
-Run this script in a shell
+Run [this script](./run-hyperfine.sh) in a shell
 ```bash
 sh run-hyperfine.sh
 ```
 
-16 tests are run, on in-mem, in-file and io-uring.
+If you don't have linux running on your machine (yet), use
+[the docker script provided here](./run-docker.sh).
+
+### Results
+
+| Test | Desc | Winner |
+| --- | --- | --- |
+| 1 | 1000 INSERTs | in-file |
+| 2 | 25000 INSERTs in a transaction | in-file |
+| 3 | 25000 INSERTs into an indexed table | in-file |
+| 4 | 100 SELECTs without an index | - |
+| 5 | 100 SELECTs on a string comparison | - |
+| 6 | Creating an index | - |
+| 7 | 5000 SELECTs with an index | - |
+| 8 | 1000 UPDATEs without an index | io-uring |
+| 9 | 25000 UPDATEs with an index | io-uring |
+| 10 | 25000 text UPDATEs with an index | in-file |
+| 11 | INSERTs from a SELECT | in-file |
+| 12 | DELETE without an index | in-file |
+| 13 | DELETE with an index | in-file |
+| 14 | A big INSERT after a big DELETE | io-uring |
+| 15 | A big DELETE followed by many small INSERTs | in-file |
+| 16 | DROP TABLE | io-uring |
+
+The number of executions were reduced due to life being too short.
+
+## Conclusion
+
+It seems that with in-file coming in second on most of the tests,
+adding io_uring, to [rusqlite](https://github.com/rusqlite/rusqlite) does not lead to major speed improvements.
+
+## TODO
+- [] Fix tests 4 through 7
+- [] Use the vfs extension on a production sqlite3 binary
+
+## Other research ideas
+* IO Uring storage via paging on Vfs, or multiple file vs single file storage
+* All insert optimization mentioned here: https://voidstar.tech/sqlite_insert_speed
+* IO Uring and sqlite3 replication via sockets
+* Vfs consensus via IO Uring managed sockets + Raft, e.g. rqlite
+* Turn on libc::O_DIRECT as u64 | libc::O_SYNC as u64 on drives that support it
 
 ## Determine whether your kernel supports IO Uring
 
@@ -48,7 +93,7 @@ int main(int argc, char **argv) {
 
 ```
 
-## Benchmark results (on Docker)
+## Raw benchmark results (on Docker)
 
 Benchmark 1: ./target/debug/examples/test_1
   Time (mean ± σ):       4.5 ms ±   0.1 ms    [User: 2.8 ms, System: 1.0 ms]
@@ -273,20 +318,3 @@ Summary
   ./target/debug/examples/test_16 ran
     1.35 ± 0.06 times faster than ./target/debug/examples/test_16 test_16.ring.db
     1.36 ± 0.10 times faster than ./target/debug/examples/test_16 test_16.db
-
-## Conclusion
-
-It seems that with in-file coming in second on most of the tests, at least half,
-it seems that adding io_uring, to rusqlite does not lead to major speed improvements.
-
-In-memory serves as the baseline.
-
-## TODO
-- [] Use the vfs extension on a production sqlite3 binary
-
-## Research ideas
-* IO Uring storage via paging on Vfs, or multiple file vs single file storage
-* All insert optimization mentioned here: https://voidstar.tech/sqlite_insert_speed
-* IO Uring and sqlite3 replication via sockets
-* Vfs consensus via IO Uring managed sockets + Raft, e.g. rqlite
-* Turn on libc::O_DIRECT as u64 | libc::O_SYNC as u64 on drives that support it
