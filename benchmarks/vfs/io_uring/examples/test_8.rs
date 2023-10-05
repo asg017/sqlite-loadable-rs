@@ -6,7 +6,7 @@ include!("conn.in");
 fn main() -> rusqlite::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let mut conn = create_test_database(args.len() > 0);
+    let mut conn = create_test_database(args);
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction()?;
@@ -27,6 +27,6 @@ fn main() -> rusqlite::Result<()> {
         let _ = tx2.execute("UPDATE t8 SET b=b*2 WHERE a >= ?1 AND a < ?2", (lower_bound, upper_bound));
     }
     tx2.commit()?;
-    
+
     Ok(())
 }

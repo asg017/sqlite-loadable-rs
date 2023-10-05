@@ -7,8 +7,7 @@ include!("conn.in");
 fn main() -> rusqlite::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let conn = create_test_database(args.len() > 0);
-    let rng = rand::thread_rng();
+    let conn = create_test_database(args);
 
     for _ in 0..1000 {
         let value1: i32 = thread_rng().gen_range(0..1000);

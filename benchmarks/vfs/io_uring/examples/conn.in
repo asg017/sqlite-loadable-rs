@@ -2,18 +2,28 @@ use _iouringvfs::sqlite3_iouringvfs_init;
 use rusqlite::{ffi::sqlite3_auto_extension, Connection};
 
 /// Tests were derived from: https://www.sqlite.org/speed.html
-fn create_test_database(b: bool) -> Connection {
+fn create_test_database(args: Vec<String>) -> Connection {
+    assert!(args.len() <= 2);
+
     unsafe {
         sqlite3_auto_extension(Some(std::mem::transmute(
             sqlite3_iouringvfs_init as *const (),
         )));
     }
 
-    let conn = Connection::open_in_memory().expect("Failed to create in-memory database");
+    let conn = if args.len() == 2 {
+        let file_path = args[1].as_str();
+        let conn = Connection::open(file_path).expect("Failed to create in-file database");
+        if args[0].contains("ring") {
+            let stmt = format!("ATTACH io_uring_vfs_from_file('{}') AS inring", file_path);
+            let stmt_str = stmt.as_str();
+            let _ = conn.execute(stmt_str, ());
+        }
+        conn
+    }else {
+        Connection::open_in_memory().expect("Failed to create in-memory database")
+    };
 
-    if b {
-        let _ = conn.execute("ATTACH io_uring_vfs_from_file('from.db') AS inring;", ());
-    }
 
     let _ = conn.execute("CREATE TABLE t1(a integer, b varchar(10))", ());
 
