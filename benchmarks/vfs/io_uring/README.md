@@ -54,8 +54,9 @@ It seems that with in-file coming in second on most of the tests,
 adding io_uring, to [rusqlite](https://github.com/rusqlite/rusqlite) does not lead to major speed improvements.
 
 ## TODO
-- [] Fix tests 4 through 7
-- [] Use the vfs extension on a production sqlite3 binary
+- [ ] Fix tests 4 through 7
+- [ ] Use the vfs extension on a production sqlite3 binary
+- [x] [Use WAL](https://fly.io/blog/sqlite-internals-wal) (write ahead Log), e.g. PRAGMA journal_mode = wal
 
 ## Other research ideas
 * IO Uring storage via paging on Vfs, or multiple file vs single file storage
