@@ -607,3 +607,12 @@ pub unsafe fn sqlite3ext_mprintf(s: *const c_char) -> *mut c_char {
 pub unsafe fn sqlite3ext_mprintf(s: *const c_char) -> *mut c_char {
     ((*SQLITE3_API).mprintf.expect(EXPECT_MESSAGE))(s)
 }
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
+    libsqlite3_sys::sqlite3_auto_extension(Some(f))
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
+    ((*SQLITE3_API).auto_extension.expect(EXPECT_MESSAGE))(Some(f))
+}
