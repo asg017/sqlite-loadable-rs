@@ -16,17 +16,8 @@ use std::{
 };
 
 use sqlite3ext_sys::{
-    sqlite3, sqlite3_api_routines, sqlite3_bind_int, sqlite3_bind_int64, sqlite3_bind_text,
-    sqlite3_column_bytes, sqlite3_column_int64, sqlite3_column_text, sqlite3_column_value,
-    sqlite3_context, sqlite3_context_db_handle, sqlite3_create_collation_v2,
-    sqlite3_create_function_v2, sqlite3_create_module_v2, sqlite3_declare_vtab, sqlite3_finalize,
-    sqlite3_get_auxdata, sqlite3_index_info, sqlite3_module, sqlite3_overload_function,
-    sqlite3_prepare_v2, sqlite3_result_blob, sqlite3_result_double, sqlite3_result_error,
-    sqlite3_result_error_code, sqlite3_result_int, sqlite3_result_int64, sqlite3_result_null,
-    sqlite3_result_pointer, sqlite3_result_text, sqlite3_set_auxdata, sqlite3_step, sqlite3_stmt,
-    sqlite3_value, sqlite3_value_blob, sqlite3_value_bytes, sqlite3_value_double,
-    sqlite3_value_int, sqlite3_value_int64, sqlite3_value_pointer, sqlite3_value_subtype,
-    sqlite3_value_text, sqlite3_value_type,
+    sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_index_info, sqlite3_module,
+    sqlite3_stmt, sqlite3_value,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -52,36 +43,21 @@ static EXPECT_MESSAGE: &str =
     "sqlite-loadable error: expected method on SQLITE3_API. Please file an issue";
 
 pub unsafe fn sqlite3ext_value_text(arg1: *mut sqlite3_value) -> *const ::std::os::raw::c_uchar {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_text(arg1);
-    }
     ((*SQLITE3_API).value_text.expect(EXPECT_MESSAGE))(arg1)
 }
 
 pub unsafe fn sqlite3ext_value_type(value: *mut sqlite3_value) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_type(value);
-    }
     ((*SQLITE3_API).value_type.expect(EXPECT_MESSAGE))(value)
 }
 pub unsafe fn sqlite3ext_value_subtype(value: *mut sqlite3_value) -> u32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_subtype(value);
-    }
     ((*SQLITE3_API).value_subtype.expect(EXPECT_MESSAGE))(value)
 }
 
 pub unsafe fn sqlite3ext_value_bytes(arg1: *mut sqlite3_value) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_bytes(arg1);
-    }
     ((*SQLITE3_API).value_bytes.expect(EXPECT_MESSAGE))(arg1)
 }
 
 pub unsafe fn sqlite3ext_value_blob(arg1: *mut sqlite3_value) -> *const c_void {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_blob(arg1);
-    }
     ((*SQLITE3_API).value_blob.expect(EXPECT_MESSAGE))(arg1)
 }
 
@@ -94,42 +70,24 @@ pub unsafe fn sqlite3ext_bind_pointer(
     ((*SQLITE3_API).bind_pointer.expect(EXPECT_MESSAGE))(db, i, p, t, None)
 }
 pub unsafe fn sqlite3ext_step(stmt: *mut sqlite3_stmt) -> c_int {
-    if SQLITE3_API.is_null() {
-        return sqlite3_step(stmt);
-    }
     ((*SQLITE3_API).step.expect(EXPECT_MESSAGE))(stmt)
 }
 
 pub unsafe fn sqlite3ext_finalize(stmt: *mut sqlite3_stmt) -> c_int {
-    if SQLITE3_API.is_null() {
-        return sqlite3_finalize(stmt);
-    }
     ((*SQLITE3_API).finalize.expect(EXPECT_MESSAGE))(stmt)
 }
 
 pub unsafe fn sqlite3ext_column_text(stmt: *mut sqlite3_stmt, c: c_int) -> *const c_uchar {
-    if SQLITE3_API.is_null() {
-        return sqlite3_column_text(stmt, c);
-    }
     ((*SQLITE3_API).column_text.expect(EXPECT_MESSAGE))(stmt, c)
 }
 pub unsafe fn sqlite3ext_column_int64(stmt: *mut sqlite3_stmt, c: c_int) -> i64 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_column_int64(stmt, c);
-    }
     ((*SQLITE3_API).column_int64.expect(EXPECT_MESSAGE))(stmt, c)
 }
 pub unsafe fn sqlite3ext_column_bytes(stmt: *mut sqlite3_stmt, c: c_int) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_column_bytes(stmt, c);
-    }
     ((*SQLITE3_API).column_bytes.expect(EXPECT_MESSAGE))(stmt, c)
 }
 
 pub unsafe fn sqlite3ext_column_value(stmt: *mut sqlite3_stmt, c: c_int) -> *mut sqlite3_value {
-    if SQLITE3_API.is_null() {
-        return sqlite3_column_value(stmt, c);
-    }
     ((*SQLITE3_API).column_value.expect(EXPECT_MESSAGE))(stmt, c)
 }
 
@@ -140,21 +98,12 @@ pub unsafe fn sqlite3ext_bind_text(
     n: c_int,
     destructor: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_bind_text(stmt, c, s, n, destructor);
-    }
     ((*SQLITE3_API).bind_text.expect(EXPECT_MESSAGE))(stmt, c, s, n, destructor)
 }
 pub unsafe fn sqlite3ext_bind_int(stmt: *mut sqlite3_stmt, c: c_int, v: c_int) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_bind_int(stmt, c, v);
-    }
     ((*SQLITE3_API).bind_int.expect(EXPECT_MESSAGE))(stmt, c, v)
 }
 pub unsafe fn sqlite3ext_bind_int64(stmt: *mut sqlite3_stmt, c: c_int, v: i64) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_bind_int64(stmt, c, v);
-    }
     ((*SQLITE3_API).bind_int64.expect(EXPECT_MESSAGE))(stmt, c, v)
 }
 
@@ -165,43 +114,27 @@ pub unsafe fn sqlite3ext_prepare_v2(
     stmt: *mut *mut sqlite3_stmt,
     leftover: *mut *const c_char,
 ) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_prepare_v2(db, sql, n, stmt, leftover);
-    }
     ((*SQLITE3_API).prepare_v2.expect(EXPECT_MESSAGE))(db, sql, n, stmt, leftover)
 }
 
 pub unsafe fn sqlite3ext_value_int(arg1: *mut sqlite3_value) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_int(arg1);
-    }
     ((*SQLITE3_API).value_int.expect(EXPECT_MESSAGE))(arg1)
 }
 
 pub unsafe fn sqlite3ext_value_int64(arg1: *mut sqlite3_value) -> i64 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_int64(arg1);
-    }
     ((*SQLITE3_API).value_int64.expect(EXPECT_MESSAGE))(arg1)
 }
 
 pub unsafe fn sqlite3ext_value_double(arg1: *mut sqlite3_value) -> f64 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_double(arg1);
-    }
     ((*SQLITE3_API).value_double.expect(EXPECT_MESSAGE))(arg1)
 }
 
 pub unsafe fn sqlite3ext_value_pointer(arg1: *mut sqlite3_value, p: *mut c_char) -> *mut c_void {
-    if SQLITE3_API.is_null() {
-        return sqlite3_value_pointer(arg1, p);
-    }
     ((*SQLITE3_API).value_pointer.expect(EXPECT_MESSAGE))(arg1, p)
 }
 
 pub unsafe fn sqlite3ext_result_int(context: *mut sqlite3_context, v: c_int) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_int(context, v);
+    if false {
     } else {
         ((*SQLITE3_API).result_int.expect(EXPECT_MESSAGE))(context, v);
     }
@@ -215,39 +148,23 @@ pub unsafe fn sqlite3ext_result_int(context: *mut sqlite3_context, v: c_int) {
 // or serde??
 // or slice??
 pub unsafe fn sqlite3ext_result_blob(context: *mut sqlite3_context, p: *const c_void, n: i32) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_blob(context, p, n, Some(mem::transmute(-1_isize)));
-    } else {
-        ((*SQLITE3_API).result_blob.expect(EXPECT_MESSAGE))(
-            context,
-            p,
-            n,
-            Some(mem::transmute(-1_isize)),
-        );
-    }
+    ((*SQLITE3_API).result_blob.expect(EXPECT_MESSAGE))(
+        context,
+        p,
+        n,
+        Some(mem::transmute(-1_isize)),
+    );
 }
 pub unsafe fn sqlite3ext_result_int64(context: *mut sqlite3_context, v: i64) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_int64(context, v);
-    } else {
-        ((*SQLITE3_API).result_int64.expect(EXPECT_MESSAGE))(context, v);
-    }
+    ((*SQLITE3_API).result_int64.expect(EXPECT_MESSAGE))(context, v);
 }
 
 pub unsafe fn sqlite3ext_result_double(context: *mut sqlite3_context, f: f64) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_double(context, f);
-    } else {
-        ((*SQLITE3_API).result_double.expect(EXPECT_MESSAGE))(context, f);
-    }
+    ((*SQLITE3_API).result_double.expect(EXPECT_MESSAGE))(context, f);
 }
 
 pub unsafe fn sqlite3ext_result_null(context: *mut sqlite3_context) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_null(context);
-    } else {
-        ((*SQLITE3_API).result_null.expect(EXPECT_MESSAGE))(context);
-    }
+    ((*SQLITE3_API).result_null.expect(EXPECT_MESSAGE))(context);
 }
 pub unsafe fn sqlite3ext_result_pointer(
     context: *mut sqlite3_context,
@@ -255,27 +172,15 @@ pub unsafe fn sqlite3ext_result_pointer(
     name: *mut c_char,
     destructor: Option<unsafe extern "C" fn(*mut std::ffi::c_void)>,
 ) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_pointer(context, pointer, name, destructor);
-    } else {
-        ((*SQLITE3_API).result_pointer.expect(EXPECT_MESSAGE))(context, pointer, name, destructor);
-    }
+    ((*SQLITE3_API).result_pointer.expect(EXPECT_MESSAGE))(context, pointer, name, destructor);
 }
 
 pub unsafe fn sqlite3ext_result_error(context: *mut sqlite3_context, s: *const c_char, n: i32) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_error(context, s, n);
-    } else {
-        ((*SQLITE3_API).result_error.expect(EXPECT_MESSAGE))(context, s, n);
-    }
+    ((*SQLITE3_API).result_error.expect(EXPECT_MESSAGE))(context, s, n);
 }
 
 pub unsafe fn sqlite3ext_result_error_code(context: *mut sqlite3_context, code: i32) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_error_code(context, code);
-    } else {
-        ((*SQLITE3_API).result_error_code.expect(EXPECT_MESSAGE))(context, code);
-    }
+    ((*SQLITE3_API).result_error_code.expect(EXPECT_MESSAGE))(context, code);
 }
 pub unsafe fn sqlite3ext_result_text(
     context: *mut sqlite3_context,
@@ -283,19 +188,11 @@ pub unsafe fn sqlite3ext_result_text(
     n: i32,
     d: Option<unsafe extern "C" fn(*mut c_void)>,
 ) {
-    if SQLITE3_API.is_null() {
-        sqlite3_result_text(context, s, n, d);
-    } else {
-        ((*SQLITE3_API).result_text.expect(EXPECT_MESSAGE))(context, s, n, d);
-    }
+    ((*SQLITE3_API).result_text.expect(EXPECT_MESSAGE))(context, s, n, d);
 }
 
 pub unsafe fn sqlite3ext_result_subtype(context: *mut sqlite3_context, subtype: u32) {
-    if SQLITE3_API.is_null() {
-        //sqlite3_result_int(context, v);
-    } else {
-        ((*SQLITE3_API).result_subtype.expect(EXPECT_MESSAGE))(context, subtype);
-    }
+    ((*SQLITE3_API).result_subtype.expect(EXPECT_MESSAGE))(context, subtype);
 }
 
 pub unsafe fn sqlite3ext_set_auxdata(
@@ -304,17 +201,10 @@ pub unsafe fn sqlite3ext_set_auxdata(
     p: *mut c_void,
     d: Option<unsafe extern "C" fn(*mut c_void)>,
 ) {
-    if SQLITE3_API.is_null() {
-        sqlite3_set_auxdata(context, n, p, d);
-    } else {
-        ((*SQLITE3_API).set_auxdata.expect(EXPECT_MESSAGE))(context, n, p, d);
-    }
+    ((*SQLITE3_API).set_auxdata.expect(EXPECT_MESSAGE))(context, n, p, d);
 }
 
 pub unsafe fn sqlite3ext_get_auxdata(context: *mut sqlite3_context, n: c_int) -> *mut c_void {
-    if SQLITE3_API.is_null() {
-        return sqlite3_get_auxdata(context, n);
-    }
     ((*SQLITE3_API).get_auxdata.expect(EXPECT_MESSAGE))(context, n)
 }
 
@@ -329,16 +219,9 @@ pub unsafe fn sqlite3ext_create_function_v2(
     x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
     destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
-    println!("SQLITE3_API.is_null() {}", SQLITE3_API.is_null());
-    if SQLITE3_API.is_null() {
-        sqlite3_create_function_v2(
-            db, s, argc, text_rep, p_app, x_func, x_step, x_final, destroy,
-        )
-    } else {
-        ((*SQLITE3_API).create_function_v2.expect(EXPECT_MESSAGE))(
-            db, s, argc, text_rep, p_app, x_func, x_step, x_final, destroy,
-        )
-    }
+    ((*SQLITE3_API).create_function_v2.expect(EXPECT_MESSAGE))(
+        db, s, argc, text_rep, p_app, x_func, x_step, x_final, destroy,
+    )
 }
 pub unsafe fn sqlite3ext_collation_v2(
     db: *mut sqlite3,
@@ -356,13 +239,9 @@ pub unsafe fn sqlite3ext_collation_v2(
     >,
     destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> c_int {
-    if SQLITE3_API.is_null() {
-        sqlite3_create_collation_v2(db, s, text_rep, p_app, x_compare, destroy)
-    } else {
-        ((*SQLITE3_API).create_collation_v2.expect(EXPECT_MESSAGE))(
-            db, s, text_rep, p_app, x_compare, destroy,
-        )
-    }
+    ((*SQLITE3_API).create_collation_v2.expect(EXPECT_MESSAGE))(
+        db, s, text_rep, p_app, x_compare, destroy,
+    )
 }
 
 pub unsafe fn sqlite3ext_create_module_v2(
@@ -372,11 +251,7 @@ pub unsafe fn sqlite3ext_create_module_v2(
     p_app: *mut c_void,
     destroy: Option<unsafe extern "C" fn(*mut c_void)>,
 ) -> i32 {
-    if SQLITE3_API.is_null() {
-        sqlite3_create_module_v2(db, s, module, p_app, destroy)
-    } else {
-        ((*SQLITE3_API).create_module_v2.expect(EXPECT_MESSAGE))(db, s, module, p_app, destroy)
-    }
+    ((*SQLITE3_API).create_module_v2.expect(EXPECT_MESSAGE))(db, s, module, p_app, destroy)
 }
 
 pub unsafe fn sqlite3ext_vtab_distinct(index_info: *mut sqlite3_index_info) -> i32 {
@@ -404,20 +279,17 @@ pub unsafe fn sqlite3ext_vtab_in_next(
 }
 
 pub unsafe fn sqlitex_declare_vtab(db: *mut sqlite3, s: *const c_char) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_declare_vtab(db, s);
-    }
     ((*SQLITE3_API).declare_vtab.expect(EXPECT_MESSAGE))(db, s)
 }
 pub unsafe fn sqlite3ext_overload_function(db: *mut sqlite3, s: *const c_char, n: i32) -> i32 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_overload_function(db, s, n);
-    }
     ((*SQLITE3_API).overload_function.expect(EXPECT_MESSAGE))(db, s, n)
 }
 pub unsafe fn sqlite3ext_context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
-    if SQLITE3_API.is_null() {
-        return sqlite3_context_db_handle(context);
-    }
     ((*SQLITE3_API).context_db_handle.expect(EXPECT_MESSAGE))(context)
+}
+pub unsafe fn sqlite3ext_user_data(context: *mut sqlite3_context) -> *mut c_void {
+    ((*SQLITE3_API).user_data.expect(EXPECT_MESSAGE))(context)
+}
+pub unsafe fn sqlite3ext_mprintf(s: *const c_char) -> *mut c_char {
+    ((*SQLITE3_API).mprintf.expect(EXPECT_MESSAGE))(s)
 }

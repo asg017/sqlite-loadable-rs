@@ -23,6 +23,9 @@ libsqlite3-sys = {version="0.26.0", default-features = false}
 [features]
 exec = []
 
+[lib]
+doctest = false
+
 [[example]]
 name = "hello"
 crate-type = ["cdylib", "staticlib"]

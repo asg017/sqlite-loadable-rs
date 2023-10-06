@@ -7,19 +7,19 @@
 
 use crate::constants::SQLITE_OKAY;
 use crate::ext::{
-    sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_overload_function,
-    sqlite3ext_result_blob, sqlite3ext_result_double, sqlite3ext_result_error,
-    sqlite3ext_result_error_code, sqlite3ext_result_int, sqlite3ext_result_int64,
-    sqlite3ext_result_null, sqlite3ext_result_pointer, sqlite3ext_result_subtype,
-    sqlite3ext_result_text, sqlite3ext_set_auxdata, sqlite3ext_value_blob, sqlite3ext_value_bytes,
-    sqlite3ext_value_double, sqlite3ext_value_int, sqlite3ext_value_int64,
-    sqlite3ext_value_pointer, sqlite3ext_value_subtype, sqlite3ext_value_text,
-    sqlite3ext_value_type,
+    sqlite3ext_context_db_handle, sqlite3ext_get_auxdata, sqlite3ext_mprintf,
+    sqlite3ext_overload_function, sqlite3ext_result_blob, sqlite3ext_result_double,
+    sqlite3ext_result_error, sqlite3ext_result_error_code, sqlite3ext_result_int,
+    sqlite3ext_result_int64, sqlite3ext_result_null, sqlite3ext_result_pointer,
+    sqlite3ext_result_subtype, sqlite3ext_result_text, sqlite3ext_set_auxdata,
+    sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double, sqlite3ext_value_int,
+    sqlite3ext_value_int64, sqlite3ext_value_pointer, sqlite3ext_value_subtype,
+    sqlite3ext_value_text, sqlite3ext_value_type,
 };
 use crate::Error;
 use sqlite3ext_sys::{
-    sqlite3, sqlite3_context, sqlite3_mprintf, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT,
-    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT,
+    sqlite3, sqlite3_context, sqlite3_value, SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER,
+    SQLITE_NULL, SQLITE_TEXT,
 };
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
@@ -109,11 +109,11 @@ pub enum MprintfError {
 pub fn mprintf(base: &str) -> Result<*mut c_char, MprintfError> {
     let cbase = CString::new(base.as_bytes()).map_err(MprintfError::Nul)?;
 
-    let result = unsafe { sqlite3_mprintf(cbase.as_ptr()) };
+    let result = unsafe { sqlite3ext_mprintf(cbase.as_ptr()) };
     if result.is_null() {
         Err(MprintfError::Oom)
     } else {
-        Ok(result)
+        Ok(result as *mut c_char)
     }
 }
 

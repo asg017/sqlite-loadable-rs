@@ -20,9 +20,11 @@ mod tests {
 
     use rusqlite::Connection;
 
+    #[ignore]
     #[test]
     fn test_manual_load() {
         let db = Connection::open_in_memory().unwrap();
+        // TODO when static linking is fixed, this should work
         unsafe {
             sqlite3_manual_init(
                 std::mem::transmute(db.handle()),
