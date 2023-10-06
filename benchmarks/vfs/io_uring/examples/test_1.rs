@@ -7,7 +7,7 @@ include!("conn.in");
 fn main() -> rusqlite::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let conn = create_test_database(args);
+    let conn = create_test_database(args)?;
 
     let mut stmt = conn.prepare_cached("INSERT INTO t1 (a, b) VALUES (?, ?)")?;
 

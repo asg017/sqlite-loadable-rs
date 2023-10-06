@@ -7,7 +7,7 @@ include!("conn.in");
 fn main() -> rusqlite::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let mut conn = create_test_database(args);
+    let mut conn = create_test_database(args)?;
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction().expect("Failed to start tx");
