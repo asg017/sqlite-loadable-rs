@@ -95,7 +95,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
-      - run: make test
+      - run: make test python=/usr/local/opt/python@3/libexec/bin/python
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
