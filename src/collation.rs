@@ -4,9 +4,8 @@
 use crate::{
     constants::SQLITE_OKAY,
     errors::{Error, ErrorKind, Result},
-    ext::sqlite3ext_collation_v2,
+    ext::{sqlite3, sqlite3ext_collation_v2},
 };
-use sqlite3ext_sys::sqlite3;
 use std::{ffi::CString, os::raw::c_void};
 
 use sqlite3ext_sys::SQLITE_UTF8;

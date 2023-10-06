@@ -11,9 +11,11 @@ use crate::{
     api,
     constants::{SQLITE_INTERNAL, SQLITE_OKAY},
     errors::{Error, ErrorKind, Result},
-    ext::{sqlite3ext_create_function_v2, sqlite3ext_user_data},
+    ext::{
+        sqlite3, sqlite3_context, sqlite3_value, sqlite3ext_create_function_v2,
+        sqlite3ext_user_data,
+    },
 };
-use sqlite3ext_sys::{sqlite3, sqlite3_context, sqlite3_value};
 
 use bitflags::bitflags;
 

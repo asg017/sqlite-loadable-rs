@@ -35,13 +35,6 @@ Solution: the `ext.rs` functions need to export different functions (either `pAp
 
 Though there's no `crate_type="cdylib"` macro we can use, so gotta introduce a new feature flag. Also means builds will be weird.
 
-```toml
-[dependencies]
-libsqlite3-sys = {version="0.26.0", default-features = false, optional=true, features=["bundled"]}
-
-[features]
-static = ["libsqlite3-sys"]
-```
 
 ```rs
 #[cfg(feature = "static")]

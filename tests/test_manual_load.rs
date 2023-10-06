@@ -14,13 +14,13 @@ pub fn sqlite3_manual_init(db: *mut sqlite3) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "static")]
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use rusqlite::Connection;
 
-    #[ignore]
     #[test]
     fn test_manual_load() {
         let db = Connection::open_in_memory().unwrap();
