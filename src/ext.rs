@@ -50,7 +50,7 @@ pub unsafe fn faux_sqlite_extension_init2(api: *mut sqlite3_api_routines) {
     }
 }
 
-//definex!("value_text", c_uchar);
+#[cfg(not(feature = "static"))]
 static EXPECT_MESSAGE: &str =
     "sqlite-loadable error: expected method on SQLITE3_API. Please file an issue";
 
