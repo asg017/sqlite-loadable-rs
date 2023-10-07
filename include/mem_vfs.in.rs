@@ -21,11 +21,11 @@ use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
 /// 
 /// The following dependency has to be copied by users to use this vfs implementation:
 /// sqlite3ext-sys = {version="0.0.1", path="./sqlite3ext-sys"}
-// TODO This lib should be released 0.0.2 version, with the previously missing
-// .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
-// parameter
+// TODO This lib should be released as the new 0.0.2 version, with the previously missing
+// .default_macro_constant_type(bindgen::MacroTypeVariation::Signed) parameter
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
+/// See https://www.sqlite.org/debugging.html for debugging methods
 struct MemVfs {
     default_vfs: DefaultVfs,
     name: CString,
