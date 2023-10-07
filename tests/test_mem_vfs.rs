@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-include!("../examples/mem_vfs.in.rs");
+include!("../include/mem_vfs.in.rs");
 
 #[cfg(test)]
 mod tests {

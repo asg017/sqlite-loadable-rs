@@ -167,7 +167,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn read(&mut self, orig_file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         let size: usize = s.try_into().unwrap();
         let offset = ofst.try_into().unwrap();
         let source = &mut self.file_contents;
@@ -229,7 +229,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
+    fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
 
