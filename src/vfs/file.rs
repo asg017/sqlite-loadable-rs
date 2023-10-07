@@ -148,7 +148,7 @@ unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
     let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
     let mut aux = Box::<T>::from_raw(m.aux.cast());
-    let result = aux.file_control(op, pArg);
+    let result = aux.file_control(arg1, op, pArg);
     Box::into_raw(f);
     Box::into_raw(m);
     Box::into_raw(aux);

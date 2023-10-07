@@ -1,7 +1,7 @@
 use std::env;
 use rand::Rng;
 
-include!("conn.in");
+include!("../include/conn.in.rs");
 
 fn main() -> rusqlite::Result<()> {
     let args: Vec<String> = env::args().collect();

@@ -19,9 +19,6 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
             let stmt_str = stmt.as_str();
             conn.execute(stmt_str, ()).expect("Failed to execute");
         }
-        if file_path.contains("wal") {
-            conn.pragma_update(None, "journal_mode", "wal")?;
-        }
         conn
     }else {
         Connection::open_in_memory().expect("Failed to create in-memory database")

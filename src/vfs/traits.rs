@@ -31,6 +31,7 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn file_control(
         &mut self,
+        file: *mut sqlite3_file,
         op: c_int,
         p_arg: *mut c_void,
     ) -> Result<()>;

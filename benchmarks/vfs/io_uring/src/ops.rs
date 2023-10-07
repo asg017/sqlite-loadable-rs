@@ -4,7 +4,9 @@ use std::os::raw::c_void;
 use std::fs::File;
 use std::os::unix::io::{FromRawFd,AsRawFd};
 
+use sqlite_loadable::vfs::default::DefaultFile;
 use sqlite_loadable::{Result, Error, ErrorKind, SqliteIoMethods};
+use sqlite3ext_sys::sqlite3_file;
 use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
 use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};    
@@ -25,11 +27,13 @@ const USER_DATA_STATX: u64 = 0x3;
 const USER_DATA_WRITE: u64 = 0x4;
 const USER_DATA_FALLOCATE: u64 = 0x5;
 const USER_DATA_CLOSE: u64 = 0x6;
+const USER_DATA_FSYNC: u64 = 0x7;
 
 pub struct Ops {
     ring: IoUring,
     file_path: CString,
     file_fd: Option<i32>,
+    default_file: Option<DefaultFile>,
 }
 
 impl Ops {
@@ -41,6 +45,7 @@ impl Ops {
             ring,
             file_path,
             file_fd: None,
+            default_file: None,
         }
     }
 
@@ -221,6 +226,29 @@ impl Ops {
         Ok(())
     }
     
+    // TODO write unit test
+    pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
+        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let op = opcode::Fsync::new(fd);
+
+        self.ring
+            .submission()
+            .push(&op.build().user_data(USER_DATA_FSYNC))
+            .map_err(|_| Error::new_message("submission queue is full"))?;
+
+        self.ring.submit_and_wait(1)
+            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+
+        let cqe = self.ring
+            .completion()
+            .next()
+            .unwrap();
+
+        if cqe.result() < 0 {
+            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+        }
+        Ok(())
+    }
 }
 
 impl SqliteIoMethods for Ops {
@@ -241,7 +269,7 @@ impl SqliteIoMethods for Ops {
     }
 
     fn sync(&mut self, flags: i32) -> Result<()> {
-        Ok(())
+        unsafe { self.o_fsync(flags) }
     }
 
     fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
@@ -261,7 +289,13 @@ impl SqliteIoMethods for Ops {
         Ok(())
     }
 
-    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
+    /// See https://www.sqlite.org/c3ref/file_control.html
+    /// and also https://www.sqlite.org/c3ref/c_fcntl_begin_atomic_write.html
+    fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
+        if let None = self.default_file {
+            let orig_file: *mut sqlite3_file = unsafe { file.offset(1) };
+            self.default_file = Some(DefaultFile::from_ptr(orig_file));
+        }
         Ok(())
     }
 

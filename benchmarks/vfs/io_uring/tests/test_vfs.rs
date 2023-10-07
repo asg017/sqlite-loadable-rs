@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use _iouringvfs::sqlite3_iouringvfs_init;
-    use rusqlite::{ffi::sqlite3_auto_extension, Connection, self};
+    use rusqlite::{ffi::sqlite3_auto_extension, Connection, self, OpenFlags};
 
     #[test]
     fn test_io_uring_ext() -> rusqlite::Result<()> {
@@ -11,11 +11,16 @@ mod tests {
             )));
         }
 
-        let conn = Connection::open_in_memory()?;
+        let file_path = "test_iouring.db";
 
-        conn.execute("ATTACH io_uring_vfs_from_file('from.db') AS inring;", ())?;
+        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE;
+        let conn = Connection::open_in_memory_with_flags(flags).unwrap();
 
-        conn.execute("CREATE TABLE t3(x, y)", ())?;
+        let stmt = format!("ATTACH DATABASE io_uring_vfs_from_file('{}') AS inring", file_path);
+        let stmt_str = stmt.as_str();
+        conn.execute(stmt_str, ())?;
+
+        conn.execute("CREATE TABLE t3(x varchar(10), y integer)", ())?;
         conn.execute("INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)", ())?;
 
         let result: String = conn
@@ -35,11 +40,14 @@ mod tests {
             )));
         }
 
-        let conn = Connection::open_in_memory()?;
+        let file_path = "test_iouring.wal.db";
 
-        conn.execute("ATTACH io_uring_vfs_from_file('from.db') AS inring;", ())?;
-
-        conn.pragma_update(None, "journal_mode", "wal")?;
+        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE;
+        let conn = Connection::open_in_memory_with_flags(flags).unwrap();
+        
+        let stmt = format!("ATTACH io_uring_vfs_from_file('{}') AS inring", file_path);
+        let stmt_str = stmt.as_str();
+        conn.execute(stmt_str, ())?;
 
         conn.execute("CREATE TABLE t3(x, y)", ())?;
         conn.execute("INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)", ())?;

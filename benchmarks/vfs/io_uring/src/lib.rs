@@ -17,7 +17,7 @@ use std::os::raw::{c_void, c_char};
 use std::{ptr, mem};
 
 use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
-use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
+use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE, SQLITE_OPEN_WAL};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
@@ -30,6 +30,7 @@ const EXTENSION_NAME: &str = "iouring";
 struct IoUringVfs {
     default_vfs: DefaultVfs,
     vfs_name: CString,
+    wal: bool,
 }
 
 impl SqliteVfs for IoUringVfs {
@@ -43,17 +44,29 @@ impl SqliteVfs for IoUringVfs {
         file.open_file().map_err(|_| Error::new_message("can't open file"))?;
 
         unsafe { *p_file = *create_file_pointer( file ); }
+
+        if String::from_utf8_lossy(file_path.to_bytes()).to_string().contains("wal") {
+            unsafe { *p_res_out |= SQLITE_OPEN_WAL; }
+            self.wal = true;
+        }
     
         Ok(())
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_DELETE)))
+        let file_path_cstr = unsafe { CStr::from_ptr(z_name) };
+        let file_path = file_path_cstr.to_str().unwrap();
+        if let Ok(metadata) = fs::metadata(file_path) {
+            if metadata.is_file() {
+                self.default_vfs.delete(z_name, sync_dir);
+            }
+        }
+        Ok(())
     }
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
         unsafe {
-            *p_res_out = 0;
+            *p_res_out = if self.wal { 1 } else { 0 };
         }
         Ok(())
     }
@@ -142,7 +155,8 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
             // pass thru
             DefaultVfs::from_ptr(sqlite3ext_vfs_find(ptr::null()))
         },
-        vfs_name
+        vfs_name,
+        wal: false,
     };
 
     let name_ptr = ring_vfs.vfs_name.as_ptr(); // allocation is bound to lifetime of struct
