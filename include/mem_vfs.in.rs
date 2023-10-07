@@ -48,16 +48,7 @@ impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: i32, p_res_out: *mut i32) -> Result<()> {
         let mut mem_file = MemFile {
             file_contents: Vec::new(),
-            path: String::new()
         };
-        
-        let path_cstr = unsafe { CStr::from_ptr(z_name) };
-        let path_str = path_cstr.to_str().expect("should be fine");
-        mem_file.path = path_str.to_string();
-
-        if !z_name.is_null() {
-            write_file_to_vec_u8(path_str, &mut mem_file.file_contents)?;
-        }
         
         unsafe { *p_file = *create_file_pointer( mem_file ); }
     
@@ -141,25 +132,6 @@ impl SqliteVfs for MemVfs {
 
 struct MemFile {
     file_contents: Vec<u8>,
-    path: String,
-}
-
-impl Drop for MemFile {
-    fn drop(&mut self) {
-        if !self.file_contents.is_empty() {
-            if let Err(err) = self.write_to_file() {
-                eprintln!("Error writing to file {}: {}", self.path, err);
-            }
-        }
-    }
-}
-
-impl MemFile {
-    fn write_to_file(&self) -> io::Result<()> {
-        let mut file = File::create(&self.path)?;
-        file.write_all(&self.file_contents)?;
-        Ok(())
-    }
 }
 
 impl SqliteIoMethods for MemFile {
@@ -272,11 +244,8 @@ impl SqliteIoMethods for MemFile {
     }
 }
 
-/// Usage: "ATTACH memvfs_from_file('test.db') AS inmem;"
-fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
-    let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
-
-    let text_output = format!("file:{}?vfs={}", path, EXTENSION_NAME);
+fn print_uri(context: *mut sqlite3_context, _: &[*mut sqlite3_value]) -> Result<()> {
+    let text_output = format!("file:___mem___?vfs={}", EXTENSION_NAME);
 
     api::result_text(context, text_output);
 
@@ -291,7 +260,7 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
             // pass thru
             DefaultVfs::from_ptr(sqlite3ext_vfs_find(ptr::null()))
         },
-        name: name
+        name
     };
     let name_ptr = mem_vfs.name.as_ptr();
 
@@ -299,7 +268,7 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     register_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
-    define_scalar_function(db, "memvfs_from_file", 1, vfs_from_file, flags)?;
+    define_scalar_function(db, "mem_vfs_uri", 0, print_uri, flags)?;
 
     Ok(())
 }

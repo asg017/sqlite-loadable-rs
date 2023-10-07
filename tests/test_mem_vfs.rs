@@ -20,7 +20,7 @@ mod tests {
 
         let conn = Connection::open_in_memory_with_flags(flags).unwrap();
 
-        conn.execute("ATTACH DATABASE memvfs_from_file('dummy.db') AS inmem;", ());
+        conn.execute("ATTACH DATABASE mem_vfs_uri() AS inmem;", ());
 
         conn.execute("CREATE TABLE t3(x, y)", ());
         conn.execute("INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)", ());
