@@ -33,7 +33,7 @@ So, `sqlite-loadable-rs` is the first and most involved framework for writing lo
 
 Scalar functions are the simplest functions one can add to SQLite - take in values as inputs, and return a value as output. To implement one in `sqlite-loadable-rs`, you just need to call `define_scalar_function` on a "callback" Rust function decorated with `#[sqlite_entrypoint]`, and you'll be able to call it from SQL!
 
-```rs
+```rust
 // add(a, b)
 fn add(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let a = api::value_int(values.get(0).expect("1st argument"));
@@ -75,7 +75,7 @@ See [`define_scalar_function`](https://docs.rs/sqlite-loadable/latest/sqlite_loa
 
 Table functions, (aka "[Eponymous-only virtual tables](https://www.sqlite.org/vtab.html#eponymous_only_virtual_tables)"), can be added to your extension with [`define_table_function`](https://docs.rs/sqlite-loadable/latest/sqlite_loadable/fn.define_table_function.html).
 
-```rs
+```rust
 define_table_function::<CharactersTable>(db, "characters", None)?;
 ```
 
@@ -116,7 +116,7 @@ Some real-world non-Rust examples of table functions in SQLite:
 
 [`define_virtual_table()`](https://docs.rs/sqlite-loadable/latest/sqlite_loadable/fn.define_virtual_table.html) can define a new read-only virtual table module for the given SQLite connection. [`define_virtual_table_writeable()`](https://docs.rs/sqlite-loadable/latest/sqlite_loadable/fn.define_virtual_table_writeable.html) is also available for tables that support `INSERT`/`UPDATE`/`DELETE`, but this API will probably change.
 
-```rs
+```rust
 define_virtual_table::<CustomVtab>(db, "custom_vtab", None)?
 ```
 
@@ -181,7 +181,7 @@ crate-type=["cdylib"]
 
 Then, fill in your `src/lib.rs` with a "hello world" extension:
 
-```rs
+```rust
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::{
   api,

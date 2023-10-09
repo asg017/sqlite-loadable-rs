@@ -11,7 +11,11 @@ def connect():
   db.execute("create table base_modules as select name from pragma_module_list")
 
   db.enable_load_extension(True)
-  db.load_extension("target/debug/examples/libhello")
+  try:
+    db.load_extension("target/debug/examples/libhello")
+  except:
+    # windows
+    db.load_extension("target/debug/examples/hello")
 
   db.execute("create temp table loaded_functions as select name from pragma_function_list where name not in (select name from base_functions) order by name")
   db.execute("create temp table loaded_modules as select name from pragma_module_list where name not in (select name from base_modules) order by name")
@@ -38,6 +42,6 @@ class TestExamples(unittest.TestCase):
     self.assertEqual(hello("null: x\0x"), "hello, null: x\0x!")
     #hello("x" * (2_147_483_647 - len("hello, !") - 20) )
     #hello("x" * (200) )
-    
+
 if __name__ == '__main__':
     unittest.main()

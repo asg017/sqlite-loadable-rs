@@ -2,13 +2,6 @@
 
 // ![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use sqlite3ext_sys::sqlite3_index_info_sqlite3_index_constraint_usage;
-use sqlite3ext_sys::{
-    sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
-    sqlite3_index_info_sqlite3_index_orderby, sqlite3_module, sqlite3_value, sqlite3_vtab,
-    sqlite3_vtab_cursor,
-};
-
 use crate::constants::*;
 use std::ffi::CString;
 use std::marker::PhantomData;
@@ -21,10 +14,12 @@ use std::str::Utf8Error;
 use crate::api::{mprintf, value_type, MprintfError, ValueType};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::ext::{
-    sqlite3ext_create_module_v2, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in_first,
-    sqlite3ext_vtab_in_next,
+    sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
+    sqlite3_index_info_sqlite3_index_constraint_usage, sqlite3_index_info_sqlite3_index_orderby,
+    sqlite3_module, sqlite3_value, sqlite3_vtab, sqlite3_vtab_cursor, sqlite3ext_create_module_v2,
+    sqlite3ext_declare_vtab, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in,
+    sqlite3ext_vtab_in_first, sqlite3ext_vtab_in_next,
 };
-use crate::ext::{sqlite3ext_vtab_in, sqlitex_declare_vtab};
 use serde::{Deserialize, Serialize};
 
 /// Possible operators for a given constraint, found and used in xBestIndex and xFilter.
@@ -498,6 +493,62 @@ pub fn define_virtual_table<'vtab, T: VTab<'vtab> + 'vtab>(
     Ok(())
 }
 
+pub fn define_virtual_table_with_find<'vtab, T: VTabFind<'vtab> + 'vtab>(
+    db: *mut sqlite3,
+    name: &str,
+    aux: Option<T::Aux>,
+) -> Result<()> {
+    let m = &Module {
+        base: sqlite3_module {
+            iVersion: 2,
+            xCreate: Some(rust_create::<T>),
+            xConnect: Some(rust_connect::<T>),
+            xBestIndex: Some(rust_best_index::<T>),
+            xDisconnect: Some(rust_disconnect::<T>),
+            xDestroy: Some(rust_destroy::<T>),
+            xOpen: Some(rust_open::<T>),
+            xClose: Some(rust_close::<T::Cursor>),
+            xFilter: Some(rust_filter::<T::Cursor>),
+            xNext: Some(rust_next::<T::Cursor>),
+            xEof: Some(rust_eof::<T::Cursor>),
+            xColumn: Some(rust_column::<T::Cursor>),
+            xRowid: Some(rust_rowid::<T::Cursor>),
+            xUpdate: None,
+            xBegin: None,    //Some(rust_begin::<T>),
+            xSync: None,     //Some(rust_sync::<T>),
+            xCommit: None,   //Some(rust_commit::<T>),
+            xRollback: None, //Some(rust_rollback::<T>),
+            xFindFunction: Some(rust_find_function::<T>),
+            xRename: None,
+            xSavepoint: None,
+            xRelease: None,
+            xRollbackTo: None,
+            xShadowName: None,
+        },
+        phantom: PhantomData::<&'vtab T>,
+    };
+    let cname = CString::new(name)?;
+    let p_app = match aux {
+        Some(aux) => {
+            let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
+            boxed_aux.cast::<c_void>()
+        }
+        None => ptr::null_mut(),
+    };
+    let result = unsafe {
+        sqlite3ext_create_module_v2(
+            db,
+            cname.as_ptr(),
+            &m.base,
+            p_app,
+            Some(destroy_aux::<T::Aux>),
+        )
+    };
+    if result != SQLITE_OKAY {
+        return Err(Error::new(ErrorKind::TableFunction(result)));
+    }
+    Ok(())
+}
 pub fn define_virtual_table_writeable<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
     db: *mut sqlite3,
     name: &str,
@@ -702,13 +753,16 @@ pub trait VTab<'vtab>: Sized {
 pub trait VTabWriteable<'vtab>: VTab<'vtab> {
     fn update(&'vtab mut self, operation: UpdateOperation, p_rowid: *mut i64) -> Result<()>;
 }
+
+pub type FindResult = (
+    unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value),
+    Option<i32>,
+    Option<*mut c_void>,
+);
+
 pub trait VTabFind<'vtab>: VTab<'vtab> {
     // TODO should be able to return SQLITE_INDEX_CONSTRAINT_FUNCTION or more
-    fn find_function(
-        &'vtab mut self,
-        argc: i32,
-        name: &str,
-    ) -> Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>;
+    fn find_function(&'vtab mut self, argc: i32, name: &str) -> Option<FindResult>;
 }
 
 pub trait VTabWriteableWithTransactions<'vtab>: VTabWriteable<'vtab> {
@@ -826,7 +880,7 @@ where
     match T::create(db, aux.as_ref(), args) {
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
-                let rc = sqlitex_declare_vtab(db, c_sql.as_ptr());
+                let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
                 if rc == SQLITE_OKAY {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
@@ -869,7 +923,7 @@ where
     match T::connect(db, aux.as_ref(), args) {
         Ok((sql, vtab)) => match CString::new(sql) {
             Ok(c_sql) => {
-                let rc = sqlitex_declare_vtab(db, c_sql.as_ptr());
+                let rc = sqlite3ext_declare_vtab(db, c_sql.as_ptr());
                 if rc == SQLITE_OKAY {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
@@ -1116,9 +1170,12 @@ where
     let name = std::str::from_utf8_unchecked(name);
 
     match (*vt).find_function(n_arg, name) {
-        Some(function) => {
+        Some((function, rc, p_arg)) => {
             (*p_xfunc) = Some(function);
-            1 // TODO give option to return non 1 funcs
+            if let Some(p_arg) = p_arg {
+                (*p_p_arg) = p_arg;
+            }
+            rc.map_or(1, |rc| rc)
         }
         None => 0,
     }

@@ -26,3 +26,16 @@ pub fn sqlite3_hello_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "hello", 1, hello, flags)?;
     Ok(())
 }
+
+#[cfg(target_os = "emscripten")]
+#[no_mangle]
+pub extern "C" fn sqlite3_wasm_extra_init(_unused: *const std::ffi::c_char) -> std::ffi::c_int {
+    use sqlite_loadable::SQLITE_OKAY;
+    unsafe {
+        sqlite_loadable::ext::sqlite3ext_auto_extension(std::mem::transmute(
+            sqlite3_hello_init as *const (),
+        ));
+    }
+
+    SQLITE_OKAY
+}

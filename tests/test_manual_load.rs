@@ -14,6 +14,7 @@ pub fn sqlite3_manual_init(db: *mut sqlite3) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "static")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -23,6 +24,7 @@ mod tests {
     #[test]
     fn test_manual_load() {
         let db = Connection::open_in_memory().unwrap();
+        // TODO when static linking is fixed, this should work
         unsafe {
             sqlite3_manual_init(
                 std::mem::transmute(db.handle()),

@@ -24,7 +24,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
-      - run: cargo test
+      - run: make test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -41,14 +41,14 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          # - arm-unknown-linux-gnueabi # "failed to merge target specific data of file ..."
-          - arm-unknown-linux-gnueabihf
-          - armv7-unknown-linux-gnueabihf
-          #- armv7-unknown-linux-musleabihf # "cannot produce cdylib ... as the target `armv7-unknown-linux-musleabihf` does not support these crate types"
           - x86_64-unknown-linux-gnu
-          #- x86_64-unknown-linux-musl # cannot produce cdylib ... as the target `x86_64-unknown-linux-musl` does not support these crate types
+          - x86_64-unknown-linux-musl
           - aarch64-unknown-linux-gnu
           #- aarch64-unknown-linux-musl # cannot produce cdylib for ... as the target `aarch64-unknown-linux-musl` does not support these crate types
+          - arm-unknown-linux-gnueabihf
+          #- arm-unknown-linux-gnueabi # "failed to merge target specific data of file ..."
+          - armv7-unknown-linux-gnueabihf
+          #- armv7-unknown-linux-musleabihf # "cannot produce cdylib ... as the target `armv7-unknown-linux-musleabihf` does not support these crate types"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/cache@v3
@@ -63,9 +63,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - run: sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf gcc-arm-linux-gnueabi
+      - run: sudo apt-get update && sudo apt-get install -qq crossbuild-essential-arm64 crossbuild-essential-armhf gcc-arm-linux-gnueabi musl-tools
       - run: rustup target add ${{ matrix.target }}
       - run: cargo build --examples --verbose --target ${{ matrix.target }}
+        env:
+          RUSTFLAGS: "-C target-feature=-crt-static"
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -93,7 +95,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
-      - run: cargo test
+      - run: make test python=/usr/local/opt/python@3/libexec/bin/python
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
@@ -121,7 +123,7 @@ jobs:
         with:
           toolchain: stable
       - run: cargo build --examples --verbose
-      - run: cargo test
+      - run: make test
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
