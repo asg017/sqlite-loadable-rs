@@ -1,16 +1,16 @@
 //! cargo build --example series
 //! sqlite3 :memory: '.read examples/test.sql'
 
+use sqlite_loadable::prelude::*;
 use sqlite_loadable::{
-    api, define_table_function,
+    api,
     scalar::scalar_function_raw,
     table::{
-        define_table_function_with_find, BestIndexError, IndexInfo, VTab, VTabArguments,
-        VTabCursor, VTabFind,
+        define_table_function_with_find, BestIndexError, FindResult, IndexInfo, VTab,
+        VTabArguments, VTabCursor, VTabFind,
     },
     Result,
 };
-use sqlite_loadable::{prelude::*, Error};
 
 use std::{mem, os::raw::c_int};
 
@@ -59,13 +59,9 @@ impl<'vtab> VTab<'vtab> for FindTable {
 }
 
 impl<'vtab> VTabFind<'vtab> for FindTable {
-    fn find_function(
-        &mut self,
-        argc: i32,
-        name: &str,
-    ) -> Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)> {
+    fn find_function(&mut self, _argc: i32, name: &str) -> Option<FindResult> {
         if name == "wrapped" {
-            return Some(scalar_function_raw(wrapped));
+            return Some((scalar_function_raw(wrapped), None, None));
         }
         None
     }

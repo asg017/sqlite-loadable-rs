@@ -5,7 +5,7 @@ pub use crate::entrypoints::register_entrypoint;
 #[doc(inline)]
 pub use crate::entrypoints::register_entrypoint_load_permanently;
 #[doc(inline)]
-pub use sqlite3ext_sys::{
+pub use crate::ext::{
     sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_value, sqlite3_vtab,
     sqlite3_vtab_cursor,
 };

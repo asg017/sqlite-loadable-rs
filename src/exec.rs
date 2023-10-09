@@ -1,11 +1,11 @@
-use sqlite3ext_sys::{sqlite3, sqlite3_stmt, sqlite3_value};
+use sqlite3ext_sys::{sqlite3, sqlite3_stmt};
 use std::{
     error::Error,
     ffi::{c_char, c_void, CString},
 };
 
 use crate::{
-    constants::{SQLITE_OKAY, SQLITE_ROW},
+    constants::SQLITE_OKAY,
     ext::{
         sqlite3ext_bind_int, sqlite3ext_bind_text, sqlite3ext_column_bytes,
         sqlite3ext_column_int64, sqlite3ext_column_text, sqlite3ext_finalize,
@@ -61,9 +61,8 @@ impl Statement {
         }
         Ok(())
     }
-    fn bind_blob(&mut self, param_idx: i32, value: &[u8]) -> Result<(), Box<dyn Error>> {
-        todo!();
-        Ok(())
+    fn bind_blob(&mut self, _param_idx: i32, _value: &[u8]) -> Result<(), Box<dyn Error>> {
+        todo!()
     }
     pub fn execute(&mut self) -> Rows {
         Rows { stmt: self.stmt }
