@@ -3,7 +3,6 @@ use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
 use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
-use url::Url;
 
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};

@@ -1,8 +1,11 @@
 //! Utilities for working with SQLite's "sqlite3_extension_init"-style
 //! entrypoints.
-use crate::{errors::Result, ext::faux_sqlite_extension_init2};
+use crate::{
+    errors::Result,
+    ext::{faux_sqlite_extension_init2, sqlite3, sqlite3_api_routines},
+};
 
-use sqlite3ext_sys::{sqlite3, sqlite3_api_routines, SQLITE_OK};
+use sqlite3ext_sys::SQLITE_OK;
 
 use std::os::raw::c_char;
 

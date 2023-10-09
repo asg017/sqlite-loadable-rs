@@ -1,5 +1,10 @@
 #[cfg(feature = "exec")]
-use sqlite_loadable::ext;
+use sqlite_loadable::prelude::*;
+#[cfg(feature = "exec")]
+use sqlite_loadable::{api, define_scalar_function, Result};
+
+#[cfg(feature = "exec")]
+use sqlite_loadable::exec;
 
 #[cfg(feature = "exec")]
 pub fn t_values(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {

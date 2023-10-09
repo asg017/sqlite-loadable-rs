@@ -4,3 +4,4 @@ target/
 *.res
 *.cdtor.o
 rustc*/
+wasm/
