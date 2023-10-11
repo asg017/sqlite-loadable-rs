@@ -7,6 +7,7 @@ use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sq
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
+use sqlite_loadable::vfs::file::{MethodsWithAux, FileWithAux};
 use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
 use url::Url;
 
@@ -159,9 +160,14 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
         wal: false,
     };
 
-    let name_ptr = ring_vfs.vfs_name.as_ptr(); // allocation is bound to lifetime of struct
+    // allocation is bound to lifetime of struct
+    let name_ptr = ring_vfs.vfs_name.as_ptr(); 
 
-    let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, None);
+    // let file_size = std::mem::size_of::<FileWithAux<Ops>>();
+    // let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, file_size.try_into().unwrap());
+    
+    // vfs_file_size == 0, fixes the stack smash, when Box does the clean up
+    let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, 0);
 
     register_vfs(vfs, true)?;
 
@@ -170,9 +176,3 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
 
     Ok(())
 }
-
-
-
-
-
-

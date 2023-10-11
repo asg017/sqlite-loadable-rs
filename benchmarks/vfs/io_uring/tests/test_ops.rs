@@ -1,11 +1,6 @@
 use std::ffi::CString;
 use std::os::raw::c_void;
 
-/// EBADF
-/// The fd field in the submission queue entry is invalid,
-/// or the IOSQE_FIXED_FILE flag was set in the submission queue entry,
-/// but no files were registered with the io_uring instance.
-
 #[cfg(test)]
 mod tests {
     use super::*;
