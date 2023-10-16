@@ -4,7 +4,6 @@ use std::os::raw::c_void;
 use std::fs::File;
 use std::os::unix::io::{FromRawFd,AsRawFd};
 
-use sqlite_loadable::vfs::default::DefaultFile;
 use sqlite_loadable::{Result, Error, ErrorKind, SqliteIoMethods};
 use sqlite3ext_sys::sqlite3_file;
 use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
@@ -33,7 +32,6 @@ pub struct Ops {
     ring: IoUring,
     file_path: CString,
     file_fd: Option<i32>,
-    default_file: Option<DefaultFile>,
 }
 
 impl Ops {
@@ -45,7 +43,6 @@ impl Ops {
             ring,
             file_path,
             file_fd: None,
-            default_file: None,
         }
     }
 
@@ -252,86 +249,108 @@ impl Ops {
 }
 
 impl SqliteIoMethods for Ops {
-    fn close(&mut self) -> Result<()> {
+    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe { self.o_close() }
     }
 
-    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         unsafe { self.o_read(ofst as u64, s as u32, buf) }
     }
 
-    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
+    fn write(&mut self, file: *mut sqlite3_file, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
         unsafe { self.o_write(buf, ofst as u64, s as u32) }
     }
 
-    fn truncate(&mut self, size: i64) -> Result<()> {
+    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
         unsafe { self.o_truncate(size) }
     }
 
-    fn sync(&mut self, flags: i32) -> Result<()> {
+    fn sync(&mut self, file: *mut sqlite3_file, flags: i32) -> Result<()> {
         unsafe { self.o_fsync(flags) }
     }
 
-    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
+    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()> {
         unsafe { self.o_file_size(p_size as *mut u64) }
     }
 
-    fn lock(&mut self, arg2: i32) -> Result<()> {
-        Ok(())
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
+        unsafe {
+            let next_file: *mut sqlite3_file = file.offset(1);
+            if let Some(f) = (*(*next_file).pMethods).xLock {
+                f(file, arg2)
+            }else {
+                0
+            }
+        }
     }
 
-    fn unlock(&mut self, arg2: i32) -> Result<()> {
-        Ok(())
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
+        unsafe {
+            let next_file: *mut sqlite3_file = file.offset(1);
+            if let Some(f) = (*(*next_file).pMethods).xUnlock {
+                f(file, arg2)
+            }else {
+                0
+            }    
+        }
     }
 
-    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
-        unsafe{ *p_res_out = 0; }
-        Ok(())
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> i32 {
+        unsafe {
+            let next_file: *mut sqlite3_file = file.offset(1);
+            if let Some(f) = (*(*next_file).pMethods).xCheckReservedLock {
+                f(file, p_res_out)
+            }else {
+                0
+            }    
+        }
     }
 
     /// See https://www.sqlite.org/c3ref/file_control.html
     /// and also https://www.sqlite.org/c3ref/c_fcntl_begin_atomic_write.html
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
-        if let None = self.default_file {
-            let orig_file: *mut sqlite3_file = unsafe { file.offset(1) };
-            self.default_file = Some(DefaultFile::from_ptr(orig_file));
-        }
+        // unsafe {
+        //     let next_file: *mut sqlite3_file = file.offset(1);
+        //     if let Some(f) = (*(*next_file).pMethods).xFileControl {
+        //         f(next_file, op, p_arg);
+        //     }
+        // }
         Ok(())
     }
 
-    fn sector_size(&mut self) -> i32 {
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> i32 {
         1024
     }
 
-    fn device_characteristics(&mut self) -> i32 {
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> i32 {
         SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
         SQLITE_IOCAP_SEQUENTIAL
     }
 
-    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
+    fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
     }
 
-    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
+    fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
         // SQLITE_IOERR_SHMLOCK is deprecated?
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
     }
 
-    fn shm_barrier(&mut self) -> Result<()> {
+    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
         Ok(())
     }
 
-    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
+    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: i32) -> Result<()> {
         Ok(())
     }
 
-    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, file: *mut sqlite3_file, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
         unsafe { self.o_fetch(ofst as u64, size as u32, pp) }
     }
 
-    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
         Ok(())
     }
 }

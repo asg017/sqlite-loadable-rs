@@ -13,8 +13,8 @@ mod tests {
 
         let file_path = "test_iouring.db";
 
-        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE;
-        let conn = Connection::open_in_memory_with_flags(flags).unwrap();
+        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
+        let conn = Connection::open_with_flags_and_vfs(file_path, flags, "unix")?;
 
         let stmt = format!("ATTACH DATABASE io_uring_vfs_from_file('{}') AS inring", file_path);
         let stmt_str = stmt.as_str();
@@ -42,8 +42,8 @@ mod tests {
 
         let file_path = "test_iouring.wal.db";
 
-        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE;
-        let conn = Connection::open_in_memory_with_flags(flags).unwrap();
+        let flags = OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE;
+        let conn = Connection::open_with_flags_and_vfs(file_path, flags, "unix")?;
         
         let stmt = format!("ATTACH io_uring_vfs_from_file('{}') AS inring", file_path);
         let stmt_str = stmt.as_str();

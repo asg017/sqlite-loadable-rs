@@ -3,12 +3,12 @@
 pub mod ops;
 use ops::Ops;
 
-use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
+use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control, sqlite3ext_vfs_register, sqlite3ext_database_file_object};
 use sqlite_loadable::vfs::default::DefaultVfs;
-use sqlite_loadable::vfs::vfs::create_vfs;
+use sqlite_loadable::vfs::vfs::{create_vfs, handle_vfs_result};
 
 use sqlite_loadable::vfs::file::{MethodsWithAux, FileWithAux};
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
 use url::Url;
 
 use std::ffi::{CString, CStr};
@@ -50,6 +50,8 @@ impl SqliteVfs for IoUringVfs {
             unsafe { *p_res_out |= SQLITE_OPEN_WAL; }
             self.wal = true;
         }
+
+        let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
     
         Ok(())
     }
@@ -151,17 +153,27 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 #[sqlite_entrypoint_permanent]
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
+
+    let shimmed_name = CString::new("unix-dotfile").unwrap();
+    let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
+    let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
+
+    unsafe {
+        let result = sqlite3ext_vfs_register(shimmed_vfs, 1);
+        handle_vfs_result(result)?;
+    }    
+
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {
             // pass thru
-            DefaultVfs::from_ptr(sqlite3ext_vfs_find(ptr::null()))
+            DefaultVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
         wal: false,
     };
 
     // allocation is bound to lifetime of struct
-    let name_ptr = ring_vfs.vfs_name.as_ptr(); 
+    let name_ptr = ring_vfs.vfs_name.as_ptr();
 
     // let file_size = std::mem::size_of::<FileWithAux<Ops>>();
     // let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, file_size.try_into().unwrap());
@@ -169,7 +181,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
     // vfs_file_size == 0, fixes the stack smash, when Box does the clean up
     let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, 0);
 
-    register_vfs(vfs, true)?;
+    register_boxed_vfs(vfs, false)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "io_uring_vfs_from_file", 1, vfs_from_file, flags)?;

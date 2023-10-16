@@ -8,29 +8,44 @@ use crate::{vfs::traits::SqliteIoMethods};
 use crate::{Error, Result, ErrorKind};
 use crate::vfs::vfs::handle_error;
 
+// TODO use libsqlite3-dev, check installed: dpkg-query -l | grep sqlite
+
+// Before setting break, enter gdb, run with parameters, then just directly crash it, then run 'where'
+
+// Get only file numbers of matched pattern of crash revealed by valgrind, then sed to break on gdb:
+// egrep -n "isOpen\(pPager->fd" ./sqlite3.c | grep assert | cut -f1 -d: | sed 's/^/break sqlite3.c:/'
+
+// Segfaults:
+// valgrind --leak-check=full --track-origins=yes --trace-children=yes --show-leak-kinds=all --log-file=leaky.txt sqlite3 --init iouring.sql
+
+// Cause of crash, because io_method is dropped by the box when into_raw is enabled
+// #define isOpen(pFd) ((pFd)->pMethods!=0)
+
 /// Let aux and methods Boxes go out of scope, thus drop,
-unsafe extern "C" fn x_close<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+unsafe extern "C" fn x_close<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.close();
-    // disabling reduces leak to 16B,  also fixes free-ing invalid pointer
+    let result = m.aux.close(file);
+    // disabling reduces leak to 16B,  also fixes free-ing invalid pointer, on rusql, sqlite3 just crashes
     // Box::into_raw(m);
 
     // disabling crashes valgrind, reason: stack smashing, and free invalid pointer
     // setting szOsFile to 0, fixes the stack smashing, only free'ing invalid pointer remains
     Box::into_raw(f);
+
+    // Disabling both fails the unit tests, free(): invalid pointer
     handle_error(result)
 }
 
 unsafe extern "C" fn x_read<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     buf: *mut c_void,
     iAmt: c_int,
     iOfst: sqlite3_int64,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.read(buf, iAmt, iOfst);
+    let result = m.aux.read(file, buf, iAmt, iOfst);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
@@ -38,14 +53,14 @@ unsafe extern "C" fn x_read<T: SqliteIoMethods>(
 
 
 unsafe extern "C" fn x_write<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     buf: *const c_void,
     iAmt: c_int,
     iOfst: sqlite3_int64,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.write(buf, iAmt, iOfst);
+    let result = m.aux.write(file, buf, iAmt, iOfst);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
@@ -53,12 +68,12 @@ unsafe extern "C" fn x_write<T: SqliteIoMethods>(
 
 
 unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     size: sqlite3_int64,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.truncate(size);
+    let result = m.aux.truncate(file, size);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
@@ -66,12 +81,12 @@ unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
 
 
 unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     flags: c_int,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.sync(flags);
+    let result = m.aux.sync(file, flags);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
@@ -79,162 +94,162 @@ unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
 
 
 unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     pSize: *mut sqlite3_int64,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.file_size(pSize);
+    let result = m.aux.file_size(file, pSize);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
 }
 
 unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     arg2: c_int,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.lock(arg2);
-    Box::into_raw(f);
-    Box::into_raw(m);
-    handle_error(result)
-}
-
-unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
-    arg2: c_int,
-) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
-    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.unlock(arg2);
-    Box::into_raw(f);
-    Box::into_raw(m);
-    handle_error(result)
-}
-
-unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
-    pResOut: *mut c_int,
-) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
-    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.check_reserved_lock(pResOut);
-    Box::into_raw(f);
-    Box::into_raw(m);
-    handle_error(result)
-}
-
-unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
-    op: c_int,
-    pArg: *mut c_void,
-) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
-    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.file_control(arg1, op, pArg);
-    Box::into_raw(f);
-    Box::into_raw(m);
-    handle_error(result)
-}
-
-
-unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
-    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.sector_size();
+    let result = m.aux.lock(file, arg2);
     Box::into_raw(f);
     Box::into_raw(m);
     result
 }
 
-unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(arg1: *mut sqlite3_file) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
+    file: *mut sqlite3_file,
+    arg2: c_int,
+) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.device_characteristics();
+    let result = m.aux.unlock(file, arg2);
+    Box::into_raw(f);
+    Box::into_raw(m);
+    result
+}
+
+unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
+    file: *mut sqlite3_file,
+    pResOut: *mut c_int,
+) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
+    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
+    let result = m.aux.check_reserved_lock(file, pResOut);
+    Box::into_raw(f);
+    Box::into_raw(m);
+    result
+}
+
+unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
+    file: *mut sqlite3_file,
+    op: c_int,
+    pArg: *mut c_void,
+) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
+    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
+    let result = m.aux.file_control(file, op, pArg);
+    Box::into_raw(f);
+    Box::into_raw(m);
+    handle_error(result)
+}
+
+
+unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
+    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
+    let result = m.aux.sector_size(file);
+    Box::into_raw(f);
+    Box::into_raw(m);
+    result
+}
+
+unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
+    let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
+    let result = m.aux.device_characteristics(file);
     Box::into_raw(f);
     Box::into_raw(m);
     result
 }
 
 unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     iPg: c_int,
     pgsz: c_int,
     arg2: c_int,
     arg3: *mut *mut c_void,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.shm_map(iPg, pgsz, arg2, arg3);
+    let result = m.aux.shm_map(file, iPg, pgsz, arg2, arg3);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
 }
 
 unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     offset: c_int,
     n: c_int,
     flags: c_int,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
-    let result = m.aux.shm_lock(offset, n, flags);
+    let result = m.aux.shm_lock(file, offset, n, flags);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
 }
 
 
-unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(arg1: *mut sqlite3_file) {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(file: *mut sqlite3_file) {
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
 
-    m.aux.shm_barrier();
+    m.aux.shm_barrier(file);
 
     Box::into_raw(f);
     Box::into_raw(m);
 }
 
 unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     deleteFlag: c_int,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
 
-    let result = m.aux.shm_unmap(deleteFlag);
+    let result = m.aux.shm_unmap(file, deleteFlag);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
 }
 
 unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     iOfst: sqlite3_int64,
     iAmt: c_int,
     pp: *mut *mut c_void,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
 
-    let result = m.aux.fetch(iOfst, iAmt, pp);
+    let result = m.aux.fetch(file, iOfst, iAmt, pp);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
 }
 
 unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
-    arg1: *mut sqlite3_file,
+    file: *mut sqlite3_file,
     iOfst: sqlite3_int64,
     p: *mut c_void,
 ) -> c_int {
-    let mut f = Box::<FileWithAux<T>>::from_raw(arg1.cast::<FileWithAux<T>>());
+    let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
 
-    let result = m.aux.unfetch(iOfst, p);
+    let result = m.aux.unfetch(file, iOfst, p);
     Box::into_raw(f);
     Box::into_raw(m);
     handle_error(result)
@@ -287,11 +302,11 @@ pub fn create_file_pointer<T: SqliteIoMethods>(actual_methods: T) -> *mut sqlite
 pub struct MethodsWithAux<T: SqliteIoMethods> {
     pub iVersion: ::std::os::raw::c_int,
     pub xClose: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+        unsafe extern "C" fn(file: *mut sqlite3_file) -> ::std::os::raw::c_int,
     >,
     pub xRead: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             arg2: *mut ::std::os::raw::c_void,
             iAmt: ::std::os::raw::c_int,
             iOfst: sqlite3_int64,
@@ -299,61 +314,62 @@ pub struct MethodsWithAux<T: SqliteIoMethods> {
     >,
     pub xWrite: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             arg2: *const ::std::os::raw::c_void,
             iAmt: ::std::os::raw::c_int,
             iOfst: sqlite3_int64,
         ) -> ::std::os::raw::c_int,
     >,
     pub xTruncate: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut sqlite3_file, size: sqlite3_int64) -> ::std::os::raw::c_int,
+        unsafe extern "C" fn(file: *mut sqlite3_file, size: sqlite3_int64) -> ::std::os::raw::c_int,
     >,
     pub xSync: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             flags: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
     pub xFileSize: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             pSize: *mut sqlite3_int64,
         ) -> ::std::os::raw::c_int,
     >,
     pub xLock: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             arg2: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
     pub xUnlock: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             arg2: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
     pub xCheckReservedLock: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             pResOut: *mut ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
     pub xFileControl: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             op: ::std::os::raw::c_int,
             pArg: *mut ::std::os::raw::c_void,
         ) -> ::std::os::raw::c_int,
     >,
     pub xSectorSize: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+        unsafe extern "C" fn(file: *mut sqlite3_file) -> ::std::os::raw::c_int,
     >,
     pub xDeviceCharacteristics: ::std::option::Option<
-        unsafe extern "C" fn(arg1: *mut sqlite3_file) -> ::std::os::raw::c_int,
+        unsafe extern "C" fn(file: *mut sqlite3_file) -> ::std::os::raw::c_int,
     >,
+    // shm = shared memory
     pub xShmMap: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             iPg: ::std::os::raw::c_int,
             pgsz: ::std::os::raw::c_int,
             arg2: ::std::os::raw::c_int,
@@ -362,22 +378,22 @@ pub struct MethodsWithAux<T: SqliteIoMethods> {
     >,
     pub xShmLock: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             offset: ::std::os::raw::c_int,
             n: ::std::os::raw::c_int,
             flags: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
-    pub xShmBarrier: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_file)>,
+    pub xShmBarrier: ::std::option::Option<unsafe extern "C" fn(file: *mut sqlite3_file)>,
     pub xShmUnmap: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             deleteFlag: ::std::os::raw::c_int,
         ) -> ::std::os::raw::c_int,
     >,
     pub xFetch: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             iOfst: sqlite3_int64,
             iAmt: ::std::os::raw::c_int,
             pp: *mut *mut ::std::os::raw::c_void,
@@ -385,7 +401,7 @@ pub struct MethodsWithAux<T: SqliteIoMethods> {
     >,
     pub xUnfetch: ::std::option::Option<
         unsafe extern "C" fn(
-            arg1: *mut sqlite3_file,
+            file: *mut sqlite3_file,
             iOfst: sqlite3_int64,
             p: *mut ::std::os::raw::c_void,
         ) -> ::std::os::raw::c_int,

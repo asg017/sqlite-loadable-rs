@@ -7,7 +7,7 @@ use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
 use std::rc::Rc;
 
-use crate::ext::sqlite3ext_vfs_register;
+use crate::ext::{sqlite3ext_vfs_register, sqlite3ext_vfs_find};
 use crate::{ErrorKind, Error};
 
 use super::traits::SqliteVfs;
@@ -304,14 +304,18 @@ pub fn create_vfs<T: SqliteVfs>(aux: T, name_ptr: *const c_char, max_path_name_s
     }
 }
 
-pub fn register_vfs(vfs: sqlite3_vfs, make_default: bool) -> crate::Result<()> {
-    let translate_to_int = if make_default { 1 } else { 0 };
-
-    let result = unsafe { sqlite3ext_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
-    
+pub fn handle_vfs_result(result: i32) -> crate::Result<()> {
     if result == 0 {
         Ok(())
     } else {
         Err(Error::new_message(format!("sqlite3_vfs_register failed with error code: {}", result)))
     }
+}
+
+pub fn register_boxed_vfs(vfs: sqlite3_vfs, make_default: bool) -> crate::Result<()> {
+    let translate_to_int = if make_default { 1 } else { 0 };
+
+    let result = unsafe { sqlite3ext_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
+    
+    handle_vfs_result(result)
 }

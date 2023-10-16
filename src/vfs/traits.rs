@@ -7,38 +7,42 @@ use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
 // TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
 /// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
 pub trait SqliteIoMethods {
-    fn close(&mut self) -> Result<()>;
+    fn close(&mut self, file: *mut sqlite3_file) -> Result<()>;
     fn read(
         &mut self,
+        file: *mut sqlite3_file,
         buf: *mut c_void,
         i_amt: i32,
         i_ofst: i64,
     ) -> Result<()>;
     fn write(
         &mut self,
+        file: *mut sqlite3_file,
         buf: *const c_void,
         i_amt: i32,
         i_ofst: i64,
     ) -> Result<()>;
-    fn truncate(&mut self, size: i64) -> Result<()>;
-    fn sync(&mut self, flags: c_int) -> Result<()>;
-    fn file_size(&mut self, p_size: *mut i64) -> Result<()>;
-    fn lock(&mut self, arg2: c_int) -> Result<()>;
-    fn unlock(&mut self, arg2: c_int) -> Result<()>;
+    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()>;
+    fn sync(&mut self, file: *mut sqlite3_file, flags: c_int) -> Result<()>;
+    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()>;
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> c_int;
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> c_int;
     fn check_reserved_lock(
         &mut self,
+        file: *mut sqlite3_file,
         p_res_out: *mut c_int,
-    ) -> Result<()>;
+    ) -> c_int;
     fn file_control(
         &mut self,
         file: *mut sqlite3_file,
         op: c_int,
         p_arg: *mut c_void,
     ) -> Result<()>;
-    fn sector_size(&mut self) -> c_int;
-    fn device_characteristics(&mut self) -> c_int;
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> c_int;
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> c_int;
     fn shm_map(
         &mut self,
+        file: *mut sqlite3_file,
         i_pg: c_int,
         pgsz: c_int,
         arg2: c_int,
@@ -46,23 +50,27 @@ pub trait SqliteIoMethods {
     ) -> Result<()>;
     fn shm_lock(
         &mut self,
+        file: *mut sqlite3_file,
         offset: c_int,
         n: c_int,
         flags: c_int,
     ) -> Result<()>;
-    fn shm_barrier(&mut self) -> Result<()>;
+    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()>;
     fn shm_unmap(
         &mut self,
+        file: *mut sqlite3_file,
         delete_flag: c_int,
     ) -> Result<()>;
     fn fetch(
         &mut self,
+        file: *mut sqlite3_file,
         i_ofst: i64,
         i_amt: c_int,
         pp: *mut *mut c_void,
     ) -> Result<()>;
     fn unfetch(
         &mut self,
+        file: *mut sqlite3_file,
         i_ofst: i64,
         p: *mut c_void,
     ) -> Result<()>;

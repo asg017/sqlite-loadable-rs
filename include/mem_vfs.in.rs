@@ -2,7 +2,7 @@ use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sq
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
 
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};
@@ -134,11 +134,11 @@ struct MemFile {
 }
 
 impl SqliteIoMethods for MemFile {
-    fn close(&mut self) -> Result<()> {
+    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         Ok(())
     }
 
-    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         let size: usize = s.try_into().unwrap();
         let offset = ofst.try_into().unwrap();
         let source = &mut self.file_contents;
@@ -155,7 +155,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
+    fn write(&mut self, file: *mut sqlite3_file, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
         let size = s.try_into().unwrap();
         let offset = ofst.try_into().unwrap();
         let new_length = size + offset;
@@ -172,73 +172,72 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn truncate(&mut self, size: i64) -> Result<()> {
+    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
         self.file_contents.resize(size.try_into().unwrap(), 0);
 
         Ok(())
     }
 
-    fn sync(&mut self, flags: i32) -> Result<()> {
+    fn sync(&mut self, file: *mut sqlite3_file, flags: i32) -> Result<()> {
         Ok(())
     }
 
-    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
+    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()> {
         unsafe { *p_size = self.file_contents.len().try_into().unwrap(); }
         Ok(())
     }
 
-    fn lock(&mut self, arg2: i32) -> Result<()> {
-        Ok(())
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
+        0
     }
 
-    fn unlock(&mut self, arg2: i32) -> Result<()> {
-        Ok(())
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
+        0
     }
 
-    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> i32 {
         unsafe{ *p_res_out = 0; }
-        Ok(())
+        0
     }
 
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
 
-    fn sector_size(&mut self) -> i32 {
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> i32 {
         1024
     }
 
-    fn device_characteristics(&mut self) -> i32 {
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> i32 {
         SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
         SQLITE_IOCAP_SEQUENTIAL
     }
 
-    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
+    fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
     }
 
-    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
-        // SQLITE_IOERR_SHMLOCK is deprecated?
+    fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
         Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
     }
 
-    fn shm_barrier(&mut self) -> Result<()> {
+    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
         Ok(())
     }
 
-    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
+    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: i32) -> Result<()> {
         Ok(())
     }
 
-    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, file: *mut sqlite3_file, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
         let memory_location = self.file_contents.as_mut_ptr();
         unsafe { *pp = memory_location.add(ofst.try_into().unwrap()).cast(); }
         Ok(())
     }
 
-    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
         Ok(())
     }
 }
@@ -263,8 +262,8 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
     };
     let name_ptr = mem_vfs.name.as_ptr();
 
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, None);
-    register_vfs(vfs, true)?;
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, 0);
+    register_boxed_vfs(vfs, true)?;
 
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
     define_scalar_function(db, "mem_vfs_uri", 0, print_uri, flags)?;
