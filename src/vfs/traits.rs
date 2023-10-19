@@ -2,7 +2,13 @@ use crate::errors::Result;
 
 use std::os::raw::{c_int, c_void, c_char};
 
-use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs};
+use sqlite3ext_sys::sqlite3_file;
+
+#[cfg(feature = "vfs_loadext")]
+use sqlite3ext_sys::sqlite3_vfs;
+
+#[cfg(feature = "vfs_syscall")]
+use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_vfs};
 
 // TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
 /// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
@@ -106,17 +112,20 @@ pub trait SqliteVfs {
         z_out: *mut c_char,
     ) -> Result<()>;
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_open(
         &mut self,
         z_filename: *const c_char,
     ) -> *mut c_void;
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_error(
         &mut self,
         n_byte: c_int,
         z_err_msg: *mut c_char,
     );
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_sym(
         &mut self,
         arg2: *mut c_void,
@@ -129,6 +138,7 @@ pub trait SqliteVfs {
         ),
     >;
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_close(&mut self, arg2: *mut c_void);
 
     fn randomness(
@@ -155,17 +165,20 @@ pub trait SqliteVfs {
         arg2: *mut i64,
     ) -> c_int;
 
+    #[cfg(feature = "vfs_syscall")]
     fn set_system_call(
         &mut self,
         z_name: *const c_char,
         arg2: sqlite3_syscall_ptr,
     ) -> c_int;
 
+    #[cfg(feature = "vfs_syscall")]
     fn get_system_call(
         &mut self,
         z_name: *const c_char,
     ) -> sqlite3_syscall_ptr;
 
+    #[cfg(feature = "vfs_syscall")]
     fn next_system_call(
         &mut self,
         z_name: *const c_char,

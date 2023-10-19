@@ -89,6 +89,7 @@ unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
     handle_error(result)
 }
 
+#[cfg(feature = "vfs_loadext")]
 unsafe extern "C" fn x_dl_open<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_filename: *const c_char,
@@ -103,6 +104,7 @@ unsafe extern "C" fn x_dl_open<T: SqliteVfs>(
     out
 }
 
+#[cfg(feature = "vfs_loadext")]
 unsafe extern "C" fn x_dl_error<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     n_byte: c_int,
@@ -116,6 +118,7 @@ unsafe extern "C" fn x_dl_error<T: SqliteVfs>(
     Box::into_raw(vfs);
 }
 
+#[cfg(feature = "vfs_loadext")]
 unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     p_handle: *mut c_void,
@@ -131,6 +134,7 @@ unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
     None
 }
 
+#[cfg(feature = "vfs_loadext")]
 /// Let Boxes go out of scope, thus drop
 unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
@@ -213,6 +217,7 @@ unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
     result
 }
 
+#[cfg(feature = "vfs_syscall")]
 unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
@@ -228,6 +233,7 @@ unsafe extern "C" fn x_set_system_call<T: SqliteVfs>(
     result
 }
 
+#[cfg(feature = "vfs_syscall")]
 unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
@@ -242,6 +248,7 @@ unsafe extern "C" fn x_get_system_call<T: SqliteVfs>(
     result
 }
 
+#[cfg(feature = "vfs_syscall")]
 unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     p_vfs: *mut sqlite3_vfs,
     z_name: *const c_char,
@@ -287,19 +294,43 @@ pub fn create_vfs<T: SqliteVfs>(aux: T, name_ptr: *const c_char, max_path_name_s
             ///
             /// are supposed to implement the functionality needed by SQLite to load
             /// extensions compiled as shared objects.
+            #[cfg(feature = "vfs_loadext")]
             xDlOpen: Some(x_dl_open::<T>),
+            #[cfg(feature = "vfs_loadext")]
             xDlError: Some(x_dl_error::<T>),
+            #[cfg(feature = "vfs_loadext")]
             xDlSym: Some(x_dl_sym::<T>),
+            #[cfg(feature = "vfs_loadext")]
             xDlClose: Some(x_dl_close::<T>),
+
+            #[cfg(not(feature = "vfs_loadext"))]
+            xDlOpen: None,
+            #[cfg(not(feature = "vfs_loadext"))]
+            xDlError: None,
+            #[cfg(not(feature = "vfs_loadext"))]
+            xDlSym: None,
+            #[cfg(not(feature = "vfs_loadext"))]
+            xDlClose: None,
 
             xRandomness: Some(x_randomness::<T>),
             xSleep: Some(x_sleep::<T>),
             xCurrentTime: Some(x_current_time::<T>),
             xGetLastError: Some(x_get_last_error::<T>),
             xCurrentTimeInt64: Some(x_current_time_int64::<T>),
+
+            #[cfg(feature = "vfs_syscall")]
             xSetSystemCall: Some(x_set_system_call::<T>),
+            #[cfg(feature = "vfs_syscall")]
             xGetSystemCall: Some(x_get_system_call::<T>),
+            #[cfg(feature = "vfs_syscall")]
             xNextSystemCall: Some(x_next_system_call::<T>),
+
+            #[cfg(not(feature = "vfs_syscall"))]
+            xSetSystemCall: None,
+            #[cfg(not(feature = "vfs_syscall"))]
+            xGetSystemCall: None,
+            #[cfg(not(feature = "vfs_syscall"))]
+            xNextSystemCall: None,
         }
     }
 }

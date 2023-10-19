@@ -79,22 +79,22 @@ impl SqliteVfs for MemVfs {
     }
 
     /// From here onwards, all calls are redirected to the default vfs
-    fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
-        self.default_vfs.dl_open(z_filename)
-    }
+    // fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
+    //     self.default_vfs.dl_open(z_filename)
+    // }
 
-    fn dl_error(&mut self, n_byte: i32, z_err_msg: *mut c_char) {
-        self.default_vfs.dl_error(n_byte, z_err_msg)
-    }
+    // fn dl_error(&mut self, n_byte: i32, z_err_msg: *mut c_char) {
+    //     self.default_vfs.dl_error(n_byte, z_err_msg)
+    // }
 
-    fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char)
-        -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
-        self.default_vfs.dl_sym(arg2, z_symbol)
-    }
+    // fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char)
+    //     -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
+    //     self.default_vfs.dl_sym(arg2, z_symbol)
+    // }
 
-    fn dl_close(&mut self, arg2: *mut c_void) {
-        self.default_vfs.dl_close(arg2)
-    }
+    // fn dl_close(&mut self, arg2: *mut c_void) {
+    //     self.default_vfs.dl_close(arg2)
+    // }
 
     fn randomness(&mut self, n_byte: i32, z_out: *mut c_char) -> i32 {
          self.default_vfs.randomness(n_byte, z_out)
@@ -116,17 +116,17 @@ impl SqliteVfs for MemVfs {
         self.default_vfs.current_time_int64(arg2)
     }
 
-    fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> i32 {
-        self.default_vfs.set_system_call(z_name, arg2)
-    }
+    // fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> i32 {
+    //     self.default_vfs.set_system_call(z_name, arg2)
+    // }
 
-    fn get_system_call(&mut self, z_name: *const c_char) -> sqlite3_syscall_ptr {
-        self.default_vfs.get_system_call(z_name)
-    }
+    // fn get_system_call(&mut self, z_name: *const c_char) -> sqlite3_syscall_ptr {
+    //     self.default_vfs.get_system_call(z_name)
+    // }
 
-    fn next_system_call(&mut self, z_name: *const c_char) -> *const c_char {
-        self.default_vfs.next_system_call(z_name)
-    }
+    // fn next_system_call(&mut self, z_name: *const c_char) -> *const c_char {
+    //     self.default_vfs.next_system_call(z_name)
+    // }
 }
 
 struct MemFile {

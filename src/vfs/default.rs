@@ -100,6 +100,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_open(
         &mut self,
         z_filename: *const c_char,
@@ -113,6 +114,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_error(
         &mut self,
         n_byte: c_int,
@@ -125,6 +127,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_sym(
         &mut self,
         arg2: *mut c_void,
@@ -138,6 +141,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_loadext")]
     fn dl_close(
         &mut self,
         arg2: *mut c_void,
@@ -221,6 +225,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_syscall")]
     fn set_system_call(
         &mut self,
         z_name: *const c_char,
@@ -235,6 +240,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_syscall")]
     fn get_system_call(
         &mut self,
         z_name: *const c_char,
@@ -248,6 +254,7 @@ impl SqliteVfs for DefaultVfs {
         }
     }
 
+    #[cfg(feature = "vfs_syscall")]
     fn next_system_call(
         &mut self,
         z_name: *const c_char,
@@ -271,6 +278,12 @@ pub struct DefaultFile {
 
 impl DefaultFile {
     pub fn from_ptr(file_ptr: *mut sqlite3_file) -> Self {
+        if file_ptr.is_null() {
+            return Self {
+                file_ptr,
+                methods_ptr: ptr::null_mut(),
+            };
+        }
         Self {
             file_ptr,
             methods_ptr: (unsafe { *file_ptr }).pMethods.cast_mut()
@@ -279,7 +292,7 @@ impl DefaultFile {
 }
 
 impl SqliteIoMethods for DefaultFile {
-    fn close(&mut self) -> Result<()> {
+    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe {
             if let Some(xClose) = ((*self.methods_ptr).xClose) {
                 let result = xClose(self.file_ptr);
@@ -294,10 +307,10 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn read(&mut self, buf: *mut c_void, i_amt: i32, i_ofst: i64) -> Result<()> {
+    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         unsafe {
             if let Some(xRead) = ((*self.methods_ptr).xRead) {
-                let result = xRead(self.file_ptr, buf, i_amt.try_into().unwrap(), i_ofst.try_into().unwrap());
+                let result = xRead(self.file_ptr, buf, s, ofst);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -311,13 +324,14 @@ impl SqliteIoMethods for DefaultFile {
 
     fn write(
         &mut self,
+        file: *mut sqlite3_file,
         buf: *const c_void,
         i_amt: i32,
         i_ofst: i64,
     ) -> Result<()> {
         unsafe {
             if let Some(xWrite) = ((*self.methods_ptr).xWrite) {
-                let result = xWrite(self.file_ptr, buf, i_amt.try_into().unwrap(), i_ofst.try_into().unwrap());
+                let result = xWrite(self.file_ptr, buf, i_amt, i_ofst);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -329,10 +343,10 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
     
-    fn truncate(&mut self, size: i64) -> Result<()> {
+    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
         unsafe {
             if let Some(xTruncate) = ((*self.methods_ptr).xTruncate) {
-                let result = xTruncate(self.file_ptr, size.try_into().unwrap());
+                let result = xTruncate(self.file_ptr, size);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -344,7 +358,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn sync(&mut self, flags: c_int) -> Result<()> {
+    fn sync(&mut self, file: *mut sqlite3_file, flags: c_int) -> Result<()> {
         unsafe {
             if let Some(xSync) = ((*self.methods_ptr).xSync) {
                 let result = xSync(self.file_ptr,flags);
@@ -359,7 +373,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
     
-    fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()> {
+    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut sqlite3_int64) -> Result<()> {
         unsafe {
             if let Some(xFileSize) = ((*self.methods_ptr).xFileSize) {
                 let result = xFileSize(self.file_ptr,p_size);
@@ -374,47 +388,32 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn lock(&mut self, arg2: c_int) -> Result<()> {
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> i32 {
         unsafe {
             if let Some(xLock) = ((*self.methods_ptr).xLock) {
-                let result = xLock(self.file_ptr,arg2);
-                if result == 1 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
-            } else {
-                Err(Error::new_message("Missing function"))
+                xLock(self.file_ptr, arg2)
+            }else {
+                0
             }
         }
     }
 
-    fn unlock(&mut self, arg2: c_int) -> Result<()> {
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> i32 {
         unsafe {
             if let Some(xUnlock) = ((*self.methods_ptr).xUnlock) {
-                let result = xUnlock(self.file_ptr,arg2);
-                if result == 1 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                xUnlock(self.file_ptr,arg2)
             } else {
-                Err(Error::new_message("Missing function"))
+                0
             }
         }
     }
             
-    fn check_reserved_lock(&mut self, p_res_out: *mut c_int) -> Result<()> {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut c_int) -> i32 {
         unsafe {
             if let Some(xCheckReservedLock) = ((*self.methods_ptr).xCheckReservedLock) {
-                let result = xCheckReservedLock(self.file_ptr, p_res_out);
-                if result == 1 {
-                    Ok(())
-                } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
-                }
+                xCheckReservedLock(self.file_ptr, p_res_out)
             } else {
-                Err(Error::new_message("Missing function"))
+                0
             }
         }
     }
@@ -434,7 +433,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
                 
-    fn sector_size(&mut self) -> c_int {
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> c_int {
         unsafe {
             if let Some(xSectorSize) = ((*self.methods_ptr).xSectorSize) {
                 xSectorSize(self.file_ptr)
@@ -444,7 +443,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn device_characteristics(&mut self) -> c_int {
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> c_int {
         unsafe {
             if let Some(xDeviceCharacteristics) = ((*self.methods_ptr).xDeviceCharacteristics) {
                 xDeviceCharacteristics(self.file_ptr)
@@ -454,7 +453,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn shm_map(&mut self, i_pg: c_int, pgsz: c_int, arg2: c_int, arg3: *mut *mut c_void) -> Result<()> {
+    fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: c_int, pgsz: c_int, arg2: c_int, arg3: *mut *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xShmMap) = ((*self.methods_ptr).xShmMap) {
                 let result = xShmMap(self.file_ptr,i_pg, pgsz, arg2, arg3);
@@ -469,7 +468,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn shm_lock(&mut self, offset: c_int, n: c_int, flags: c_int) -> Result<()> {
+    fn shm_lock(&mut self, file: *mut sqlite3_file, offset: c_int, n: c_int, flags: c_int) -> Result<()> {
         unsafe {
             if let Some(xShmLock) = ((*self.methods_ptr).xShmLock) {
                 let result = xShmLock(self.file_ptr,offset, n, flags);
@@ -484,7 +483,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn shm_barrier(&mut self) -> Result<()> {
+    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe {
             if let Some(xShmBarrier) = ((*self.methods_ptr).xShmBarrier) {
                 xShmBarrier(self.file_ptr);
@@ -495,7 +494,7 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn shm_unmap(&mut self, delete_flag: c_int) -> Result<()> {
+    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: c_int) -> Result<()> {
         unsafe {
             if let Some(xShmUnmap) = ((*self.methods_ptr).xShmUnmap) {
                 let result = xShmUnmap(self.file_ptr, delete_flag);
@@ -510,10 +509,10 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn fetch(&mut self, i_ofst: i64, i_amt: i32, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, i_amt: i32, pp: *mut *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xFetch) = ((*self.methods_ptr).xFetch) {
-                let result = xFetch(self.file_ptr, i_ofst.try_into().unwrap(), i_amt.try_into().unwrap(), pp);
+                let result = xFetch(self.file_ptr, i_ofst, i_amt, pp);
                 if result == 1 {
                     Ok(())
                 } else {
@@ -525,10 +524,10 @@ impl SqliteIoMethods for DefaultFile {
         }
     }
 
-    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xUnfetch) = ((*self.methods_ptr).xUnfetch) {
-                let result = xUnfetch(self.file_ptr, i_ofst.try_into().unwrap(), p);
+                let result = xUnfetch(self.file_ptr, i_ofst, p);
                 if result == 1 {
                     Ok(())
                 } else {
