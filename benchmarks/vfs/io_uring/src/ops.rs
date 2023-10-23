@@ -15,7 +15,7 @@ use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 
 use std::{ptr, mem};
 use sqlite_loadable::ext::sqlite3ext_vfs_find;
-use sqlite_loadable::vfs::default::DefaultVfs;
+use sqlite_loadable::vfs::default::{DefaultVfs, DefaultFile};
 
 use io_uring::{register, opcode, types, IoUring};
 use std::io;
@@ -274,47 +274,20 @@ impl SqliteIoMethods for Ops {
     }
 
     fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        unsafe {
-            let next_file: *mut sqlite3_file = file.offset(1);
-            if let Some(f) = (*(*next_file).pMethods).xLock {
-                f(file, arg2)
-            }else {
-                0
-            }
-        }
+        0
     }
 
     fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        unsafe {
-            let next_file: *mut sqlite3_file = file.offset(1);
-            if let Some(f) = (*(*next_file).pMethods).xUnlock {
-                f(file, arg2)
-            }else {
-                0
-            }    
-        }
+        0
     }
 
     fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> i32 {
-        unsafe {
-            let next_file: *mut sqlite3_file = file.offset(1);
-            if let Some(f) = (*(*next_file).pMethods).xCheckReservedLock {
-                f(file, p_res_out)
-            }else {
-                0
-            }    
-        }
+        0
     }
 
     /// See https://www.sqlite.org/c3ref/file_control.html
     /// and also https://www.sqlite.org/c3ref/c_fcntl_begin_atomic_write.html
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
-        // unsafe {
-        //     let next_file: *mut sqlite3_file = file.offset(1);
-        //     if let Some(f) = (*(*next_file).pMethods).xFileControl {
-        //         f(next_file, op, p_arg);
-        //     }
-        // }
         Ok(())
     }
 
@@ -330,12 +303,11 @@ impl SqliteIoMethods for Ops {
     }
 
     fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
+        Ok(())
     }
 
     fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
-        // SQLITE_IOERR_SHMLOCK is deprecated?
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
+        Ok(())
     }
 
     fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {

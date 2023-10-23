@@ -1,10 +1,13 @@
 #![allow(unused)]
-
 pub mod ops;
+
+pub(crate) mod lock;
+pub(crate) mod connection;
+
 use ops::Ops;
 
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control, sqlite3ext_vfs_register, sqlite3ext_database_file_object};
-use sqlite_loadable::vfs::default::DefaultVfs;
+use sqlite_loadable::vfs::default::{DefaultVfs, DefaultFile};
 use sqlite_loadable::vfs::vfs::{create_vfs, handle_vfs_result};
 
 use sqlite_loadable::vfs::file::{MethodsWithAux, FileWithAux};
@@ -31,7 +34,6 @@ const EXTENSION_NAME: &str = "iouring";
 struct IoUringVfs {
     default_vfs: DefaultVfs,
     vfs_name: CString,
-    wal: bool,
 }
 
 impl SqliteVfs for IoUringVfs {
@@ -40,19 +42,13 @@ impl SqliteVfs for IoUringVfs {
 
         let file_path = unsafe { CStr::from_ptr(z_name) };
 
+        let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
         let mut file = Ops::new(file_path.to_owned(), 32);
 
         file.open_file().map_err(|_| Error::new_message("can't open file"))?;
 
         unsafe { *p_file = *create_file_pointer( file ); }
 
-        if String::from_utf8_lossy(file_path.to_bytes()).to_string().contains("wal") {
-            unsafe { *p_res_out |= SQLITE_OPEN_WAL; }
-            self.wal = true;
-        }
-
-        let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
-    
         Ok(())
     }
 
@@ -69,7 +65,8 @@ impl SqliteVfs for IoUringVfs {
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
         unsafe {
-            *p_res_out = if self.wal { 1 } else { 0 };
+            // *p_res_out = if self.wal { 1 } else { 0 };
+            *p_res_out = 0;
         }
         Ok(())
     }
@@ -88,22 +85,22 @@ impl SqliteVfs for IoUringVfs {
     }
 
     /// From here onwards, all calls are redirected to the default vfs
-    fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
-        self.default_vfs.dl_open(z_filename)
-    }
+    // fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
+    //     self.default_vfs.dl_open(z_filename)
+    // }
 
-    fn dl_error(&mut self, n_byte: i32, z_err_msg: *mut c_char) {
-        self.default_vfs.dl_error(n_byte, z_err_msg)
-    }
+    // fn dl_error(&mut self, n_byte: i32, z_err_msg: *mut c_char) {
+    //     self.default_vfs.dl_error(n_byte, z_err_msg)
+    // }
 
-    fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char)
-        -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
-        self.default_vfs.dl_sym(arg2, z_symbol)
-    }
+    // fn dl_sym(&mut self, arg2: *mut c_void, z_symbol: *const c_char)
+    //     -> Option<unsafe extern "C" fn(arg1: *mut sqlite3_vfs, arg2: *mut c_void, z_symbol: *const c_char)> {
+    //     self.default_vfs.dl_sym(arg2, z_symbol)
+    // }
 
-    fn dl_close(&mut self, arg2: *mut c_void) {
-        self.default_vfs.dl_close(arg2)
-    }
+    // fn dl_close(&mut self, arg2: *mut c_void) {
+    //     self.default_vfs.dl_close(arg2)
+    // }
 
     fn randomness(&mut self, n_byte: i32, z_out: *mut c_char) -> i32 {
          self.default_vfs.randomness(n_byte, z_out)
@@ -125,17 +122,17 @@ impl SqliteVfs for IoUringVfs {
         self.default_vfs.current_time_int64(arg2)
     }
 
-    fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> i32 {
-        self.default_vfs.set_system_call(z_name, arg2)
-    }
+    // fn set_system_call(&mut self, z_name: *const c_char, arg2: sqlite3_syscall_ptr) -> i32 {
+    //     self.default_vfs.set_system_call(z_name, arg2)
+    // }
 
-    fn get_system_call(&mut self, z_name: *const c_char) -> sqlite3_syscall_ptr {
-        self.default_vfs.get_system_call(z_name)
-    }
+    // fn get_system_call(&mut self, z_name: *const c_char) -> sqlite3_syscall_ptr {
+    //     self.default_vfs.get_system_call(z_name)
+    // }
 
-    fn next_system_call(&mut self, z_name: *const c_char) -> *const c_char {
-        self.default_vfs.next_system_call(z_name)
-    }
+    // fn next_system_call(&mut self, z_name: *const c_char) -> *const c_char {
+    //     self.default_vfs.next_system_call(z_name)
+    // }
 }
 
 /// Usage: "ATTACH io_uring_vfs_from_file('test.db') AS inring;"
@@ -169,7 +166,6 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
             DefaultVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
-        wal: false,
     };
 
     // allocation is bound to lifetime of struct
