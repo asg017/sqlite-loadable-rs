@@ -1,25 +1,60 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, SQLITE_OK, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_ERROR, SQLITE_CANTOPEN_FULLPATH};
 use std::ffi::{CString, CStr};
 use std::os::raw::{c_int, c_char, c_void};
 use std::ptr;
 use std::rc::Rc;
 
 use crate::ext::{sqlite3ext_vfs_register, sqlite3ext_vfs_find};
-use crate::{ErrorKind, Error};
+use std::io::{Result, Error, ErrorKind};
 
 use super::traits::SqliteVfs;
 
-pub(crate) fn handle_error(result: Result<(), Error>) -> c_int {
+pub(crate) fn handle_bool(result: Result<bool>, ext_io_err: Option<c_int>) -> c_int {
     match result {
-        Ok(()) => 0,
+        Ok(i) => if i { 1 } else { 0 },
         Err(e) => {
-            if let ErrorKind::DefineVfs(i) = *e.kind() {
-                i
-            } else {
-                -1
+            if let Some(inner_err) = e.into_inner() {
+                println!("error: {inner_err}");
+            }
+            if let Some(extended) = ext_io_err {
+                extended
+            }else {
+                SQLITE_ERROR
+            }
+        }
+    }
+}
+
+pub(crate) fn handle_int(result: Result<c_int>, ext_io_err: Option<c_int>) -> c_int {
+    match result {
+        Ok(i) => i,
+        Err(e) => {
+            if let Some(inner_err) = e.into_inner() {
+                println!("error: {inner_err}");
+            }
+            if let Some(extended) = ext_io_err {
+                extended
+            }else {
+                SQLITE_ERROR
+            }
+        }
+    }
+}
+
+pub(crate) fn handle_error(result: Result<()>, ext_io_err: Option<c_int>) -> c_int {
+    match result {
+        Ok(()) => SQLITE_OK,
+        Err(e) => {
+            if let Some(inner_err) = e.into_inner() {
+                println!("error: {inner_err}");
+            }
+            if let Some(extended) = ext_io_err {
+                extended
+            }else {
+                SQLITE_ERROR
             }
         }
     }
@@ -39,7 +74,7 @@ unsafe extern "C" fn x_open<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result)
+    handle_error(result, None /* SQLITE_IOERR_OPEN */)
 }
 
 unsafe extern "C" fn x_delete<T: SqliteVfs>(
@@ -54,7 +89,7 @@ unsafe extern "C" fn x_delete<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_DELETE))
 }
 
 unsafe extern "C" fn x_access<T: SqliteVfs>(
@@ -70,7 +105,7 @@ unsafe extern "C" fn x_access<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_ACCESS))
 }
 
 unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
@@ -86,7 +121,7 @@ unsafe extern "C" fn x_full_pathname<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result)
+    handle_error(result, Some(SQLITE_CANTOPEN_FULLPATH))
 }
 
 #[cfg(feature = "vfs_loadext")]
@@ -200,7 +235,7 @@ unsafe extern "C" fn x_get_last_error<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result)
+    handle_error(result, None)
 }
 
 unsafe extern "C" fn x_current_time_int64<T: SqliteVfs>(
@@ -335,11 +370,11 @@ pub fn create_vfs<T: SqliteVfs>(aux: T, name_ptr: *const c_char, max_path_name_s
     }
 }
 
-pub fn handle_vfs_result(result: i32) -> crate::Result<()> {
-    if result == 0 {
+fn handle_vfs_result(result: i32) -> crate::Result<()> {
+    if result == SQLITE_OK {
         Ok(())
     } else {
-        Err(Error::new_message(format!("sqlite3_vfs_register failed with error code: {}", result)))
+        Err(crate::errors::Error::new_message(format!("sqlite3_vfs_register failed with error code: {}", result)))
     }
 }
 

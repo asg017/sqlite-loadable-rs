@@ -2,7 +2,7 @@ use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sq
 use sqlite_loadable::vfs::default::DefaultVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, define_scalar_function, api, vfs::traits::SqliteVfs};
 
 use std::ffi::{CString, CStr};
 use std::fs::{File, self};
@@ -14,7 +14,9 @@ use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_
 use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
-    SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
+    SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL, SQLITE_LOCK_SHARED};
+
+use std::io::{Error, Result, ErrorKind};
 
 /// There is some duplication between rusqlite / sqlite3ext / libsqlite3
 /// 
@@ -33,12 +35,12 @@ struct MemVfs {
 const EXTENSION_NAME: &str = "memvfs";
 
 fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
-    let metadata = fs::metadata(path).map_err(|_| Error::new_message("can't determine file size"))?;
+    let metadata = fs::metadata(path)?;
     let file_size = metadata.len() as usize;
 
-    let mut file = File::open(path).map_err(|_| Error::new_message("can't open file"))?;
+    let mut file = File::open(path)?;
 
-    file.read_to_end(dest).map_err(|_| Error::new_message("can't read to the end"))?;
+    file.read_to_end(dest)?;
     
     Ok(())
 }
@@ -55,7 +57,7 @@ impl SqliteVfs for MemVfs {
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_DELETE)))
+        Err(Error::new(ErrorKind::Other, "Unable to delete in memory mode"))
     }
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
@@ -187,40 +189,43 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        0
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        Ok(SQLITE_LOCK_SHARED)
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        0
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        Ok(SQLITE_LOCK_SHARED)
     }
 
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> i32 {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<bool> {
         unsafe{ *p_res_out = 0; }
-        0
+        Ok(true)
     }
 
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> i32 {
-        1024
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        Ok(1024)
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> i32 {
-        SQLITE_IOCAP_ATOMIC | 
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        let settings = SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
-        SQLITE_IOCAP_SEQUENTIAL
+        SQLITE_IOCAP_SEQUENTIAL;
+        Ok(settings)
     }
 
     fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMMAP)))
+        // SQLITE_IOERR_SHMMAP
+        Err(Error::new(ErrorKind::Other, "Unsupported"))
     }
 
     fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
-        Err(Error::new(ErrorKind::DefineVfs(SQLITE_IOERR_SHMLOCK)))
+        // SQLITE_IOERR_SHMLOCK
+        Err(Error::new(ErrorKind::Other, "Unsupported"))
     }
 
     fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
@@ -242,7 +247,7 @@ impl SqliteIoMethods for MemFile {
     }
 }
 
-fn print_uri(context: *mut sqlite3_context, _: &[*mut sqlite3_value]) -> Result<()> {
+fn print_uri(context: *mut sqlite3_context, _: &[*mut sqlite3_value]) -> sqlite_loadable::Result<()> {
     let text_output = format!("file:___mem___?vfs={}", EXTENSION_NAME);
 
     api::result_text(context, text_output);
@@ -251,8 +256,8 @@ fn print_uri(context: *mut sqlite3_context, _: &[*mut sqlite3_value]) -> Result<
 }
 
 #[sqlite_entrypoint_permanent]
-pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> Result<()> {
-    let name = CString::new(EXTENSION_NAME).expect("should be fine");
+pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
+    let name = CString::new(EXTENSION_NAME).expect("should be a valid utf-8 string");
     let mem_vfs = MemVfs {
         default_vfs: unsafe {
             // pass thru

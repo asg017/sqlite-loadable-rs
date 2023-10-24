@@ -1,13 +1,15 @@
 #![ allow(unused)]
 #![ allow(non_snake_case)]
 
-use crate::{Error, SqliteIoMethods};
+use crate::SqliteIoMethods;
 
-use super::super::{Result, vfs::traits::SqliteVfs};
+use std::io::{Result, Error, ErrorKind};
+
+use super::super::vfs::traits::SqliteVfs;
 
 use std::{os::raw::{c_int, c_void, c_char}, ptr};
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find, SQLITE_OK, SQLITE_ERROR};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods, sqlite3_vfs, sqlite3_vfs_find, SQLITE_OK, SQLITE_ERROR, SQLITE_LOCK_NONE};
 
 pub struct DefaultVfs {
     default_vfs: *mut sqlite3_vfs,
@@ -33,7 +35,7 @@ impl SqliteVfs for DefaultVfs {
                 if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while opening a file"))
                 }
             } else {
                 Ok(())
@@ -52,7 +54,7 @@ impl SqliteVfs for DefaultVfs {
                 if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while removing a file"))
                 }
             } else {
                 Ok(())
@@ -72,7 +74,7 @@ impl SqliteVfs for DefaultVfs {
                 if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while determining the permissions of a file"))
                 }
             } else {
                 Ok(())
@@ -92,7 +94,7 @@ impl SqliteVfs for DefaultVfs {
                 if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while determining the full pathname of a file"))
                 }
             } else {
                 Ok(())
@@ -204,7 +206,7 @@ impl SqliteVfs for DefaultVfs {
                 if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while determining the last internal error"))
                 }
             } else {
                 Ok(())
@@ -296,13 +298,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xClose) = ((*self.methods_ptr).xClose) {
                 let result = xClose(self.file_ptr);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while attempting to close a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -311,13 +313,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xRead) = ((*self.methods_ptr).xRead) {
                 let result = xRead(self.file_ptr, buf, s, ofst);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while reading from a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -332,13 +334,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xWrite) = ((*self.methods_ptr).xWrite) {
                 let result = xWrite(self.file_ptr, buf, i_amt, i_ofst);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while writing to a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -347,13 +349,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xTruncate) = ((*self.methods_ptr).xTruncate) {
                 let result = xTruncate(self.file_ptr, size);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while truncating a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -362,13 +364,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xSync) = ((*self.methods_ptr).xSync) {
                 let result = xSync(self.file_ptr,flags);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while updating the metadata of a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -377,43 +379,44 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xFileSize) = ((*self.methods_ptr).xFileSize) {
                 let result = xFileSize(self.file_ptr,p_size);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while determining the size a file"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> i32 {
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> Result<i32> {
         unsafe {
             if let Some(xLock) = ((*self.methods_ptr).xLock) {
-                xLock(self.file_ptr, arg2)
+                Ok(xLock(self.file_ptr, arg2))
             }else {
-                0
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> i32 {
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> Result<i32> {
         unsafe {
             if let Some(xUnlock) = ((*self.methods_ptr).xUnlock) {
-                xUnlock(self.file_ptr,arg2)
+                Ok(xUnlock(self.file_ptr,arg2))
             } else {
-                0
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
             
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut c_int) -> i32 {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut c_int) -> Result<bool> {
         unsafe {
             if let Some(xCheckReservedLock) = ((*self.methods_ptr).xCheckReservedLock) {
-                xCheckReservedLock(self.file_ptr, p_res_out)
+                let result = xCheckReservedLock(self.file_ptr, p_res_out);
+                Ok(result > 0)
             } else {
-                0
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -422,33 +425,33 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xFileControl) = ((*self.methods_ptr).xFileControl) {
                 let result = xFileControl(self.file_ptr, op, p_arg);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while setting file parameters"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
                 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> c_int {
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<c_int> {
         unsafe {
             if let Some(xSectorSize) = ((*self.methods_ptr).xSectorSize) {
-                xSectorSize(self.file_ptr)
+                Ok(xSectorSize(self.file_ptr))
             } else {
-                -1
+                Err(Error::new(ErrorKind::Other, "Missing sector size"))
             }
         }
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> c_int {
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<c_int> {
         unsafe {
             if let Some(xDeviceCharacteristics) = ((*self.methods_ptr).xDeviceCharacteristics) {
-                xDeviceCharacteristics(self.file_ptr)
+                Ok(xDeviceCharacteristics(self.file_ptr))
             } else {
-                -1
+                Err(Error::new(ErrorKind::Other, "Missing device characteristics"))
             }
         }
     }
@@ -457,13 +460,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xShmMap) = ((*self.methods_ptr).xShmMap) {
                 let result = xShmMap(self.file_ptr,i_pg, pgsz, arg2, arg3);
-                if result >= 0 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while using mmap"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -472,13 +475,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xShmLock) = ((*self.methods_ptr).xShmLock) {
                 let result = xShmLock(self.file_ptr,offset, n, flags);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while applying a lock to mmap"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -489,7 +492,7 @@ impl SqliteIoMethods for DefaultFile {
                 xShmBarrier(self.file_ptr);
                 Ok(())
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -498,13 +501,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xShmUnmap) = ((*self.methods_ptr).xShmUnmap) {
                 let result = xShmUnmap(self.file_ptr, delete_flag);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while unmapping"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -513,13 +516,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xFetch) = ((*self.methods_ptr).xFetch) {
                 let result = xFetch(self.file_ptr, i_ofst, i_amt, pp);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while fetching"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }
@@ -528,13 +531,13 @@ impl SqliteIoMethods for DefaultFile {
         unsafe {
             if let Some(xUnfetch) = ((*self.methods_ptr).xUnfetch) {
                 let result = xUnfetch(self.file_ptr, i_ofst, p);
-                if result == 1 {
+                if result == SQLITE_OK {
                     Ok(())
                 } else {
-                    Err(Error::new(crate::ErrorKind::DefineVfs(result)))
+                    Err(Error::new(ErrorKind::Other, "An error occurred while unfetching"))
                 }
             } else {
-                Err(Error::new_message("Missing function"))
+                Err(Error::new(ErrorKind::Other, "An undefined function was called"))
             }
         }
     }

@@ -1,12 +1,15 @@
 #![allow(non_snake_case)] 
 #![allow(unused)] 
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_io_methods};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_io_methods,
+    SQLITE_IOERR_CLOSE, SQLITE_IOERR_READ, SQLITE_IOERR_WRITE, SQLITE_IOERR_TRUNCATE, SQLITE_IOERR_FSYNC, SQLITE_IOERR_FSTAT, SQLITE_IOERR_LOCK, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_SHMLOCK, SQLITE_IOERR_MMAP, SQLITE_IOERR_SHMMAP};
 use std::{os::raw::{c_int, c_void}};
 
 use crate::{vfs::traits::SqliteIoMethods};
-use crate::{Error, Result, ErrorKind};
+use std::io::{Error, Result, ErrorKind};
 use crate::vfs::vfs::handle_error;
+
+use super::vfs::{handle_int, handle_bool};
 
 // TODO use libsqlite3-dev, check installed: dpkg-query -l | grep sqlite
 
@@ -34,7 +37,7 @@ unsafe extern "C" fn x_close<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_i
     Box::into_raw(f);
 
     // Disabling both fails the unit tests, free(): invalid pointer
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_CLOSE))
 }
 
 unsafe extern "C" fn x_read<T: SqliteIoMethods>(
@@ -48,7 +51,7 @@ unsafe extern "C" fn x_read<T: SqliteIoMethods>(
     let result = m.aux.read(file, buf, iAmt, iOfst);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_READ))
 }
 
 
@@ -63,7 +66,7 @@ unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     let result = m.aux.write(file, buf, iAmt, iOfst);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_WRITE))
 }
 
 
@@ -76,7 +79,7 @@ unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     let result = m.aux.truncate(file, size);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_TRUNCATE))
 }
 
 
@@ -89,7 +92,7 @@ unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
     let result = m.aux.sync(file, flags);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_FSYNC))
 }
 
 
@@ -102,7 +105,7 @@ unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
     let result = m.aux.file_size(file, pSize);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_FSTAT))
 }
 
 unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
@@ -114,7 +117,7 @@ unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
     let result = m.aux.lock(file, arg2);
     Box::into_raw(f);
     Box::into_raw(m);
-    result
+    handle_int(result, Some(SQLITE_IOERR_LOCK))
 }
 
 unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
@@ -126,7 +129,7 @@ unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
     let result = m.aux.unlock(file, arg2);
     Box::into_raw(f);
     Box::into_raw(m);
-    result
+    handle_int(result, Some(SQLITE_IOERR_UNLOCK))
 }
 
 unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
@@ -138,7 +141,7 @@ unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
     let result = m.aux.check_reserved_lock(file, pResOut);
     Box::into_raw(f);
     Box::into_raw(m);
-    result
+    handle_bool(result, None)
 }
 
 unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
@@ -151,7 +154,7 @@ unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
     let result = m.aux.file_control(file, op, pArg);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, None)
 }
 
 
@@ -161,7 +164,7 @@ unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(file: *mut sqlite3_file) 
     let result = m.aux.sector_size(file);
     Box::into_raw(f);
     Box::into_raw(m);
-    result
+    handle_int(result, None)
 }
 
 unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
@@ -170,7 +173,7 @@ unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(file: *mut sql
     let result = m.aux.device_characteristics(file);
     Box::into_raw(f);
     Box::into_raw(m);
-    result
+    handle_int(result, None)
 }
 
 unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
@@ -185,7 +188,7 @@ unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
     let result = m.aux.shm_map(file, iPg, pgsz, arg2, arg3);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_SHMMAP))
 }
 
 unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
@@ -199,7 +202,7 @@ unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
     let result = m.aux.shm_lock(file, offset, n, flags);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_SHMLOCK))
 }
 
 
@@ -223,7 +226,7 @@ unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
     let result = m.aux.shm_unmap(file, deleteFlag);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, None)
 }
 
 unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
@@ -238,7 +241,7 @@ unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
     let result = m.aux.fetch(file, iOfst, iAmt, pp);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_MMAP))
 }
 
 unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
@@ -252,7 +255,7 @@ unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
     let result = m.aux.unfetch(file, iOfst, p);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_error(result)
+    handle_error(result, Some(SQLITE_IOERR_MMAP))
 }
 
 // C struct polymorphism, given the alignment and field sequence are the same
