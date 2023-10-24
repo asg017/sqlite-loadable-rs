@@ -1,15 +1,19 @@
-#![allow(non_snake_case)] 
-#![allow(unused)] 
+#![allow(non_snake_case)]
+#![allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_io_methods,
-    SQLITE_IOERR_CLOSE, SQLITE_IOERR_READ, SQLITE_IOERR_WRITE, SQLITE_IOERR_TRUNCATE, SQLITE_IOERR_FSYNC, SQLITE_IOERR_FSTAT, SQLITE_IOERR_LOCK, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_SHMLOCK, SQLITE_IOERR_MMAP, SQLITE_IOERR_SHMMAP};
-use std::{os::raw::{c_int, c_void}};
+use sqlite3ext_sys::{
+    sqlite3_file, sqlite3_int64, sqlite3_io_methods, SQLITE_IOERR_CLOSE, SQLITE_IOERR_FSTAT,
+    SQLITE_IOERR_FSYNC, SQLITE_IOERR_LOCK, SQLITE_IOERR_MMAP, SQLITE_IOERR_READ,
+    SQLITE_IOERR_SHMLOCK, SQLITE_IOERR_SHMMAP, SQLITE_IOERR_TRUNCATE, SQLITE_IOERR_UNLOCK,
+    SQLITE_IOERR_WRITE,
+};
+use std::os::raw::{c_int, c_void};
 
-use crate::{vfs::traits::SqliteIoMethods};
-use std::io::{Error, Result, ErrorKind};
+use crate::vfs::traits::SqliteIoMethods;
 use crate::vfs::vfs::handle_error;
+use std::io::{Error, ErrorKind, Result};
 
-use super::vfs::{handle_int, handle_bool};
+use super::vfs::{handle_bool, handle_int};
 
 // TODO use libsqlite3-dev, check installed: dpkg-query -l | grep sqlite
 
@@ -54,7 +58,6 @@ unsafe extern "C" fn x_read<T: SqliteIoMethods>(
     handle_error(result, Some(SQLITE_IOERR_READ))
 }
 
-
 unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     file: *mut sqlite3_file,
     buf: *const c_void,
@@ -69,7 +72,6 @@ unsafe extern "C" fn x_write<T: SqliteIoMethods>(
     handle_error(result, Some(SQLITE_IOERR_WRITE))
 }
 
-
 unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     file: *mut sqlite3_file,
     size: sqlite3_int64,
@@ -82,11 +84,7 @@ unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
     handle_error(result, Some(SQLITE_IOERR_TRUNCATE))
 }
 
-
-unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
-    file: *mut sqlite3_file,
-    flags: c_int,
-) -> c_int {
+unsafe extern "C" fn x_sync<T: SqliteIoMethods>(file: *mut sqlite3_file, flags: c_int) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
     let result = m.aux.sync(file, flags);
@@ -94,7 +92,6 @@ unsafe extern "C" fn x_sync<T: SqliteIoMethods>(
     Box::into_raw(m);
     handle_error(result, Some(SQLITE_IOERR_FSYNC))
 }
-
 
 unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
     file: *mut sqlite3_file,
@@ -108,10 +105,7 @@ unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
     handle_error(result, Some(SQLITE_IOERR_FSTAT))
 }
 
-unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
-    file: *mut sqlite3_file,
-    arg2: c_int,
-) -> c_int {
+unsafe extern "C" fn x_lock<T: SqliteIoMethods>(file: *mut sqlite3_file, arg2: c_int) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
     let result = m.aux.lock(file, arg2);
@@ -120,10 +114,7 @@ unsafe extern "C" fn x_lock<T: SqliteIoMethods>(
     handle_int(result, Some(SQLITE_IOERR_LOCK))
 }
 
-unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(
-    file: *mut sqlite3_file,
-    arg2: c_int,
-) -> c_int {
+unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(file: *mut sqlite3_file, arg2: c_int) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
     let result = m.aux.unlock(file, arg2);
@@ -157,7 +148,6 @@ unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
     handle_error(result, None)
 }
 
-
 unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
@@ -167,7 +157,9 @@ unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(file: *mut sqlite3_file) 
     handle_int(result, None)
 }
 
-unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
+unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(
+    file: *mut sqlite3_file,
+) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
     let mut m = Box::<MethodsWithAux<T>>::from_raw(f.0.cast_mut());
     let result = m.aux.device_characteristics(file);
@@ -204,7 +196,6 @@ unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
     Box::into_raw(m);
     handle_error(result, Some(SQLITE_IOERR_SHMLOCK))
 }
-
 
 unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(file: *mut sqlite3_file) {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
@@ -260,7 +251,7 @@ unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
 
 // C struct polymorphism, given the alignment and field sequence are the same
 #[repr(C)]
-pub struct FileWithAux<T: SqliteIoMethods> (*const MethodsWithAux<T>);
+pub struct FileWithAux<T: SqliteIoMethods>(*const MethodsWithAux<T>);
 
 unsafe fn create_io_methods<T: SqliteIoMethods>(aux: T) -> MethodsWithAux<T> {
     MethodsWithAux {
@@ -283,7 +274,7 @@ unsafe fn create_io_methods<T: SqliteIoMethods>(aux: T) -> MethodsWithAux<T> {
         xShmUnmap: Some(x_shm_unmap::<T>),
         xFetch: Some(x_fetch::<T>),
         xUnfetch: Some(x_unfetch::<T>),
-        aux
+        aux,
     }
 }
 

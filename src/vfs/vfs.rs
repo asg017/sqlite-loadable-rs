@@ -1,27 +1,36 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_int64, sqlite3_vfs, sqlite3_syscall_ptr, SQLITE_OK, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_ERROR, SQLITE_CANTOPEN_FULLPATH};
-use std::ffi::{CString, CStr};
-use std::os::raw::{c_int, c_char, c_void};
+use sqlite3ext_sys::{
+    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs, SQLITE_CANTOPEN_FULLPATH,
+    SQLITE_ERROR, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_OK,
+};
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::rc::Rc;
 
-use crate::ext::{sqlite3ext_vfs_register, sqlite3ext_vfs_find};
-use std::io::{Result, Error, ErrorKind};
+use crate::ext::{sqlite3ext_vfs_find, sqlite3ext_vfs_register};
+use std::io::{Error, ErrorKind, Result};
 
 use super::traits::SqliteVfs;
 
 pub(crate) fn handle_bool(result: Result<bool>, ext_io_err: Option<c_int>) -> c_int {
     match result {
-        Ok(i) => if i { 1 } else { 0 },
+        Ok(i) => {
+            if i {
+                1
+            } else {
+                0
+            }
+        }
         Err(e) => {
             if let Some(inner_err) = e.into_inner() {
                 println!("error: {inner_err}");
             }
             if let Some(extended) = ext_io_err {
                 extended
-            }else {
+            } else {
                 SQLITE_ERROR
             }
         }
@@ -37,7 +46,7 @@ pub(crate) fn handle_int(result: Result<c_int>, ext_io_err: Option<c_int>) -> c_
             }
             if let Some(extended) = ext_io_err {
                 extended
-            }else {
+            } else {
                 SQLITE_ERROR
             }
         }
@@ -53,7 +62,7 @@ pub(crate) fn handle_error(result: Result<()>, ext_io_err: Option<c_int>) -> c_i
             }
             if let Some(extended) = ext_io_err {
                 extended
-            }else {
+            } else {
                 SQLITE_ERROR
             }
         }
@@ -171,10 +180,7 @@ unsafe extern "C" fn x_dl_sym<T: SqliteVfs>(
 
 #[cfg(feature = "vfs_loadext")]
 /// Let Boxes go out of scope, thus drop
-unsafe extern "C" fn x_dl_close<T: SqliteVfs>(
-    p_vfs: *mut sqlite3_vfs,
-    p_handle: *mut c_void,
-) {
+unsafe extern "C" fn x_dl_close<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, p_handle: *mut c_void) {
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
     b.dl_close(p_handle);
@@ -195,10 +201,7 @@ unsafe extern "C" fn x_randomness<T: SqliteVfs>(
     result
 }
 
-unsafe extern "C" fn x_sleep<T: SqliteVfs>(
-    p_vfs: *mut sqlite3_vfs,
-    microseconds: c_int,
-) -> c_int {
+unsafe extern "C" fn x_sleep<T: SqliteVfs>(p_vfs: *mut sqlite3_vfs, microseconds: c_int) -> c_int {
     let mut vfs = Box::<sqlite3_vfs>::from_raw(p_vfs);
     let mut b = Box::<T>::from_raw(vfs.pAppData.cast::<T>());
 
@@ -298,7 +301,12 @@ unsafe extern "C" fn x_next_system_call<T: SqliteVfs>(
     result
 }
 
-pub fn create_vfs<T: SqliteVfs>(aux: T, name_ptr: *const c_char, max_path_name_size: i32, vfs_file_size: i32) -> sqlite3_vfs {
+pub fn create_vfs<T: SqliteVfs>(
+    aux: T,
+    name_ptr: *const c_char,
+    max_path_name_size: i32,
+    vfs_file_size: i32,
+) -> sqlite3_vfs {
     unsafe {
         let vfs_ptr = Box::into_raw(Box::<T>::new(aux));
 
@@ -319,7 +327,7 @@ pub fn create_vfs<T: SqliteVfs>(aux: T, name_ptr: *const c_char, max_path_name_s
             xDelete: Some(x_delete::<T>),
             xAccess: Some(x_access::<T>),
             xFullPathname: Some(x_full_pathname::<T>),
-    
+
             /// The following four VFS methods:
             ///
             ///   xDlOpen
@@ -374,7 +382,10 @@ fn handle_vfs_result(result: i32) -> crate::Result<()> {
     if result == SQLITE_OK {
         Ok(())
     } else {
-        Err(crate::errors::Error::new_message(format!("sqlite3_vfs_register failed with error code: {}", result)))
+        Err(crate::errors::Error::new_message(format!(
+            "sqlite3_vfs_register failed with error code: {}",
+            result
+        )))
     }
 }
 
@@ -382,6 +393,6 @@ pub fn register_boxed_vfs(vfs: sqlite3_vfs, make_default: bool) -> crate::Result
     let translate_to_int = if make_default { 1 } else { 0 };
 
     let result = unsafe { sqlite3ext_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
-    
+
     handle_vfs_result(result)
 }
