@@ -1,29 +1,35 @@
 #![allow(unused)]
 pub mod ops;
 
-pub(crate) mod lock;
 pub(crate) mod connection;
+pub(crate) mod lock;
 
 use ops::Ops;
 
-use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control, sqlite3ext_vfs_register, sqlite3ext_database_file_object};
-use sqlite_loadable::vfs::default::{DefaultVfs, DefaultFile};
-use sqlite_loadable::vfs::vfs::{create_vfs};
+use sqlite_loadable::ext::{
+    sqlite3ext_context_db_handle, sqlite3ext_database_file_object, sqlite3ext_file_control,
+    sqlite3ext_vfs_find, sqlite3ext_vfs_register,
+};
+use sqlite_loadable::vfs::default::{DefaultFile, DefaultVfs};
+use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::vfs::file::{MethodsWithAux, FileWithAux};
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, define_scalar_function, api, vfs::traits::SqliteVfs};
+use sqlite_loadable::vfs::file::{FileWithAux, MethodsWithAux};
+use sqlite_loadable::{
+    api, create_file_pointer, define_scalar_function, prelude::*, register_boxed_vfs,
+    vfs::traits::SqliteVfs, SqliteIoMethods,
+};
 use url::Url;
 
-use std::ffi::{CString, CStr};
-use std::fs::{File, self};
-use std::io::{Write, Read, self};
-use std::os::raw::{c_void, c_char};
-use std::{ptr, mem};
+use std::ffi::{CStr, CString};
+use std::fs::{self, File};
+use std::io::{self, Read, Write};
+use std::os::raw::{c_char, c_void};
+use std::{mem, ptr};
 
-use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
-use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE, SQLITE_OPEN_WAL};
+use sqlite3ext_sys::{sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs};
+use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_IOERR_DELETE, SQLITE_OPEN_MAIN_DB, SQLITE_OPEN_WAL};
 
-use std::io::{Error, Result, ErrorKind};
+use std::io::{Error, ErrorKind, Result};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
@@ -39,17 +45,24 @@ struct IoUringVfs {
 }
 
 impl SqliteVfs for IoUringVfs {
-
-    fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: i32, p_res_out: *mut i32) -> Result<()> {
-
+    fn open(
+        &mut self,
+        z_name: *const c_char,
+        p_file: *mut sqlite3_file,
+        flags: i32,
+        p_res_out: *mut i32,
+    ) -> Result<()> {
         let file_path = unsafe { CStr::from_ptr(z_name) };
 
         let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
         let mut file = Ops::new(file_path.to_owned(), 32);
 
-        file.open_file().map_err(|_| Error::new(ErrorKind::Other, "can't open file"))?;
+        file.open_file()
+            .map_err(|_| Error::new(ErrorKind::Other, "can't open file"))?;
 
-        unsafe { *p_file = *create_file_pointer( file ); }
+        unsafe {
+            *p_file = *create_file_pointer(file);
+        }
 
         Ok(())
     }
@@ -73,7 +86,12 @@ impl SqliteVfs for IoUringVfs {
         Ok(())
     }
 
-    fn full_pathname(&mut self, z_name: *const c_char, n_out: i32, z_out: *mut c_char) -> Result<()> {
+    fn full_pathname(
+        &mut self,
+        z_name: *const c_char,
+        n_out: i32,
+        z_out: *mut c_char,
+    ) -> Result<()> {
         unsafe {
             // don't rely on type conversion of n_out to determine the end line char
             let name = CString::from_raw(z_name.cast_mut());
@@ -105,7 +123,7 @@ impl SqliteVfs for IoUringVfs {
     // }
 
     fn randomness(&mut self, n_byte: i32, z_out: *mut c_char) -> i32 {
-         self.default_vfs.randomness(n_byte, z_out)
+        self.default_vfs.randomness(n_byte, z_out)
     }
 
     fn sleep(&mut self, microseconds: i32) -> i32 {
@@ -138,7 +156,10 @@ impl SqliteVfs for IoUringVfs {
 }
 
 /// Usage: "ATTACH io_uring_vfs_from_file('test.db') AS inring;"
-fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> sqlite_loadable::Result<()> {
+fn vfs_from_file(
+    context: *mut sqlite3_context,
+    values: &[*mut sqlite3_value],
+) -> sqlite_loadable::Result<()> {
     let path = api::value_text(&values[0])?;
 
     let text_output = format!("file:{}?vfs={}", path, EXTENSION_NAME);
@@ -170,7 +191,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
 
     // let file_size = std::mem::size_of::<FileWithAux<Ops>>();
     // let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, file_size.try_into().unwrap());
-    
+
     // vfs_file_size == 0, fixes the stack smash, when Box does the clean up
     let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, 0);
 

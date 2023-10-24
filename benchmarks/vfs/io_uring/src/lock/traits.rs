@@ -18,8 +18,7 @@ use std::time::Duration;
 use strum::FromRepr;
 
 use super::kind::LockKind;
-use super::wal::{WalIndex, WalConnection};
-
+use super::wal::{WalConnection, WalIndex};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpenOptions {
@@ -55,14 +54,14 @@ SQLITE_OPEN_MASTER_JOURNAL: i32 = 16384;
 #[derive(FromRepr, Debug, Clone, Copy, PartialEq)]
 #[repr(i32)]
 pub enum OpenKind {
-    MainDb = 256, // SQLITE_OPEN_MAIN_DB,
-    MainJournal = 2048, // SQLITE_OPEN_MAIN_JOURNAL
-    TempDb = 512, // SQLITE_OPEN_TEMP_DB
-    TempJournal = 4096, // SQLITE_OPEN_TEMP_JOURNAL
-    TransientDb = 1024, // SQLITE_OPEN_TRANSIENT_DB
-    SubJournal = 8192, // SQLITE_OPEN_SUBJOURNAL
+    MainDb = 256,         // SQLITE_OPEN_MAIN_DB,
+    MainJournal = 2048,   // SQLITE_OPEN_MAIN_JOURNAL
+    TempDb = 512,         // SQLITE_OPEN_TEMP_DB
+    TempJournal = 4096,   // SQLITE_OPEN_TEMP_JOURNAL
+    TransientDb = 1024,   // SQLITE_OPEN_TRANSIENT_DB
+    SubJournal = 8192,    // SQLITE_OPEN_SUBJOURNAL
     SuperJournal = 16384, // SQLITE_OPEN_SUPER_JOURNAL / SQLITE_OPEN_MASTER_JOURNAL
-    Wal = 524288, // SQLITE_OPEN_WAL
+    Wal = 524288,         // SQLITE_OPEN_WAL
 }
 
 /*
@@ -86,7 +85,6 @@ pub enum OpenAccess {
     /// Create the file, but throw if it it already exist (includes write and read access).
     CreateNewThrowIfExists = 8, // TODO figure out how to support on io_uring
 }
-
 
 /// A file opened by [Vfs].
 pub trait DatabaseHandle: Sync {

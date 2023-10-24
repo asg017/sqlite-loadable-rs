@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::fs::{self, File, Permissions, OpenOptions as FsOpenOptions};
+use std::fs::{self, File, OpenOptions as FsOpenOptions, Permissions};
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -8,11 +8,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::lock::file::FileLock;
 use crate::lock::kind::LockKind;
 use crate::lock::range::RangeLock;
-use crate::lock::traits::{DatabaseHandle, OpenAccess, OpenKind, OpenOptions, Open};
+use crate::lock::traits::{DatabaseHandle, Open, OpenAccess, OpenKind, OpenOptions};
 use crate::lock::wal::WalIndex;
 use crate::lock::wrapper::Lock;
-
-
 
 /// [Vfs] test implementation based on Rust's [std::fs:File]. This implementation is not meant for
 /// any use-cases except running SQLite unit tests, as the locking is only managed in process
@@ -103,8 +101,8 @@ impl Open for TestLockedVfs {
             file_ino,
         })
     }
-    
-    /* 
+
+    /*
     fn delete(&self, db: &str) -> Result<(), std::io::Error> {
         let path = normalize_path(Path::new(&db));
         fs::remove_file(path)
@@ -132,40 +130,40 @@ impl Open for TestLockedVfs {
             .to_string_lossy()
             .to_string()
     }
-/*
-    fn full_pathname<'a>(&self, db: &'a str) -> Result<Cow<'a, str>, std::io::Error> {
-        let path = Path::new(&db);
-        let path = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            std::env::current_dir()?.join(path)
-        };
-        let path = normalize_path(&path);
-        Ok(path
-            .to_str()
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    ErrorKind::Other,
-                    "cannot convert canonicalized path to string",
-                )
-            })?
-            .to_string()
-            .into())
-    }
+    /*
+        fn full_pathname<'a>(&self, db: &'a str) -> Result<Cow<'a, str>, std::io::Error> {
+            let path = Path::new(&db);
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir()?.join(path)
+            };
+            let path = normalize_path(&path);
+            Ok(path
+                .to_str()
+                .ok_or_else(|| {
+                    std::io::Error::new(
+                        ErrorKind::Other,
+                        "cannot convert canonicalized path to string",
+                    )
+                })?
+                .to_string()
+                .into())
+        }
 
-    fn random(&self, buffer: &mut [i8]) {
-        rand::Rng::fill(&mut rand::thread_rng(), buffer);
-    }
+        fn random(&self, buffer: &mut [i8]) {
+            rand::Rng::fill(&mut rand::thread_rng(), buffer);
+        }
 
-    fn sleep(&self, duration: std::time::Duration) -> std::time::Duration {
-        std::thread::sleep(duration);
+        fn sleep(&self, duration: std::time::Duration) -> std::time::Duration {
+            std::thread::sleep(duration);
 
-        // Well, this function is only supposed to sleep at least `n_micro`μs, but there are
-        // tests that expect the return to match exactly `n_micro`. As those tests are flaky as
-        // a result, we are cheating here.
-        duration
-    }
-*/    
+            // Well, this function is only supposed to sleep at least `n_micro`μs, but there are
+            // tests that expect the return to match exactly `n_micro`. As those tests are flaky as
+            // a result, we are cheating here.
+            duration
+        }
+    */
 }
 
 impl DatabaseHandle for Connection {
@@ -299,11 +297,7 @@ impl WalIndex for WalConnection {
         Ok(data)
     }
 
-    fn lock(
-        &mut self,
-        locks: std::ops::Range<u8>,
-        lock: LockKind,
-    ) -> Result<bool, std::io::Error> {
+    fn lock(&mut self, locks: std::ops::Range<u8>, lock: LockKind) -> Result<bool, std::io::Error> {
         self.wal_lock.lock(locks, lock)
     }
 

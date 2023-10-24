@@ -1,6 +1,6 @@
-use std::env;
-use rand::Rng;
 use rand::thread_rng;
+use rand::Rng;
+use std::env;
 
 include!("../include/conn.in.rs");
 

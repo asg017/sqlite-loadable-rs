@@ -1,5 +1,5 @@
-use std::env;
 use rand::Rng;
+use std::env;
 
 include!("../include/conn.in.rs");
 
@@ -13,8 +13,10 @@ fn main() -> rusqlite::Result<()> {
     for _ in 0..5000 {
         let value: i32 = rng.gen();
 
-        tx.execute("INSERT INTO t10 (a, b, c) VALUES (?, ?, ?)",
-                            (value, value, format!("Value {}", value).as_str()))?;
+        tx.execute(
+            "INSERT INTO t10 (a, b, c) VALUES (?, ?, ?)",
+            (value, value, format!("Value {}", value).as_str()),
+        )?;
     }
     tx.commit()?;
 
@@ -24,6 +26,6 @@ fn main() -> rusqlite::Result<()> {
         tx2.execute("UPDATE t10 SET c=?1 WHERE a = ?2", (r, i + 1))?;
     }
     tx2.commit()?;
-    
+
     Ok(())
 }

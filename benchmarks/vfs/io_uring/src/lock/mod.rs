@@ -1,16 +1,34 @@
-pub(crate) mod kind;
 pub(crate) mod file;
+pub(crate) mod kind;
 pub(crate) mod range;
+pub(crate) mod traits;
 pub(crate) mod wal;
 pub(crate) mod wrapper;
-pub(crate) mod traits;
 
-use std::{fs::{self, Permissions}, ffi::CString, sync::{Mutex, Arc}, mem::MaybeUninit, collections::HashMap, pin::Pin, io::ErrorKind, os::unix::prelude::PermissionsExt};
-use sqlite3ext_sys::{self, sqlite3_file, SQLITE_IOERR_LOCK, SQLITE_OK, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_CHECKRESERVEDLOCK, SQLITE_BUSY};
+use sqlite3ext_sys::{
+    self, sqlite3_file, SQLITE_BUSY, SQLITE_IOERR_CHECKRESERVEDLOCK, SQLITE_IOERR_LOCK,
+    SQLITE_IOERR_UNLOCK, SQLITE_OK,
+};
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    fs::{self, Permissions},
+    io::ErrorKind,
+    mem::MaybeUninit,
+    os::unix::prelude::PermissionsExt,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
 use crate::connection::permissions;
 
-use self::{kind::LockKind, range::RangeLock, wal::{WalConnection, WalIndex}, file::FileLock, traits::DatabaseHandle};
+use self::{
+    file::FileLock,
+    kind::LockKind,
+    range::RangeLock,
+    traits::DatabaseHandle,
+    wal::{WalConnection, WalIndex},
+};
 
 // TODO: add to [Vfs]?
 const MAX_PATH_LENGTH: usize = 512;

@@ -35,7 +35,7 @@ mod tests {
 
         let data_to_write = b"Hello, World!";
         let _ = tmpfile.write(data_to_write);
-        
+
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
         let mut ops = Ops::new(file_path.clone(), 16);
 
@@ -43,7 +43,7 @@ mod tests {
         ops.open_file().unwrap();
 
         // Read the file
-        let mut buf: [u8;13] = [0; 13];
+        let mut buf: [u8; 13] = [0; 13];
         let buf_ptr = buf.as_mut_ptr() as *mut c_void;
         unsafe {
             ops.o_read(0, 13, buf_ptr).unwrap();
@@ -68,10 +68,11 @@ mod tests {
 
         // Write data to the file
         let data_to_write = b"Hello, World!";
-        let mut buf: [u8;13] = [0; 13];
+        let mut buf: [u8; 13] = [0; 13];
         let buf_ptr = buf.as_mut_ptr() as *mut c_void;
         unsafe {
-            ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13).unwrap();
+            ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13)
+                .unwrap();
             ops.o_read(0, 13, buf_ptr).unwrap();
         }
 
@@ -92,18 +93,18 @@ mod tests {
         let _ = tmpfile.write(data_to_write);
 
         let mut ops = Ops::new(file_path.clone(), 16);
-    
+
         // Perform the open operation
         ops.open_file().unwrap();
-    
+
         // Get the current file size
         let mut file_size: u64 = 0;
         unsafe {
             ops.o_file_size(&mut file_size).unwrap();
         }
-    
+
         assert_eq!(file_size, 13);
-    
+
         // Cleanup
         tmpfile.close().unwrap();
     }
@@ -124,7 +125,9 @@ mod tests {
 
         // Truncate the file to a smaller size
         let new_size = 5; // Set the new size to 5 bytes
-        unsafe { ops.o_truncate(new_size).unwrap(); }
+        unsafe {
+            ops.o_truncate(new_size).unwrap();
+        }
 
         // Get the current file size
         let mut file_size: u64 = 0;
