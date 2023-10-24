@@ -8,10 +8,10 @@ use ops::Ops;
 
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control, sqlite3ext_vfs_register, sqlite3ext_database_file_object};
 use sqlite_loadable::vfs::default::{DefaultVfs, DefaultFile};
-use sqlite_loadable::vfs::vfs::{create_vfs, handle_vfs_result};
+use sqlite_loadable::vfs::vfs::{create_vfs};
 
 use sqlite_loadable::vfs::file::{MethodsWithAux, FileWithAux};
-use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, Error, ErrorKind, define_scalar_function, api, Result, vfs::traits::SqliteVfs};
+use sqlite_loadable::{prelude::*, SqliteIoMethods, create_file_pointer, register_boxed_vfs, define_scalar_function, api, vfs::traits::SqliteVfs};
 use url::Url;
 
 use std::ffi::{CString, CStr};
@@ -22,6 +22,8 @@ use std::{ptr, mem};
 
 use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
 use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE, SQLITE_OPEN_WAL};
+
+use std::io::{Error, Result, ErrorKind};
 
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
@@ -45,7 +47,7 @@ impl SqliteVfs for IoUringVfs {
         let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
         let mut file = Ops::new(file_path.to_owned(), 32);
 
-        file.open_file().map_err(|_| Error::new_message("can't open file"))?;
+        file.open_file().map_err(|_| Error::new(ErrorKind::Other, "can't open file"))?;
 
         unsafe { *p_file = *create_file_pointer( file ); }
 
@@ -136,8 +138,8 @@ impl SqliteVfs for IoUringVfs {
 }
 
 /// Usage: "ATTACH io_uring_vfs_from_file('test.db') AS inring;"
-fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
-    let path = api::value_text(&values[0]).map_err(|_| Error::new_message("can't determine path arg"))?;
+fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> sqlite_loadable::Result<()> {
+    let path = api::value_text(&values[0])?;
 
     let text_output = format!("file:{}?vfs={}", path, EXTENSION_NAME);
 
@@ -148,17 +150,12 @@ fn vfs_from_file(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -
 
 // See Cargo.toml "[[lib]] name = ..." matches this function name
 #[sqlite_entrypoint_permanent]
-pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> Result<()> {
+pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
 
     let shimmed_name = CString::new("unix-dotfile").unwrap();
     let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
     let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
-
-    unsafe {
-        let result = sqlite3ext_vfs_register(shimmed_vfs, 1);
-        handle_vfs_result(result)?;
-    }    
 
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {

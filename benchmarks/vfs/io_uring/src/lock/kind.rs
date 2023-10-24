@@ -1,4 +1,3 @@
-use sqlite3ext_sys::{SQLITE_LOCK_EXCLUSIVE, SQLITE_LOCK_PENDING, SQLITE_LOCK_RESERVED, SQLITE_LOCK_SHARED, SQLITE_LOCK_NONE};
 use strum::FromRepr;
 
 /// The access an object is opened with.

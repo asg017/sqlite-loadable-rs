@@ -1,6 +1,7 @@
 use std::{ops::Range, path::PathBuf, fs::File};
 use super::{*, range::RangeLock, wrapper::Lock, file::FileLock, kind::LockKind};
 
+// NOTE: subsumed by LockKind
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 // #[repr(u16)]
 // pub enum WalIndexLock {

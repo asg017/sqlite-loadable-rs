@@ -12,11 +12,13 @@ use crate::lock::traits::{DatabaseHandle, OpenAccess, OpenKind, OpenOptions, Ope
 use crate::lock::wal::WalIndex;
 use crate::lock::wrapper::Lock;
 
+
+
 /// [Vfs] test implementation based on Rust's [std::fs:File]. This implementation is not meant for
 /// any use-cases except running SQLite unit tests, as the locking is only managed in process
 /// memory.
 #[derive(Default)]
-pub struct TestVfs {
+pub struct TestLockedVfs {
     temp_counter: AtomicUsize,
 }
 
@@ -34,7 +36,7 @@ pub struct WalConnection {
     readonly: bool,
 }
 
-impl Open for TestVfs {
+impl Open for TestLockedVfs {
     type Handle = Connection;
 
     fn open(&self, db: &str, opts: OpenOptions) -> Result<Self::Handle, std::io::Error> {
@@ -50,7 +52,7 @@ impl Open for TestVfs {
                 o.create(true);
                 true
             }
-            OpenAccess::CreateNew => {
+            OpenAccess::CreateNewThrowIfExists => {
                 o.create_new(true);
                 true
             }
@@ -373,7 +375,7 @@ fn normalize_path(path: &Path) -> PathBuf {
     ret
 }
 
-fn permissions(path: &Path) -> io::Result<u32> {
+pub(crate) fn permissions(path: &Path) -> io::Result<u32> {
     let path = path.with_extension(
         path.extension()
             .and_then(|ext| ext.to_str())

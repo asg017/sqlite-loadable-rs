@@ -4,11 +4,14 @@ use std::os::raw::c_void;
 use std::fs::File;
 use std::os::unix::io::{FromRawFd,AsRawFd};
 
-use sqlite_loadable::{Result, Error, ErrorKind, SqliteIoMethods};
+use sqlite_loadable::SqliteIoMethods;
+use std::io::{Result, Error, ErrorKind};
 use sqlite3ext_sys::sqlite3_file;
 use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL};
-use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};    
+use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
+
+use sqlite3ext_sys::SQLITE_LOCK_SHARED;
 
 
 // IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
@@ -64,18 +67,18 @@ impl Ops {
                     &open_e.build()
                     .user_data(USER_DATA_OPEN)
                 )
-                .map_err(|_| Error::new_message("submission queue is full"))?;
+                .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
         }
 
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
     
         let cqe = self.ring.completion().next().unwrap();
 
         let result = cqe.result();
 
         if result < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
 
         self.file_fd = Some(result.try_into().unwrap());
@@ -96,12 +99,12 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(USER_DATA_READ))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
         if cqe.result() < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
@@ -119,12 +122,12 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
         let cqe = self.ring.completion().next().unwrap();
         if cqe.result() < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
@@ -141,17 +144,17 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(USER_DATA_FALLOCATE))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
         let cqe = self.ring
             .completion()
             .next()
             .unwrap();
         if cqe.result() < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
@@ -159,7 +162,7 @@ impl Ops {
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         let result = libc::ftruncate(self.file_fd.unwrap(), size);
         if result == -1 {
-            Err(Error::new_message(format!("raw os error result: {}", result)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", result)))?;
         }
         Ok(())
     }
@@ -183,17 +186,17 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(USER_DATA_CLOSE))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
         let cqe = self.ring
             .completion()
             .next()
             .unwrap();
         if cqe.result() < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
 
         Ok(())
@@ -211,10 +214,10 @@ impl Ops {
         self.ring
             .submission()
             .push(&statx_op.build().user_data(USER_DATA_STATX))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
         unsafe {
             *out = statx_buf.stx_size as u64;
@@ -231,10 +234,10 @@ impl Ops {
         self.ring
             .submission()
             .push(&op.build().user_data(USER_DATA_FSYNC))
-            .map_err(|_| Error::new_message("submission queue is full"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
         self.ring.submit_and_wait(1)
-            .map_err(|_| Error::new_message("submit failed or timed out"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
         let cqe = self.ring
             .completion()
@@ -242,7 +245,7 @@ impl Ops {
             .unwrap();
 
         if cqe.result() < 0 {
-            Err(Error::new_message(format!("raw os error result: {}", -cqe.result() as i32)))?;
+            Err(Error::new(ErrorKind::Other, format!("raw os error result: {}", -cqe.result() as i32)))?;
         }
         Ok(())
     }
@@ -273,16 +276,16 @@ impl SqliteIoMethods for Ops {
         unsafe { self.o_file_size(p_size as *mut u64) }
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        0
+    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        Ok(SQLITE_LOCK_SHARED)
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> i32 {
-        0
+    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        Ok(SQLITE_LOCK_SHARED)
     }
 
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> i32 {
-        0
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<bool> {
+        Ok(true)
     }
 
     /// See https://www.sqlite.org/c3ref/file_control.html
@@ -291,15 +294,16 @@ impl SqliteIoMethods for Ops {
         Ok(())
     }
 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> i32 {
-        1024
+    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        Ok(1024)
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> i32 {
-        SQLITE_IOCAP_ATOMIC | 
+    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        let x = SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
-        SQLITE_IOCAP_SEQUENTIAL
+        SQLITE_IOCAP_SEQUENTIAL;
+        Ok(x)
     }
 
     fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {

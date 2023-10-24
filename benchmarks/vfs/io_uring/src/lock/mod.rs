@@ -5,29 +5,29 @@ pub(crate) mod wal;
 pub(crate) mod wrapper;
 pub(crate) mod traits;
 
-/*
-use std::{fs::{self, Permissions}, ffi::CString, sync::{Mutex, Arc}, mem::MaybeUninit, collections::HashMap, pin::Pin, io::ErrorKind};
+use std::{fs::{self, Permissions}, ffi::CString, sync::{Mutex, Arc}, mem::MaybeUninit, collections::HashMap, pin::Pin, io::ErrorKind, os::unix::prelude::PermissionsExt};
 use sqlite3ext_sys::{self, sqlite3_file, SQLITE_IOERR_LOCK, SQLITE_OK, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_CHECKRESERVEDLOCK, SQLITE_BUSY};
 
-use self::{kind::LockKind, range::RangeLock, wal::{WalConnection, WalIndexLock, WalIndex}, file::FileLock};
+use crate::connection::permissions;
+
+use self::{kind::LockKind, range::RangeLock, wal::{WalConnection, WalIndex}, file::FileLock, traits::DatabaseHandle};
 
 // TODO: add to [Vfs]?
 const MAX_PATH_LENGTH: usize = 512;
 
-
-#[repr(C)]
-struct FileState {
+struct State<V> {
+    name: CString,
+    vfs: Arc<V>,
     last_error: Arc<Mutex<Option<(i32, std::io::Error)>>>,
     next_id: usize,
-    ext: MaybeUninit<FileExt>, // TODO drop manually
 }
 
 #[repr(C)]
-struct FileExt {
-    // vfs: Arc<V>,
-    // vfs_name: CString,
-    // db_name: String,
-    // file: F,
+struct FileExt<V, F: DatabaseHandle> {
+    vfs: Arc<V>,
+    vfs_name: CString,
+    db_name: String,
+    file: F,
     delete_on_close: bool,
     /// The last error; shared with the VFS.
     last_error: Arc<Mutex<Option<(i32, std::io::Error)>>>,
@@ -35,7 +35,7 @@ struct FileExt {
     last_errno: i32,
     wal_index: Option<(F::WalIndex, bool)>,
     wal_index_regions: HashMap<u32, Pin<Box<[u8; 32768]>>>,
-    wal_index_locks: HashMap<u8, WalIndexLock>,
+    wal_index_locks: HashMap<u8, LockKind>,
     has_exclusive_lock: bool,
     id: usize,
     chunk_size: Option<usize>,
@@ -60,12 +60,11 @@ impl<V, F: DatabaseHandle> FileExt<V, F> {
     }
 }
 
-
 fn null_ptr_error() -> std::io::Error {
     std::io::Error::new(ErrorKind::Other, "received null pointer")
 }
 
-impl FileExt {
+impl<V, F: DatabaseHandle> FileExt<V, F> {
     /// Lock a file.
     pub(crate) fn lock(
         // p_file: *mut sqlite3_file,
@@ -78,7 +77,7 @@ impl FileExt {
         // };
         // log::trace!("[{}] lock ({})", state.id, state.db_name);
 
-        let lock = match LockKind::from_i32(e_lock) {
+        let lock = match LockKind::from_repr(e_lock) {
             Some(lock) => lock,
             None => return SQLITE_IOERR_LOCK,
         };
@@ -93,7 +92,7 @@ impl FileExt {
                     let has_exclusive_wal_index = self
                         .wal_index_locks
                         .iter()
-                        .any(|(_, lock)| *lock == WalIndexLock::Exclusive);
+                        .any(|(_, lock)| *lock == LockKind::Exclusive);
 
                     if !has_exclusive_wal_index {
                         // log::trace!(
@@ -142,7 +141,7 @@ impl FileExt {
         // };
         // log::trace!("[{}] unlock ({})", state.id, state.db_name);
 
-        let lock = match LockKind::from_i32(e_lock) {
+        let lock = match LockKind::from_repr(e_lock) {
             Some(lock) => lock,
             None => return SQLITE_IOERR_UNLOCK,
         };
@@ -184,64 +183,4 @@ impl FileExt {
 
         SQLITE_OK
     }
-
-    fn wal_index(&self, readonly: bool) -> Result<WalIndex, std::io::Error> {
-        let path = self.path.with_extension(format!(
-            "{}-shm",
-            self.path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .map(|ext| ext.split_once('-').map(|(f, _)| f).unwrap_or(ext))
-                .unwrap_or("db")
-        ));
-        let is_new = !path.exists();
-
-        let mut opts = fs::OpenOptions::new();
-        opts.read(true);
-        if !readonly {
-            opts.write(true).create(true).truncate(false);
-        }
-
-        let file = opts.open(&path)?;
-        let mut file_lock = FileLock::new(file);
-        if !readonly && file_lock.exclusive() {
-            // If it is the first connection to open the database, truncate the index.
-            let new_file = fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&path)
-                .map_err(|err| err)?;
-
-            let new_lock = FileLock::new(new_file);
-
-            if is_new {
-                let mode = permissions(&self.path)?;
-                let perm = Permissions::from_mode(mode);
-                // Match permissions of main db file, but don't downgrade to readonly.
-                if !perm.readonly() {
-                    fs::set_permissions(&path, perm)?;
-                }
-            }
-
-            // Transition previous lock to shared before getting a shared on the new file
-            // descriptor to make sure that there isn't any other concurrent process/thread getting
-            // an exclusive lock during the transition.
-            assert!(file_lock.shared());
-            assert!(new_lock.shared());
-
-            file_lock = new_lock;
-        } else {
-            file_lock.wait_shared();
-        }
-
-        Ok(WalConnection {
-            path,
-            file_lock,
-            wal_lock: RangeLock::new(self.file_ino),
-            readonly,
-        })
-    }
 }
-*/
