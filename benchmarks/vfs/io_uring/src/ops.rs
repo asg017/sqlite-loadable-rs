@@ -89,7 +89,7 @@ impl Ops {
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
+                format!("open_file: raw os error result: {}", -cqe.result() as i32),
             ))?;
         }
 
@@ -119,7 +119,7 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
+                format!("read: raw os error result: {}", -cqe.result() as i32),
             ))?;
         }
         Ok(())
@@ -140,7 +140,7 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
+                format!("write: raw os error result: {}", -cqe.result() as i32),
             ))?;
         }
         Ok(())
@@ -168,7 +168,7 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
+                format!("truncate2: raw os error result: {}", -cqe.result() as i32),
             ))?;
         }
         Ok(())
@@ -176,10 +176,10 @@ impl Ops {
 
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         let result = libc::ftruncate(self.file_fd.unwrap(), size);
-        if result == -1 {
+        if result != 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", result),
+                format!("truncate: raw os error result: {}", result),
             ))?;
         }
         Ok(())
@@ -214,7 +214,7 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
+                format!("close: raw os error result: {}", -cqe.result() as i32),
             ))?;
         }
 
