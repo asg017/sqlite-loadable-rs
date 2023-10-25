@@ -5,7 +5,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::{env, io};
 
 use super::kind::LockKind;
-use super::wrapper::{flock_exclusive, flock_shared, flock_unlock};
+use super::lock::{flock_exclusive, flock_shared, flock_unlock};
 
 pub struct FileLock {
     file: Option<File>,

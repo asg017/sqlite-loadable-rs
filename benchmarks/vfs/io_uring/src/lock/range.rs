@@ -5,8 +5,8 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::{env, io};
 
 use super::file::FileLock;
-use super::kind::LockKind;
-use super::wrapper::{flock_exclusive, flock_shared, flock_unlock};
+use super::LockKind;
+use super::lock::{flock_exclusive, flock_shared, flock_unlock};
 
 /// SQLite's default locking on UNIX systems is quite involved to work around certain limitations
 /// of POSIX locks. See https://github.com/sqlite/sqlite/blob/master/src/os_unix.c#L1026-L1114 for

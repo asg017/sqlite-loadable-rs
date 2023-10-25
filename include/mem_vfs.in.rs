@@ -15,6 +15,7 @@ use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK};
 use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE};
 use sqlite3ext_sys::{SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL, SQLITE_LOCK_SHARED};
+use sqlite3ext_sys::SQLITE_OK;
 
 use std::io::{Error, Result, ErrorKind};
 
@@ -190,16 +191,16 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_SHARED)
+        Ok(SQLITE_OK) // or SQLITE_LOCK_BUSY
     }
 
     fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_SHARED)
+        Ok(SQLITE_OK)
     }
 
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<bool> {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
         unsafe{ *p_res_out = 0; }
-        Ok(true)
+        Ok(())
     }
 
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {

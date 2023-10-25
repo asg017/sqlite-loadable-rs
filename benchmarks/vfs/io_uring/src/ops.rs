@@ -1,9 +1,11 @@
 use std::ffi::{CStr, CString};
 use std::fs::File;
+use std::os::fd::RawFd;
 use std::os::raw::c_void;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 
+use io_uring::types::Fd;
 use sqlite3ext_sys::sqlite3_file;
 use sqlite3ext_sys::{
     SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE, SQLITE_IOCAP_SAFE_APPEND,
@@ -13,7 +15,7 @@ use sqlite3ext_sys::{SQLITE_IOERR_SHMLOCK, SQLITE_IOERR_SHMMAP};
 use sqlite_loadable::SqliteIoMethods;
 use std::io::{Error, ErrorKind, Result};
 
-use sqlite3ext_sys::SQLITE_LOCK_SHARED;
+use sqlite3ext_sys::{SQLITE_LOCK_SHARED, SQLITE_BUSY, SQLITE_OK};
 
 // IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
 
@@ -23,6 +25,9 @@ use std::{mem, ptr};
 
 use io_uring::{opcode, register, types, IoUring};
 use std::io;
+
+use crate::lock::Lock;
+use crate::lock::LockKind;
 
 const USER_DATA_OPEN: u64 = 0x1;
 const USER_DATA_READ: u64 = 0x2;
@@ -36,6 +41,7 @@ pub struct Ops {
     ring: IoUring,
     file_path: CString,
     file_fd: Option<i32>,
+    lock: Option<Lock>,
 }
 
 impl Ops {
@@ -47,6 +53,7 @@ impl Ops {
             ring,
             file_path,
             file_fd: None,
+            lock: None,
         }
     }
 
@@ -86,7 +93,13 @@ impl Ops {
             ))?;
         }
 
-        self.file_fd = Some(result.try_into().unwrap());
+        let raw_fd: RawFd = result.try_into().unwrap();
+
+        self.file_fd = Some(raw_fd);
+
+        let lock = Lock::from_raw_fd(&raw_fd)?;
+
+        self.lock = Some(lock);
 
         Ok(())
     }
@@ -257,6 +270,29 @@ impl Ops {
         }
         Ok(())
     }
+
+    fn exclusive_requested_pending_acquired(&mut self, to: LockKind) -> bool {
+        if let Some(lock) = &mut self.lock {
+            lock.lock(to) && lock.current() == to
+        }else {
+            false
+        }
+    }
+
+    pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {
+        LockKind::from_repr(lock_request)
+            .map(|kind| self.exclusive_requested_pending_acquired(kind))
+            .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY } )
+            .ok_or_else(|| Error::new(ErrorKind::Other, "Missing"))
+    }
+
+    pub fn lock_reserved(&mut self) -> bool {
+        if let Some(lock) = &mut self.lock {
+            lock.reserved()
+        }else {
+            false
+        }
+    }
 }
 
 impl SqliteIoMethods for Ops {
@@ -291,19 +327,20 @@ impl SqliteIoMethods for Ops {
     }
 
     fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_SHARED)
+        self.lock_or_unlock(arg2)
     }
 
     fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_SHARED)
+        self.lock_or_unlock(arg2)
     }
 
     fn check_reserved_lock(
         &mut self,
         file: *mut sqlite3_file,
         p_res_out: *mut i32,
-    ) -> Result<bool> {
-        Ok(true)
+    ) -> Result<()> {
+        unsafe { *p_res_out = if self.lock_reserved() { 1 } else { 0 }; }
+        Ok(())
     }
 
     /// See https://www.sqlite.org/c3ref/file_control.html

@@ -79,6 +79,11 @@ impl Lock {
         })
     }
 
+    pub fn from_raw_fd(f1_fd: &RawFd) -> io::Result<Self> {
+        let f1 = unsafe { File::from_raw_fd(*f1_fd) };
+        Self::from_file(&f1)
+    }
+
     pub fn current(&self) -> LockKind {
         self.current
     }

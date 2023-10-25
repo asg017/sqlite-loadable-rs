@@ -15,28 +15,6 @@ use std::io::{Error, ErrorKind, Result};
 
 use super::traits::SqliteVfs;
 
-pub(crate) fn handle_bool(result: Result<bool>, ext_io_err: Option<c_int>) -> c_int {
-    match result {
-        Ok(i) => {
-            if i {
-                1
-            } else {
-                0
-            }
-        }
-        Err(e) => {
-            if let Some(inner_err) = e.into_inner() {
-                println!("error: {inner_err}");
-            }
-            if let Some(extended) = ext_io_err {
-                extended
-            } else {
-                SQLITE_ERROR
-            }
-        }
-    }
-}
-
 pub(crate) fn handle_int(result: Result<c_int>, ext_io_err: Option<c_int>) -> c_int {
     match result {
         Ok(i) => i,

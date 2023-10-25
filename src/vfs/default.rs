@@ -430,11 +430,11 @@ impl SqliteIoMethods for DefaultFile {
         &mut self,
         file: *mut sqlite3_file,
         p_res_out: *mut c_int,
-    ) -> Result<bool> {
+    ) -> Result<()> {
         unsafe {
             if let Some(xCheckReservedLock) = ((*self.methods_ptr).xCheckReservedLock) {
-                let result = xCheckReservedLock(self.file_ptr, p_res_out);
-                Ok(result > 0)
+                xCheckReservedLock(self.file_ptr, p_res_out);
+                Ok(())
             } else {
                 Err(Error::new(
                     ErrorKind::Other,

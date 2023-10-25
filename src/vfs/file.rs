@@ -13,7 +13,7 @@ use crate::vfs::traits::SqliteIoMethods;
 use crate::vfs::vfs::handle_error;
 use std::io::{Error, ErrorKind, Result};
 
-use super::vfs::{handle_bool, handle_int};
+use super::vfs::handle_int;
 
 // TODO use libsqlite3-dev, check installed: dpkg-query -l | grep sqlite
 
@@ -132,7 +132,7 @@ unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
     let result = m.aux.check_reserved_lock(file, pResOut);
     Box::into_raw(f);
     Box::into_raw(m);
-    handle_bool(result, None)
+    handle_error(result, None)
 }
 
 unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
