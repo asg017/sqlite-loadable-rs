@@ -97,15 +97,10 @@ impl Ops {
 
         self.file_fd = Some(raw_fd);
 
-        let lock = Lock::from_raw_fd(&raw_fd)?;
-
-        self.lock = Some(lock);
-
         Ok(())
     }
 
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
-        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         self.ring
@@ -126,7 +121,6 @@ impl Ops {
     }
 
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
-        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
         self.ring
@@ -146,9 +140,9 @@ impl Ops {
         Ok(())
     }
 
+    /*
     // TODO find io_uring op, this doesn't work
     pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
-        // let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
             .offset(0)
@@ -173,6 +167,7 @@ impl Ops {
         }
         Ok(())
     }
+    */
 
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         let result = libc::ftruncate(self.file_fd.unwrap(), size);
@@ -279,7 +274,16 @@ impl Ops {
         }
     }
 
-    pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {
+    fn init_lock(&mut self) {
+        if self.lock.is_none() {
+            let raw_fd = self.file_fd.unwrap();
+            let lock = Lock::from_raw_fd(&raw_fd).expect("should be fine");
+            self.lock = Some(lock);    
+        }
+    }
+
+    pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {      
+        self.init_lock();
         LockKind::from_repr(lock_request)
             .map(|kind| self.exclusive_requested_pending_acquired(kind))
             .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY } )
@@ -287,6 +291,7 @@ impl Ops {
     }
 
     pub fn lock_reserved(&mut self) -> bool {
+        self.init_lock();
         if let Some(lock) = &mut self.lock {
             lock.reserved()
         }else {
