@@ -51,11 +51,9 @@ impl SqliteVfs for IoUringVfs {
     ) -> Result<()> {
         let file_path = unsafe { CStr::from_ptr(z_name) };
 
-        let db_file_obj = unsafe { sqlite3ext_database_file_object(file_path.as_ptr()) };
         let mut file = Ops::new(file_path.to_owned(), 32);
 
-        file.open_file()
-            .map_err(|_| Error::new(ErrorKind::Other, "can't open file"))?;
+        file.open_file()?;
 
         unsafe {
             *p_file = *create_file_pointer(file);
@@ -185,9 +183,6 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
 
     // allocation is bound to lifetime of struct
     let name_ptr = ring_vfs.vfs_name.as_ptr();
-
-    // let file_size = std::mem::size_of::<FileWithAux<Ops>>();
-    // let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, file_size.try_into().unwrap());
 
     // vfs_file_size == 0, fixes the stack smash, when Box does the clean up
     let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, 0);

@@ -14,6 +14,14 @@ mod tests {
     }
 
     #[test]
+    fn test_lock_order() {
+        assert!(LockKind::None < LockKind::Shared);
+        assert!(LockKind::Shared < LockKind::Reserved);
+        assert!(LockKind::Reserved < LockKind::Pending);
+        assert!(LockKind::Pending < LockKind::Exclusive);
+    }
+
+    #[test]
     fn test_none() {
         let path = test_file(".test_none");
         let lock = Lock::new(&path).unwrap();

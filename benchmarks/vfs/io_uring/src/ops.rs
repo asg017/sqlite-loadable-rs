@@ -274,29 +274,32 @@ impl Ops {
         }
     }
 
-    fn init_lock(&mut self) {
+    fn init_lock(&mut self) -> Result<()> {
         if self.lock.is_none() {
-            let str = self.file_path.to_str().expect("should be a valid utf-8 string");
+            let err = Error::new(ErrorKind::Other, "bad file name");
+            let str = self.file_path.to_str().map_err(|_| err)?;
             // the fd from the ring, returns: os error 9
-            let lock = Lock::new(str).expect("should be a valid lock");
+
+            let lock = Lock::new(str)?;
             self.lock = Some(lock);    
         }
+        Ok(())
     }
 
     pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {      
-        self.init_lock();
+        self.init_lock()?;
         LockKind::from_repr(lock_request)
             .map(|kind| self.exclusive_requested_pending_acquired(kind))
             .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY } )
-            .ok_or_else(|| Error::new(ErrorKind::Other, "Missing"))
+            .ok_or_else(|| Error::new(ErrorKind::Other, "Missing lock"))
     }
 
-    pub fn lock_reserved(&mut self) -> bool {
-        self.init_lock();
+    pub fn lock_reserved(&mut self) -> Result<bool> {
+        self.init_lock()?;
         if let Some(lock) = &mut self.lock {
-            lock.reserved()
+            Ok(lock.reserved())
         }else {
-            false
+            Err(Error::new(ErrorKind::Other, "Missing lock"))
         }
     }
 }
@@ -345,7 +348,8 @@ impl SqliteIoMethods for Ops {
         file: *mut sqlite3_file,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        unsafe { *p_res_out = if self.lock_reserved() { 1 } else { 0 }; }
+        let lock_reserved = self.lock_reserved()?;
+        unsafe { *p_res_out = if lock_reserved { 1 } else { 0 }; }
         Ok(())
     }
 

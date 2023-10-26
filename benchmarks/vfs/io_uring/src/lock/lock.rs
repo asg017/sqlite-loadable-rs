@@ -64,26 +64,6 @@ impl Lock {
         })
     }
 
-    pub fn from_file(f1: &File) -> io::Result<Self> {
-        let f2 = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open(env::temp_dir().join(format!("{}.lck", f1.metadata()?.ino())))?;
-
-        Ok(Lock {
-            fd1: f1.as_raw_fd(),
-            fd1_owned: false,
-            fd2: f2.into_raw_fd(),
-            current: LockKind::None,
-        })
-    }
-
-    pub fn from_raw_fd(f1_fd: &RawFd) -> io::Result<Self> {
-        let f1 = unsafe { File::from_raw_fd(*f1_fd) };
-        Self::from_file(&f1)
-    }
-
     pub fn current(&self) -> LockKind {
         self.current
     }
