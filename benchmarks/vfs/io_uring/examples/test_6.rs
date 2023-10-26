@@ -10,7 +10,7 @@ fn main() -> rusqlite::Result<()> {
     let mut rng = rand::thread_rng();
 
     let tx = conn.transaction()?;
-    for _ in 0..500000 {
+    for _ in 0..25000 {
         let value1: i32 = rng.gen();
         let value2: i32 = rng.gen();
 
@@ -19,8 +19,8 @@ fn main() -> rusqlite::Result<()> {
     tx.commit()?;
 
     // fails if file is already indexed, TODO fix
-    conn.execute("CREATE INDEX i6a ON t6(a)", ())?;
-    conn.execute("CREATE INDEX i6b ON t6(b)", ())?;
+    conn.execute("CREATE INDEX IF NOT EXISTS i6a ON t6(a)", ())?;
+    conn.execute("CREATE INDEX IF NOT EXISTS i6b ON t6(b)", ())?;
 
     Ok(())
 }

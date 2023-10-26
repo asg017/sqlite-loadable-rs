@@ -15,7 +15,7 @@ fn main() -> rusqlite::Result<()> {
     for _ in 0..25000 {
         let value1: i32 = rng.gen();
         let value2: i32 = rng.gen();
-        let value3: String = format!("Value{}", thread_rng().gen_range(0..25000));
+        let value3: String = format!("Value {}", thread_rng().gen_range(0..25000));
 
         tx.execute(
             "INSERT INTO t2 (a, b, c) VALUES (?, ?, ?)",
