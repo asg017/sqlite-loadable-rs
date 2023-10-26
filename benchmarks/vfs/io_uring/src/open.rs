@@ -17,8 +17,6 @@ use std::time::Duration;
 
 use strum::FromRepr;
 
-use super::kind::LockKind;
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpenOptions {
     /// The object type that is being opened.

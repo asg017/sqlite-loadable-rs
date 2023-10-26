@@ -1,6 +1,8 @@
 #![allow(unused)]
 pub mod ops;
 pub mod lock;
+pub mod open;
+
 use ops::Ops;
 
 use sqlite_loadable::ext::{

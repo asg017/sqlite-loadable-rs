@@ -15,19 +15,6 @@ use std::io::{Error, ErrorKind, Result};
 
 use super::vfs::handle_int;
 
-// TODO use libsqlite3-dev, check installed: dpkg-query -l | grep sqlite
-
-// Before setting break, enter gdb, run with parameters, then just directly crash it, then run 'where'
-
-// Get only file numbers of matched pattern of crash revealed by valgrind, then sed to break on gdb:
-// egrep -n "isOpen\(pPager->fd" ./sqlite3.c | grep assert | cut -f1 -d: | sed 's/^/break sqlite3.c:/'
-
-// Segfaults:
-// valgrind --leak-check=full --track-origins=yes --trace-children=yes --show-leak-kinds=all --log-file=leaky.txt sqlite3 --init iouring.sql
-
-// Cause of crash, because io_method is dropped by the box when into_raw is enabled
-// #define isOpen(pFd) ((pFd)->pMethods!=0)
-
 /// Let aux and methods Boxes go out of scope, thus drop,
 unsafe extern "C" fn x_close<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
     let mut f = Box::<FileWithAux<T>>::from_raw(file.cast::<FileWithAux<T>>());
@@ -37,7 +24,7 @@ unsafe extern "C" fn x_close<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_i
     // Box::into_raw(m);
 
     // disabling crashes valgrind, reason: stack smashing, and free invalid pointer
-    // setting szOsFile to 0, fixes the stack smashing, only free'ing invalid pointer remains
+    // otherwise 8 bytes leak
     Box::into_raw(f);
 
     // Disabling both fails the unit tests, free(): invalid pointer
