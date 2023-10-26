@@ -276,8 +276,9 @@ impl Ops {
 
     fn init_lock(&mut self) {
         if self.lock.is_none() {
-            let raw_fd = self.file_fd.unwrap();
-            let lock = Lock::from_raw_fd(&raw_fd).expect("should be fine");
+            let str = self.file_path.to_str().expect("should be a valid utf-8 string");
+            // the fd from the ring, returns: os error 9
+            let lock = Lock::new(str).expect("should be a valid lock");
             self.lock = Some(lock);    
         }
     }

@@ -25,19 +25,19 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
     };
 
     conn.execute_batch(
-        "CREATE TABLE t1(a integer, b varchar(100));
-        CREATE TABLE t2(a integer, b integer, c varchar(100));
-        CREATE TABLE t3(a integer, b integer, c varchar(100));
-        CREATE INDEX i3 ON t3(c);
-        CREATE TABLE t4(a integer, b integer, c varchar(100));
-        CREATE TABLE t5(a integer, b integer, c varchar(100));
-        CREATE TABLE t6(a integer, b integer);
-        CREATE TABLE t7(a integer, b integer);
-        CREATE INDEX i7 ON t7(b);
-        CREATE TABLE t8(a integer, b integer);
-        CREATE TABLE t9(a integer, b integer);
-        CREATE TABLE t10(a integer, b integer, c varchar(100));
-        CREATE INDEX i10 ON t10(a);"
+        "CREATE TABLE IF NOT EXISTS t1(a integer, b varchar(100));
+        CREATE TABLE IF NOT EXISTS t2(a integer, b integer, c varchar(100));
+        CREATE TABLE IF NOT EXISTS t3(a integer, b integer, c varchar(100));
+        CREATE INDEX IF NOT EXISTS i3 ON t3(c);
+        CREATE TABLE IF NOT EXISTS t4(a integer, b integer, c varchar(100));
+        CREATE TABLE IF NOT EXISTS t5(a integer, b integer, c varchar(100));
+        CREATE TABLE IF NOT EXISTS t6(a integer, b integer);
+        CREATE TABLE IF NOT EXISTS t7(a integer, b integer);
+        CREATE INDEX IF NOT EXISTS i7 ON t7(b);
+        CREATE TABLE IF NOT EXISTS t8(a integer, b integer);
+        CREATE TABLE IF NOT EXISTS t9(a integer, b integer);
+        CREATE TABLE IF NOT EXISTS t10(a integer, b integer, c varchar(100));
+        CREATE INDEX IF NOT EXISTS i10 ON t10(a);"
     )?;
     
     Ok(conn)
