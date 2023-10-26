@@ -13,13 +13,15 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
 
     let conn = if args.len() == 2 {
         let file_path = args[1].as_str();
-        let conn = Connection::open(file_path)?;
         if file_path.contains("ring") {
+            let mem = Connection::open_in_memory()?;
             let stmt = format!("ATTACH io_uring_vfs_from_file('{}') AS inring", file_path);
             let stmt_str = stmt.as_str();
-            conn.execute(stmt_str, ())?;
+            mem.execute(stmt_str, ())?;
+            mem
+        }else {
+            Connection::open(file_path)?
         }
-        conn
     }else {
         Connection::open_in_memory()?
     };
