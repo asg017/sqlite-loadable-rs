@@ -2,7 +2,7 @@ use std::io::Result;
 
 use std::os::raw::{c_char, c_int, c_void};
 
-use sqlite3ext_sys::sqlite3_file;
+use crate::ext::sqlite3_file;
 
 #[cfg(feature = "vfs_loadext")]
 use sqlite3ext_sys::sqlite3_vfs;

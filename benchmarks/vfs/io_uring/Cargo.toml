@@ -6,16 +6,14 @@ edition = "2021"
 [dependencies]
 io-uring = "0.6.1"
 sqlite3ext-sys = {path="../../../sqlite3ext-sys"}
-sqlite-loadable = {path="../../../"}
-url = "2.4.1"
-mmap-rs = "0.6.0"
+sqlite-loadable = {path="../../../", features = ["static"]}
 libc = "0.2.148"
 log = "0.4"
 strum = { version = "0.25", features = ["derive"] }
 
 [dev-dependencies]
-rusqlite = "0.29.0"
-libsqlite3-sys = {version="0.26.0", default-features = false}
+rusqlite = "0.30.0"
+libsqlite3-sys = {version="0.27.0", default-features = false}
 tempfile = "3.8.0"
 rand = "0.8.5"
 

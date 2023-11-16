@@ -4,7 +4,7 @@ FROM debian:bookworm-slim
 RUN apt-get update
 
 # development
-RUN apt-get install -y curl valgrind build-essential clang pahole
+RUN apt-get install -y curl valgrind build-essential clang pahole git
 
 # connect with vs code remote via ssh
 RUN apt install -y openssh-server

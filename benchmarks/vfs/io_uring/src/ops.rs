@@ -115,9 +115,10 @@ impl Ops {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("read: raw os error result: {}", -cqe.result() as i32),
-            ))?;
+            ))
+        }else {
+            Ok(())
         }
-        Ok(())
     }
 
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
@@ -135,9 +136,10 @@ impl Ops {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("write: raw os error result: {}", -cqe.result() as i32),
-            ))?;
+            ))
+        }else {
+            Ok(())
         }
-        Ok(())
     }
 
     /*

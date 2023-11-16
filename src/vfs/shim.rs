@@ -12,22 +12,26 @@ use std::{
     ptr,
 };
 
-use sqlite3ext_sys::{
-    sqlite3_file, sqlite3_int64, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
-    sqlite3_vfs_find, SQLITE_ERROR, SQLITE_LOCK_NONE, SQLITE_OK,
+use crate::ext::{
+    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs,
+    sqlite3_vfs_find, sqlite3_io_methods,
 };
 
-pub struct DefaultVfs {
+use sqlite3ext_sys::{
+    SQLITE_ERROR, SQLITE_LOCK_NONE, SQLITE_OK
+};
+
+pub struct ShimVfs {
     default_vfs: *mut sqlite3_vfs,
 }
 
-impl DefaultVfs {
+impl ShimVfs {
     pub fn from_ptr(vfs: *mut sqlite3_vfs) -> Self {
-        DefaultVfs { default_vfs: vfs }
+        ShimVfs { default_vfs: vfs }
     }
 }
 
-impl SqliteVfs for DefaultVfs {
+impl SqliteVfs for ShimVfs {
     fn open(
         &mut self,
         z_name: *const c_char,
@@ -247,12 +251,12 @@ impl SqliteVfs for DefaultVfs {
 }
 
 /// See ORIGFILE https://www.sqlite.org/src/file?name=ext/misc/cksumvfs.c
-pub struct DefaultFile {
+pub struct ShimFile {
     methods_ptr: *mut sqlite3_io_methods,
     file_ptr: *mut sqlite3_file,
 }
 
-impl DefaultFile {
+impl ShimFile {
     pub fn from_ptr(file_ptr: *mut sqlite3_file) -> Self {
         if file_ptr.is_null() {
             return Self {
@@ -267,7 +271,7 @@ impl DefaultFile {
     }
 }
 
-impl SqliteIoMethods for DefaultFile {
+impl SqliteIoMethods for ShimFile {
     fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe {
             if let Some(xClose) = ((*self.methods_ptr).xClose) {

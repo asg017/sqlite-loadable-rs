@@ -22,7 +22,8 @@ pub use libsqlite3_sys::{
     sqlite3_index_constraint_usage as sqlite3_index_info_sqlite3_index_constraint_usage,
     sqlite3_index_info, sqlite3_index_orderby as sqlite3_index_info_sqlite3_index_orderby,
     sqlite3_module, sqlite3_stmt, sqlite3_value, sqlite3_vtab, sqlite3_vtab_cursor,
-    sqlite3_database_file_object
+    sqlite3_database_file_object, sqlite3_vfs_unregister, sqlite3_vfs_register, sqlite3_vfs_find,
+    sqlite3_vfs, sqlite3_file_control, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods,
 };
 
 #[cfg(not(feature = "static"))]
@@ -30,7 +31,8 @@ pub use sqlite3ext_sys::{
     sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_index_info, sqlite3_file,
     sqlite3_index_info_sqlite3_index_constraint, sqlite3_index_info_sqlite3_index_constraint_usage,
     sqlite3_index_info_sqlite3_index_orderby, sqlite3_module, sqlite3_stmt, sqlite3_value,
-    sqlite3_vtab, sqlite3_vtab_cursor, sqlite3_vfs_unregister, sqlite3_vfs_register, sqlite3_vfs_find, sqlite3_vfs, sqlite3_file_control
+    sqlite3_vtab, sqlite3_vtab_cursor, sqlite3_vfs_unregister, sqlite3_vfs_register, sqlite3_vfs_find,
+    sqlite3_vfs, sqlite3_file_control, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_io_methods,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -675,7 +677,7 @@ pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
 }
 
 #[cfg(feature = "static")]
-pub unsafe fn sqlite3ext_database_file_object(s: *const c_char) -> i32 {
+pub unsafe fn sqlite3ext_database_file_object(s: *const c_char) -> *mut sqlite3_file {
     libsqlite3_sys::sqlite3_database_file_object(s)
 }
 #[cfg(not(feature = "static"))]

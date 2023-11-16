@@ -1,10 +1,14 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-use sqlite3ext_sys::{
-    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs, SQLITE_CANTOPEN_FULLPATH,
-    SQLITE_ERROR, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_OK,
+use crate::ext::{
+    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs,
 };
+
+use sqlite3ext_sys::{
+    SQLITE_CANTOPEN_FULLPATH, SQLITE_ERROR, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_OK, SQLITE_CANTOPEN
+};
+
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
@@ -61,7 +65,7 @@ unsafe extern "C" fn x_open<T: SqliteVfs>(
     Box::into_raw(b);
     Box::into_raw(vfs);
 
-    handle_error(result, None /* SQLITE_IOERR_OPEN */)
+    handle_error(result, Some(SQLITE_CANTOPEN))
 }
 
 unsafe extern "C" fn x_delete<T: SqliteVfs>(
@@ -370,7 +374,9 @@ fn handle_vfs_result(result: i32) -> crate::Result<()> {
 pub fn register_boxed_vfs(vfs: sqlite3_vfs, make_default: bool) -> crate::Result<()> {
     let translate_to_int = if make_default { 1 } else { 0 };
 
-    let result = unsafe { sqlite3ext_vfs_register(Box::into_raw(Box::new(vfs)), translate_to_int) };
+    let boxed_vfs = Box::into_raw(Box::new(vfs));
+
+    let result = unsafe { sqlite3ext_vfs_register(boxed_vfs, translate_to_int) };
 
     handle_vfs_result(result)
 }

@@ -77,7 +77,7 @@ pub enum OpenAccess {
     Write = 2,
 
     /// Create the file if it does not exist (includes write and read access).
-    Create = 4,
+    Create = 6,
 
     /// Create the file, but throw if it it already exist (includes write and read access).
     CreateNewThrowIfExists = 8, // TODO figure out how to support on io_uring

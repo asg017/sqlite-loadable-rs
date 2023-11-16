@@ -32,5 +32,4 @@ pub use table::{
 
 #[doc(inline)]
 pub use vfs::vfs::register_boxed_vfs;
-pub use vfs::file::create_file_pointer;
 pub use vfs::traits::{SqliteIoMethods, SqliteVfs};

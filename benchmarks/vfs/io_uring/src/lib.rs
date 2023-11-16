@@ -8,7 +8,9 @@ use ops::Ops;
 use sqlite_loadable::ext::{
     sqlite3ext_context_db_handle, sqlite3ext_database_file_object, sqlite3ext_file_control,
     sqlite3ext_vfs_find, sqlite3ext_vfs_register,
+    sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
 };
+
 use sqlite_loadable::vfs::default::{DefaultFile, DefaultVfs};
 use sqlite_loadable::vfs::vfs::create_vfs;
 
@@ -17,7 +19,6 @@ use sqlite_loadable::{
     api, create_file_pointer, define_scalar_function, prelude::*, register_boxed_vfs,
     vfs::traits::SqliteVfs, SqliteIoMethods,
 };
-use url::Url;
 
 use std::ffi::{CStr, CString};
 use std::fs::{self, File};
@@ -25,7 +26,7 @@ use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_void};
 use std::{mem, ptr};
 
-use sqlite3ext_sys::{sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs};
+// use sqlite3ext_sys::{sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs};
 use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_IOERR_DELETE, SQLITE_OPEN_MAIN_DB, SQLITE_OPEN_WAL};
 
 use std::io::{Error, ErrorKind, Result};
@@ -36,7 +37,7 @@ use std::io::{Error, ErrorKind, Result};
 // source: https://voidstar.tech/sqlite_insert_speed
 // source: https://www.sqlite.org/speed.html
 
-const EXTENSION_NAME: &str = "iouring";
+pub const EXTENSION_NAME: &str = "iouring";
 
 struct IoUringVfs {
     default_vfs: DefaultVfs,
@@ -167,7 +168,7 @@ fn vfs_from_file(
 }
 
 // See Cargo.toml "[[lib]] name = ..." matches this function name
-#[sqlite_entrypoint_permanent]
+#[sqlite_entrypoint]
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
 
