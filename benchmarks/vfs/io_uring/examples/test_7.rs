@@ -22,8 +22,9 @@ fn main() -> rusqlite::Result<()> {
         let lower_bound = i * 100;
         let upper_bound = (i + 1) + 100;
 
-        let _ = conn.prepare("SELECT count(*), avg(b) FROM t7 WHERE b >= ?1 AND b < ?2")?.
-            query([lower_bound, upper_bound])?;
+        let _ = conn
+            .prepare("SELECT count(*), avg(b) FROM t7 WHERE b >= ?1 AND b < ?2")?
+            .query([lower_bound, upper_bound])?;
     }
     Ok(())
 }

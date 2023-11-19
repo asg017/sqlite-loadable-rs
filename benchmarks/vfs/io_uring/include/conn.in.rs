@@ -23,25 +23,6 @@ fn open_io_uring_connection(db: &str) -> rusqlite::Result<Connection> {
         EXTENSION_NAME,
     )?;
 
-    // TODO support as rkusa/sqlite_vfs's implementation
-    /*
-    conn.execute_batch(
-        r#"
-        PRAGMA page_size=32768;
-        --! PRAGMA journal_mode = TRUNCATE;
-        --! PRAGMA journal_mode = MEMORY;
-        "#,
-    )?;
-    */
-
-    // conn.execute_batch(
-    //     r#"
-    //     PRAGMA page_size=32768;
-    //     --! PRAGMA journal_mode = TRUNCATE;
-    //     --! PRAGMA journal_mode = MEMORY;
-    //     "#
-    // )?;
-
     // let conn = Connection::open_in_memory()?;
     // let _ = conn.execute("ATTACH DATABASE io_uring_vfs_from_file(?1) as ?2", [db, iouring_db_alias])?;
     

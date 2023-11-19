@@ -15,7 +15,7 @@ use sqlite3ext_sys::{SQLITE_IOERR_SHMLOCK, SQLITE_IOERR_SHMMAP};
 use sqlite_loadable::SqliteIoMethods;
 use std::io::{Error, ErrorKind, Result};
 
-use sqlite3ext_sys::{SQLITE_LOCK_SHARED, SQLITE_BUSY, SQLITE_OK};
+use sqlite3ext_sys::{SQLITE_BUSY, SQLITE_LOCK_SHARED, SQLITE_OK};
 
 // IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
 
@@ -116,7 +116,7 @@ impl Ops {
                 ErrorKind::Other,
                 format!("read: raw os error result: {}", -cqe.result() as i32),
             ))
-        }else {
+        } else {
             Ok(())
         }
     }
@@ -137,7 +137,7 @@ impl Ops {
                 ErrorKind::Other,
                 format!("write: raw os error result: {}", -cqe.result() as i32),
             ))
-        }else {
+        } else {
             Ok(())
         }
     }
@@ -271,7 +271,7 @@ impl Ops {
     fn exclusive_requested_pending_acquired(&mut self, to: LockKind) -> bool {
         if let Some(lock) = &mut self.lock {
             lock.lock(to) && lock.current() == to
-        }else {
+        } else {
             false
         }
     }
@@ -283,16 +283,16 @@ impl Ops {
             // the fd from the ring, returns: os error 9
 
             let lock = Lock::new(str)?;
-            self.lock = Some(lock);    
+            self.lock = Some(lock);
         }
         Ok(())
     }
 
-    pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {      
+    pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {
         self.init_lock()?;
         LockKind::from_repr(lock_request)
             .map(|kind| self.exclusive_requested_pending_acquired(kind))
-            .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY } )
+            .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY })
             .ok_or_else(|| Error::new(ErrorKind::Other, "Missing lock"))
     }
 
@@ -300,7 +300,7 @@ impl Ops {
         self.init_lock()?;
         if let Some(lock) = &mut self.lock {
             Ok(lock.reserved())
-        }else {
+        } else {
             Err(Error::new(ErrorKind::Other, "Missing lock"))
         }
     }
@@ -345,13 +345,11 @@ impl SqliteIoMethods for Ops {
         self.lock_or_unlock(arg2)
     }
 
-    fn check_reserved_lock(
-        &mut self,
-        file: *mut sqlite3_file,
-        p_res_out: *mut i32,
-    ) -> Result<()> {
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
         let lock_reserved = self.lock_reserved()?;
-        unsafe { *p_res_out = if lock_reserved { 1 } else { 0 }; }
+        unsafe {
+            *p_res_out = if lock_reserved { 1 } else { 0 };
+        }
         Ok(())
     }
 

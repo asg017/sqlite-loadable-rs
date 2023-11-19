@@ -25,8 +25,9 @@ fn main() -> rusqlite::Result<()> {
 
     let tx2 = conn.transaction()?;
     for i in 0..9 {
-        let _ = tx2.prepare("SELECT count(*), avg(b) FROM t5 WHERE c LIKE ?1")?.
-            query([i])?;
+        let _ = tx2
+            .prepare("SELECT count(*), avg(b) FROM t5 WHERE c LIKE ?1")?
+            .query([i])?;
     }
     tx2.commit()?;
     Ok(())

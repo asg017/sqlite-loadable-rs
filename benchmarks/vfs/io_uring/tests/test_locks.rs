@@ -2,7 +2,7 @@
 mod tests {
     use std::fs;
     use std::path::PathBuf;
-    
+
     use _iouringvfs::lock::*;
 
     fn test_file(name: &str) -> PathBuf {
@@ -27,7 +27,7 @@ mod tests {
         let lock = Lock::new(&path).unwrap();
         assert_eq!(lock.current(), LockKind::None);
     }
- 
+
     #[test]
     fn test_shared() {
         let path = test_file(".test_shared");
@@ -85,7 +85,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "cannot explicitly request pending lock (request explicit lock instead)")]
+    #[should_panic(
+        expected = "cannot explicitly request pending lock (request explicit lock instead)"
+    )]
     fn test_shared_to_pending_panic() {
         let path = test_file(".test_shared_to_pending_panic");
         let mut lock = Lock::new(&path).unwrap();
@@ -94,7 +96,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "cannot explicitly request pending lock (request explicit lock instead)")]
+    #[should_panic(
+        expected = "cannot explicitly request pending lock (request explicit lock instead)"
+    )]
     fn test_reserved_to_pending_panic() {
         let path = test_file(".test_reserved_to_pending_panic");
         let mut lock = Lock::new(&path).unwrap();

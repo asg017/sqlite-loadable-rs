@@ -27,12 +27,10 @@ mod tests {
             (),
         )?;
 
-        let result: String = conn
-            .query_row("select x from t3 where y = 4", (), |x| x.get(0))?;
+        let result: String = conn.query_row("select x from t3 where y = 4", (), |x| x.get(0))?;
 
         assert_eq!(result, "a");
 
         Ok(())
     }
 }
- 

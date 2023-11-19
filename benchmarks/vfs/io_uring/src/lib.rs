@@ -1,14 +1,14 @@
 #![allow(unused)]
-pub mod ops;
 pub mod lock;
 pub mod open;
+pub mod ops;
 
 use ops::Ops;
 
 use sqlite_loadable::ext::{
+    sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
     sqlite3ext_context_db_handle, sqlite3ext_database_file_object, sqlite3ext_file_control,
     sqlite3ext_vfs_find, sqlite3ext_vfs_register,
-    sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
 };
 
 use sqlite_loadable::vfs::default::{DefaultFile, DefaultVfs};
