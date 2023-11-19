@@ -2,6 +2,13 @@
 
 include!("../include/mem_vfs.in.rs");
 
+#[derive(Debug)]
+struct Person {
+    id: i32,
+    name: String,
+    data: Option<Vec<u8>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -31,29 +38,41 @@ mod tests {
         _conn.close();
 
         let conn = Connection::open_with_flags_and_vfs(
-            "db/not_really_opened.db",
-                OpenFlags::SQLITE_OPEN_READ_WRITE
-                | OpenFlags::SQLITE_OPEN_CREATE,
-            // | OpenFlags::SQLITE_OPEN_MEMORY, // skips File creation altogether
-            // | OpenFlags::SQLITE_OPEN_EXCLUSIVE, // it is a no-op, used internally
+            "db/100-bytes.db",
+            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
             EXTENSION_NAME,
         )?;
 
-        conn.execute_batch(r#"
-            PRAGMA locking_mode = EXCLUSIVE;
-            PRAGMA journal_mode = TRUNCATE;"#)?;
-
-        conn.execute("CREATE TABLE t3(x, y)", ())?;
-
         conn.execute(
-            "INSERT INTO t3 VALUES('a', 4),('b', 5),('c', 3),('d', 8),('e', 1)",
-            (),
+            "CREATE TABLE person (
+                id    INTEGER PRIMARY KEY,
+                name  TEXT NOT NULL,
+                data  BLOB
+            )",
+            (), // empty list of parameters.
+        )?;
+        let me = Person {
+            id: 0,
+            name: "Batman".to_string(),
+            data: None,
+        };
+        conn.execute(
+            "INSERT INTO person (name, data) VALUES (?1, ?2)",
+            (&me.name, &me.data),
         )?;
 
-        let result: String = conn
-            .query_row("SELECT x FROM t3 WHERE y = 4", (), |x| x.get(0))?;
+        let mut stmt = conn.prepare("SELECT id, name, data FROM person")?;
+        let person_iter = stmt.query_map([], |row| {
+            Ok(Person {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                data: row.get(2)?,
+            })
+        })?;
 
-        assert_eq!(result, "a");
+        for person in person_iter {
+            println!("Found person {:?}", person.unwrap());
+        }
 
         Ok(())
     }

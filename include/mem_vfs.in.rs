@@ -1,20 +1,18 @@
 use sqlite_loadable::ext::{sqlite3ext_vfs_find, sqlite3ext_context_db_handle, sqlite3ext_file_control};
 use sqlite_loadable::vfs::shim::ShimVfs;
 use sqlite_loadable::vfs::vfs::create_vfs;
-use sqlite_loadable::vfs::file::create_io_methods_ptr;
+use sqlite_loadable::vfs::file::{FileWithAux, prepare_file_ptr};
 
 use sqlite_loadable::{prelude::*, SqliteIoMethods, register_boxed_vfs, define_scalar_function, api, vfs::traits::SqliteVfs};
 
 use std::ffi::{CString, CStr};
-use std::fs::{File, self};
 use std::io::{Write, Read, self};
 use std::os::raw::{c_void, c_char};
 use std::{ptr, mem};
 
 use sqlite_loadable::ext::{sqlite3_syscall_ptr, sqlite3_file, sqlite3_vfs, sqlite3_io_methods};
-use sqlite3ext_sys::{SQLITE_IOERR_SHMMAP, SQLITE_IOERR_SHMLOCK,
-    SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOERR_DELETE,
-    SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE, SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN,
+use sqlite3ext_sys::{
+    SQLITE_CANTOPEN, SQLITE_OPEN_MAIN_DB, SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE, SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN,
     SQLITE_IOCAP_SAFE_APPEND, SQLITE_IOCAP_SEQUENTIAL, SQLITE_LOCK_EXCLUSIVE, SQLITE_LOCK_SHARED, SQLITE_OK};
 
 use std::io::{Error, Result, ErrorKind};
@@ -36,10 +34,10 @@ struct MemVfs {
 const EXTENSION_NAME: &str = "memvfs";
 
 fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
-    let metadata = fs::metadata(path)?;
+    let metadata = std::fs::metadata(path)?;
     let file_size = metadata.len() as usize;
 
-    let mut file = File::open(path)?;
+    let mut file = std::fs::File::open(path)?;
 
     file.read_to_end(dest)?;
     
@@ -49,34 +47,22 @@ fn write_file_to_vec_u8(path: &str, dest: &mut Vec<u8>) -> Result<()> {
 impl SqliteVfs for MemVfs {
     fn open(&mut self, z_name: *const c_char, p_file: *mut sqlite3_file, flags: i32, p_res_out: *mut i32) -> Result<()> {
         let mut mem_file = MemFile {
-            file_contents: vec![
-                0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33, 0x00,
-                0x10, 0x00, 0x01, 0x01, 0x00, 0x40, 0x20, 0x20, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
-                0x00, 0x2e, 0x63, 0x01
-            ],
+            file_contents: vec![],
         };
 
-        /*
-        let mut j: u32 = 0;
-        for i in &mem_file.file_contents {
-            println!("{}:\t{}\t{}", j, i, *i as char);
-            j = j + 1;
-        }
-        */
-        
         unsafe {
-            (*p_file).pMethods = create_io_methods_ptr(mem_file);
+            let file_name_cstr = CStr::from_ptr(z_name);
+            let file_name = file_name_cstr.to_str()
+                .map_err(|_| Error::new(ErrorKind::Other, "conversion to string failed"))?;
+            write_file_to_vec_u8(file_name, &mut mem_file.file_contents);
+            prepare_file_ptr(p_file, mem_file);
         }
     
         Ok(())
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
-        Err(Error::new(ErrorKind::Other, "Unable to delete in memory mode"))
+        Ok(())
     }
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
@@ -185,7 +171,7 @@ impl SqliteIoMethods for MemFile {
             source.extend(vec![0; new_len - prev_len]);
         }
 
-        let src_ptr = source[offset..(size-1)].as_ptr();
+        let src_ptr = source[offset..(offset + size-1)].as_ptr();
         unsafe { ptr::copy_nonoverlapping(src_ptr, buf.cast(), size) }
     
         Ok(())
@@ -224,11 +210,11 @@ impl SqliteIoMethods for MemFile {
     }
 
     fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_EXCLUSIVE) // or SQLITE_LOCK_BUSY
+        Ok(0) // or SQLITE_LOCK_BUSY
     }
 
     fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
-        Ok(SQLITE_LOCK_SHARED)
+        Ok(0)
     }
 
     fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
@@ -248,7 +234,7 @@ impl SqliteIoMethods for MemFile {
         let settings = SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
-        SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN |
+        // SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN |
         SQLITE_IOCAP_SEQUENTIAL;
         Ok(settings)
     }
@@ -303,7 +289,7 @@ pub fn sqlite3_memvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
     };
     let name_ptr = mem_vfs.name.as_ptr();
 
-    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, std::mem::size_of::<sqlite3_file>() as i32);
+    let vfs: sqlite3_vfs = create_vfs(mem_vfs, name_ptr, 1024, std::mem::size_of::<FileWithAux<MemFile>>() as i32);
 
     register_boxed_vfs(vfs, true)?;
 

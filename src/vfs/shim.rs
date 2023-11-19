@@ -13,13 +13,11 @@ use std::{
 };
 
 use crate::ext::{
-    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs,
-    sqlite3_vfs_find, sqlite3_io_methods,
+    sqlite3_file, sqlite3_int64, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
+    sqlite3_vfs_find,
 };
 
-use sqlite3ext_sys::{
-    SQLITE_ERROR, SQLITE_LOCK_NONE, SQLITE_OK
-};
+use sqlite3ext_sys::{SQLITE_ERROR, SQLITE_LOCK_NONE, SQLITE_OK};
 
 pub struct ShimVfs {
     default_vfs: *mut sqlite3_vfs,

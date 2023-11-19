@@ -32,7 +32,6 @@ pub trait SqliteIoMethods {
     fn sync(&mut self, file: *mut sqlite3_file, flags: c_int) -> Result<()>;
     fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()>;
 
-
     /// Lock the database. Returns whether the requested lock could be acquired.
     /// Locking sequence:
     /// - The lock is never moved from [LockKind::None] to anything higher than [LockKind::Shared].
@@ -45,11 +44,8 @@ pub trait SqliteIoMethods {
 
     /// Check if the database this handle points to holds a [LockKind::Reserved],
     /// [LockKind::Pending] or [LockKind::Exclusive] lock.
-    fn check_reserved_lock(
-        &mut self,
-        file: *mut sqlite3_file,
-        p_res_out: *mut c_int,
-    ) -> Result<()>;
+    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut c_int)
+        -> Result<()>;
     fn file_control(
         &mut self,
         file: *mut sqlite3_file,

@@ -1,12 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(unused)]
 
-use crate::ext::{
-    sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs,
-};
+use crate::ext::{sqlite3_file, sqlite3_int64, sqlite3_syscall_ptr, sqlite3_vfs};
 
 use sqlite3ext_sys::{
-    SQLITE_CANTOPEN_FULLPATH, SQLITE_ERROR, SQLITE_IOERR_ACCESS, SQLITE_IOERR_DELETE, SQLITE_OK, SQLITE_CANTOPEN
+    SQLITE_CANTOPEN, SQLITE_CANTOPEN_FULLPATH, SQLITE_ERROR, SQLITE_IOERR_ACCESS,
+    SQLITE_IOERR_DELETE, SQLITE_OK,
 };
 
 use std::ffi::{CStr, CString};
