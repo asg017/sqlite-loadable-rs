@@ -1,21 +1,13 @@
 use _iouringvfs::sqlite3_iouringvfs_init;
 use rusqlite::{ffi::sqlite3_auto_extension, Connection};
 
-pub const iouring_db_alias: &str = "ring";
+pub const IOURING_DB_ALIAS: &str = "ring";
 
 fn open_io_uring_connection(db: &str) -> rusqlite::Result<Connection> {
-    // BUG: Somehow to execute the next Connection::open_with_flags_and_vfs statement
-    // another valid vfs must loaded beforehand therwise, the new vfs cannot be located.
-    // Reproducible on the following dependencies:
-    // - rusqlite = "0.29.0"
-    // - libsqlite3-sys = {version="0.26.0", default-features = false}
-
-
     // sqlite3OsRead lost mapped object and crashes
     use rusqlite::OpenFlags;
     use _iouringvfs::EXTENSION_NAME;
 
-    // let conn = Connection::open_in_memory()?;
     let conn = Connection::open_with_flags_and_vfs(
         db,
         OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -39,6 +31,9 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
             sqlite3_iouringvfs_init as *const (),
         )));
     }
+
+    let _conn = Connection::open_in_memory()?;
+    _conn.close().expect("closed wrong");
 
     let conn = if args.len() == 2 {
         let file_path = args[1].as_str();

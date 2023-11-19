@@ -11,13 +11,13 @@ use sqlite_loadable::ext::{
     sqlite3ext_vfs_find, sqlite3ext_vfs_register,
 };
 
-use sqlite_loadable::vfs::default::{DefaultFile, DefaultVfs};
+use sqlite_loadable::vfs::shim::{ShimFile, ShimVfs};
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::vfs::file::{FileWithAux, MethodsWithAux};
+use sqlite_loadable::vfs::file::{prepare_file_ptr, FileWithAux};
 use sqlite_loadable::{
-    api, create_file_pointer, define_scalar_function, prelude::*, register_boxed_vfs,
-    vfs::traits::SqliteVfs, SqliteIoMethods,
+    api, define_scalar_function, prelude::*, register_boxed_vfs, vfs::traits::SqliteVfs,
+    SqliteIoMethods,
 };
 
 use std::ffi::{CStr, CString};
@@ -40,7 +40,7 @@ use std::io::{Error, ErrorKind, Result};
 pub const EXTENSION_NAME: &str = "iouring";
 
 struct IoUringVfs {
-    default_vfs: DefaultVfs,
+    default_vfs: ShimVfs,
     vfs_name: CString,
 }
 
@@ -59,7 +59,7 @@ impl SqliteVfs for IoUringVfs {
         file.open_file()?;
 
         unsafe {
-            *p_file = *create_file_pointer(file);
+            prepare_file_ptr(p_file, file);
         }
 
         Ok(())
@@ -172,14 +172,14 @@ fn vfs_from_file(
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
 
-    let shimmed_name = CString::new("unix-dotfile").unwrap();
+    let shimmed_name = CString::new("unix").unwrap();
     let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
     let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
 
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {
             // pass thru
-            DefaultVfs::from_ptr(shimmed_vfs)
+            ShimVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
     };
@@ -188,7 +188,12 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
     let name_ptr = ring_vfs.vfs_name.as_ptr();
 
     // vfs_file_size == 0, fixes the stack smash, when Box does the clean up
-    let vfs: sqlite3_vfs = create_vfs(ring_vfs, name_ptr, 1024, 0);
+    let vfs: sqlite3_vfs = create_vfs(
+        ring_vfs,
+        name_ptr,
+        1024,
+        std::mem::size_of::<FileWithAux<Ops>>() as i32,
+    );
 
     register_boxed_vfs(vfs, false)?;
 

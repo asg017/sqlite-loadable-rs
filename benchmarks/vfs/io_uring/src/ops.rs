@@ -6,7 +6,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 
 use io_uring::types::Fd;
-use sqlite3ext_sys::sqlite3_file;
 use sqlite3ext_sys::{
     SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE, SQLITE_IOCAP_SAFE_APPEND,
     SQLITE_IOCAP_SEQUENTIAL,
@@ -19,8 +18,8 @@ use sqlite3ext_sys::{SQLITE_BUSY, SQLITE_LOCK_SHARED, SQLITE_OK};
 
 // IO Uring errors: https://codebrowser.dev/linux/linux/include/uapi/asm-generic/errno-base.h.html
 
-use sqlite_loadable::ext::sqlite3ext_vfs_find;
-use sqlite_loadable::vfs::default::{DefaultFile, DefaultVfs};
+use sqlite_loadable::ext::{sqlite3_file, sqlite3ext_vfs_find};
+use sqlite_loadable::vfs::shim::{ShimFile, ShimVfs};
 use std::{mem, ptr};
 
 use io_uring::{opcode, register, types, IoUring};
