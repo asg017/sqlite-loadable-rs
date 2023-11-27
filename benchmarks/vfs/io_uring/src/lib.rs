@@ -3,6 +3,8 @@ pub mod lock;
 pub mod open;
 pub mod ops;
 
+use io_uring::IoUring;
+use libc::name_t;
 use ops::Ops;
 
 use sqlite_loadable::ext::{
@@ -14,7 +16,7 @@ use sqlite_loadable::ext::{
 use sqlite_loadable::vfs::shim::{ShimFile, ShimVfs};
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::vfs::file::{prepare_file_ptr, FileWithAux};
+use sqlite_loadable::vfs::file::{create_io_methods_boxed, FileWithAux};
 use sqlite_loadable::{
     api, define_scalar_function, prelude::*, register_boxed_vfs, vfs::traits::SqliteVfs,
     SqliteIoMethods,
@@ -24,6 +26,7 @@ use std::ffi::{CStr, CString};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_void};
+use std::sync::Arc;
 use std::{mem, ptr};
 
 // use sqlite3ext_sys::{sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs};
@@ -38,10 +41,12 @@ use std::io::{Error, ErrorKind, Result};
 // source: https://www.sqlite.org/speed.html
 
 pub const EXTENSION_NAME: &str = "iouring";
+pub const RING_SIZE: u32 = 32;
 
 struct IoUringVfs {
     default_vfs: ShimVfs,
     vfs_name: CString,
+    ring: IoUring,
 }
 
 impl SqliteVfs for IoUringVfs {
@@ -52,15 +57,17 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let file_path = unsafe { CStr::from_ptr(z_name) };
+        let file_path: CString = unsafe { CStr::from_ptr(z_name).into() };
 
-        let mut file = Ops::new(file_path.to_owned(), 32);
-
-        file.open_file()?;
+        let mut uring_ops = Ops::from_ring(file_path.clone(), &mut self.ring);
 
         unsafe {
-            prepare_file_ptr(p_file, file);
-        }
+            let mut f = &mut (*p_file.cast::<FileWithAux<Ops>>());
+            std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops<'static>>());
+            std::mem::replace(&mut f.aux, uring_ops); // nope, a field drops
+
+            f.aux.open_file();
+        };
 
         Ok(())
     }
@@ -182,6 +189,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
             ShimVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
+        ring: IoUring::new(RING_SIZE).unwrap(),
     };
 
     // allocation is bound to lifetime of struct
@@ -192,7 +200,8 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
         ring_vfs,
         name_ptr,
         1024,
-        std::mem::size_of::<FileWithAux<Ops>>() as i32,
+        // Either rust or sqlite3 has ownership and thus manages the memory
+        std::mem::size_of::<FileWithAux<Ops>>() as i32, // nope, std::mem::replace's move drops IOUring prematurely
     );
 
     register_boxed_vfs(vfs, false)?;

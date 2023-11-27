@@ -6,6 +6,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 
 use io_uring::types::Fd;
+use libc::c_char;
 use sqlite3ext_sys::{
     SQLITE_IOCAP_ATOMIC, SQLITE_IOCAP_POWERSAFE_OVERWRITE, SQLITE_IOCAP_SAFE_APPEND,
     SQLITE_IOCAP_SEQUENTIAL,
@@ -36,21 +37,31 @@ const USER_DATA_FALLOCATE: u64 = 0x5;
 const USER_DATA_CLOSE: u64 = 0x6;
 const USER_DATA_FSYNC: u64 = 0x7;
 
-pub struct Ops {
-    ring: IoUring,
-    file_path: CString,
+// Tested on kernels 5.15.49, 6.3.13
+pub struct Ops<'a> {
+    ring: &'a mut IoUring,
+    file_path: *mut c_char,
     file_fd: Option<i32>,
     lock: Option<Lock>,
 }
 
-impl Ops {
+impl<'a> Ops<'a> {
+    // Used for tests
     pub fn new(file_path: CString, ring_size: u32) -> Self {
-        // Tested on kernels 5.15.49, 6.3.13
-        let mut ring = IoUring::new(ring_size).unwrap();
+        let mut ring = Box::into_raw(Box::new(IoUring::new(ring_size).unwrap()));
 
         Ops {
+            ring: unsafe { &mut (*ring) },
+            file_path: file_path.clone().into_raw(),
+            file_fd: None,
+            lock: None,
+        }
+    }
+
+    pub fn from_ring(file_path: CString, ring: &'a mut IoUring) -> Self {
+        Ops {
             ring,
-            file_path,
+            file_path: file_path.clone().into_raw(),
             file_fd: None,
             lock: None,
         }
@@ -68,7 +79,7 @@ impl Ops {
             .flags(flags)
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
-        let open_e = opcode::OpenAt2::new(dirfd, self.file_path.as_ptr(), &openhow);
+        let open_e = opcode::OpenAt2::new(dirfd, self.file_path, &openhow);
 
         unsafe {
             self.ring
@@ -89,14 +100,13 @@ impl Ops {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("open_file: raw os error result: {}", -cqe.result() as i32),
-            ))?;
+            ))
+        }else {
+            let raw_fd: RawFd = result.try_into().unwrap();
+            self.file_fd = Some(raw_fd);
+
+            Ok(())    
         }
-
-        let raw_fd: RawFd = result.try_into().unwrap();
-
-        self.file_fd = Some(raw_fd);
-
-        Ok(())
     }
 
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
@@ -176,9 +186,10 @@ impl Ops {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("truncate: raw os error result: {}", result),
-            ))?;
+            ))
+        }else {
+            Ok(())
         }
-        Ok(())
     }
 
     // SQLite Documentation:
@@ -194,7 +205,7 @@ impl Ops {
     }
 
     pub unsafe fn o_close(&mut self) -> Result<()> {
-        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Close::new(fd);
 
         self.ring
@@ -211,10 +222,12 @@ impl Ops {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("close: raw os error result: {}", -cqe.result() as i32),
-            ))?;
+            ))
+        } else {
+            // clean up
+            CString::from_raw(self.file_path);
+            Ok(())
         }
-
-        Ok(())
     }
 
     pub unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
@@ -222,7 +235,7 @@ impl Ops {
         let mut statx_buf_ptr: *mut libc::statx = &mut statx_buf;
 
         let dirfd = types::Fd(libc::AT_FDCWD);
-        let statx_op = opcode::Statx::new(dirfd, self.file_path.as_ptr(), statx_buf_ptr as *mut _)
+        let statx_op = opcode::Statx::new(dirfd, self.file_path, statx_buf_ptr as *mut _)
             .flags(libc::AT_EMPTY_PATH)
             .mask(libc::STATX_ALL);
 
@@ -244,7 +257,7 @@ impl Ops {
 
     // TODO write unit test
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
-        let fd = types::Fixed(self.file_fd.unwrap().try_into().unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let op = opcode::Fsync::new(fd);
 
         self.ring
@@ -261,10 +274,11 @@ impl Ops {
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("raw os error result: {}", -cqe.result() as i32),
-            ))?;
+                format!("fsync: raw os error result: {}", -cqe.result() as i32),
+            ))
+        }else {
+            Ok(())
         }
-        Ok(())
     }
 
     fn exclusive_requested_pending_acquired(&mut self, to: LockKind) -> bool {
@@ -277,12 +291,20 @@ impl Ops {
 
     fn init_lock(&mut self) -> Result<()> {
         if self.lock.is_none() {
+            let cstr = unsafe { CString::from_raw(self.file_path) };
+
+            let str_result = cstr.to_str();
+
             let err = Error::new(ErrorKind::Other, "bad file name");
-            let str = self.file_path.to_str().map_err(|_| err)?;
+
             // the fd from the ring, returns: os error 9
+            let str = str_result.map_err(|_| err)?;
 
             let lock = Lock::new(str)?;
+
             self.lock = Some(lock);
+
+            cstr.into_raw();
         }
         Ok(())
     }
@@ -305,7 +327,7 @@ impl Ops {
     }
 }
 
-impl SqliteIoMethods for Ops {
+impl SqliteIoMethods for Ops<'_> {
     fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe { self.o_close() }
     }

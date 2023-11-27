@@ -4,7 +4,6 @@ use rusqlite::{ffi::sqlite3_auto_extension, Connection};
 pub const IOURING_DB_ALIAS: &str = "ring";
 
 fn open_io_uring_connection(db: &str) -> rusqlite::Result<Connection> {
-    // sqlite3OsRead lost mapped object and crashes
     use rusqlite::OpenFlags;
     use _iouringvfs::EXTENSION_NAME;
 
@@ -15,9 +14,6 @@ fn open_io_uring_connection(db: &str) -> rusqlite::Result<Connection> {
         EXTENSION_NAME,
     )?;
 
-    // let conn = Connection::open_in_memory()?;
-    // let _ = conn.execute("ATTACH DATABASE io_uring_vfs_from_file(?1) as ?2", [db, iouring_db_alias])?;
-    
     Ok(conn)
 }
 
@@ -33,7 +29,7 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
     }
 
     let _conn = Connection::open_in_memory()?;
-    _conn.close().expect("closed wrong");
+    _conn.close().expect("error occurred while closing");
 
     let conn = if args.len() == 2 {
         let file_path = args[1].as_str();

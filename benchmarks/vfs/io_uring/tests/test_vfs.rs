@@ -3,7 +3,7 @@ include!("../include/conn.in.rs");
 #[cfg(test)]
 mod tests {
     use _iouringvfs::sqlite3_iouringvfs_init;
-    use rusqlite::{self, ffi::sqlite3_auto_extension};
+    use rusqlite::{self, ffi::sqlite3_auto_extension, Connection};
 
     use crate::open_io_uring_connection;
 
@@ -15,9 +15,13 @@ mod tests {
             )));
         }
 
+        // Pre-load register function etc. See faux_sqlite_extension_init2 and its required global.
+        let _conn = Connection::open_in_memory()?;
+        _conn.close().expect("error occurred while closing");
+
         // let tmp_file = tempfile::NamedTempFile::new().unwrap();
         // let out_path = tmp_file.path().to_str().unwrap();
-        let out_path = "main.db";
+        let out_path = "db/main.db";
 
         let conn = open_io_uring_connection(out_path)?;
 

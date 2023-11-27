@@ -1,5 +1,6 @@
 use std::ffi::CString;
 use std::os::raw::c_void;
+use std::io::Result;
 
 #[cfg(test)]
 mod tests {
@@ -8,10 +9,10 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_open_and_close_file() {
+    fn test_open_and_close_file() -> Result<()> {
         // Create a temporary file for testing
-        let tmpfile = tempfile::NamedTempFile::new().unwrap();
-        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let tmpfile = tempfile::NamedTempFile::new()?;
+        let file_path = CString::new(tmpfile.path().to_str().unwrap())?;
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
@@ -25,13 +26,15 @@ mod tests {
         }
 
         // Cleanup
-        tmpfile.close().unwrap();
+        tmpfile.close()?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_read() {
+    fn test_read() -> Result<()> {
         // Create a temporary file for testing
-        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new()?;
 
         let data_to_write = b"Hello, World!";
         let _ = tmpfile.write(data_to_write);
@@ -40,53 +43,56 @@ mod tests {
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
-        ops.open_file().unwrap();
+        ops.open_file()?;
 
         // Read the file
         let mut buf: [u8; 13] = [0; 13];
         let buf_ptr = buf.as_mut_ptr() as *mut c_void;
         unsafe {
-            ops.o_read(0, 13, buf_ptr).unwrap();
+            ops.o_read(0, 13, buf_ptr)?;
         }
 
         // Check if the data read matches what was written
         assert_eq!(buf[..], data_to_write[..]);
 
         // Cleanup
-        tmpfile.close().unwrap();
+        tmpfile.close()?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_write_then_read() {
+    fn test_write_then_read() -> Result<()> {
         // Create a temporary file for testing
-        let tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
-        ops.open_file().unwrap();
+        ops.open_file()?;
 
         // Write data to the file
         let data_to_write = b"Hello, World!";
         let mut buf: [u8; 13] = [0; 13];
         let buf_ptr = buf.as_mut_ptr() as *mut c_void;
         unsafe {
-            ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13)
-                .unwrap();
-            ops.o_read(0, 13, buf_ptr).unwrap();
+            ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13)?;
+            ops.o_read(0, 13, buf_ptr)?;
         }
 
         // Check if the data read matches what was written
         assert_eq!(buf[..], data_to_write[..]);
 
         // Cleanup
-        tmpfile.close().unwrap();
+        tmpfile.close()?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_file_size() {
+    fn test_file_size() -> Result<()> {
         // Create a temporary file for testing
-        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
 
         let data_to_write = b"Hello, World!";
@@ -95,29 +101,31 @@ mod tests {
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
-        ops.open_file().unwrap();
+        ops.open_file()?;
 
         // Get the current file size
         let mut file_size: u64 = 0;
         unsafe {
-            ops.o_file_size(&mut file_size).unwrap();
+            ops.o_file_size(&mut file_size)?;
         }
 
         assert_eq!(file_size, 13);
 
         // Cleanup
-        tmpfile.close().unwrap();
+        tmpfile.close()?;
+
+        Ok(())
     }
 
     #[test]
-    fn test_truncate_then_compare_file_size() {
+    fn test_truncate_then_compare_file_size() -> Result<()> {
         // Create a temporary file for testing
-        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
-        ops.open_file().unwrap();
+        ops.open_file()?;
 
         // Write some data to the file
         let data_to_write = b"Hello, World!";
@@ -126,19 +134,21 @@ mod tests {
         // Truncate the file to a smaller size
         let new_size = 5; // Set the new size to 5 bytes
         unsafe {
-            ops.o_truncate(new_size).unwrap();
+            ops.o_truncate(new_size)?;
         }
 
         // Get the current file size
         let mut file_size: u64 = 0;
         unsafe {
-            ops.o_file_size(&mut file_size).unwrap();
+            ops.o_file_size(&mut file_size)?;
         }
 
         // Check if the file size matches the expected size
         assert_eq!(file_size, new_size as u64);
 
         // Cleanup
-        tmpfile.close().unwrap();
+        tmpfile.close()?;
+
+        Ok(())
     }
 }

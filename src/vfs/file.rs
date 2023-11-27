@@ -9,10 +9,8 @@ use sqlite3ext_sys::{
     SQLITE_IOERR_TRUNCATE, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_WRITE,
 };
 
-use std::{
-    mem::MaybeUninit,
-    os::raw::{c_int, c_void},
-};
+use std::os::raw::{c_int, c_void}
+;
 
 use crate::vfs::traits::SqliteIoMethods;
 use crate::vfs::vfs::handle_error;
@@ -179,8 +177,8 @@ unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
 
 #[repr(C)]
 pub struct FileWithAux<T: SqliteIoMethods> {
-    pMethods: Box<sqlite3_io_methods>,
-    aux: T,
+    pub pMethods: Box<sqlite3_io_methods>,
+    pub aux: T,
 }
 
 /// See sqlite3OsOpenMalloc and sqlite3OsCloseFree dependency on szOsFile on sqlite3_vfs,
@@ -196,7 +194,7 @@ pub unsafe fn prepare_file_ptr<T: SqliteIoMethods>(
     file_ptr // in case other fields have to be modified
 }
 
-fn create_io_methods_boxed<T: SqliteIoMethods>() -> Box<sqlite3_io_methods> {
+pub fn create_io_methods_boxed<T: SqliteIoMethods>() -> Box<sqlite3_io_methods> {
     let m = sqlite3_io_methods {
         iVersion: 3, // this library targets version 3?
         xClose: Some(x_close::<T>),
