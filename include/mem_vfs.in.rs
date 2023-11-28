@@ -78,7 +78,8 @@ impl SqliteVfs for MemVfs {
             let name = CString::from_raw(z_name.cast_mut());
             let src_ptr = name.as_ptr();
             let dst_ptr = z_out;
-            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), name.as_bytes().len());
+            let len = name.as_bytes().len() + 1;
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), len);
             name.into_raw();
         }
 

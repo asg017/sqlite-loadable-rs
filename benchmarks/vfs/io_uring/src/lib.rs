@@ -22,7 +22,7 @@ use sqlite_loadable::{
     SqliteIoMethods,
 };
 
-use std::ffi::{CStr, CString};
+use std::ffi::{CString, CStr};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_void};
@@ -57,29 +57,34 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let file_path: CString = unsafe { CStr::from_ptr(z_name).into() };
 
-        let mut uring_ops = Ops::from_ring(file_path.clone(), &mut self.ring);
+        let file_name = unsafe {
+            CStr::from_ptr(z_name)
+        };
+
+        let mut uring_ops = Ops::from_ring(file_name.into(), &mut self.ring);
 
         unsafe {
             let mut f = &mut (*p_file.cast::<FileWithAux<Ops>>());
             std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops<'static>>());
-            std::mem::replace(&mut f.aux, uring_ops); // nope, a field drops
+            std::mem::replace(&mut f.aux, uring_ops); // use pointers and references, stack objects drop
 
-            f.aux.open_file();
+            f.aux.open_file()?;
         };
 
         Ok(())
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
-        let file_path_cstr = unsafe { CStr::from_ptr(z_name) };
-        let file_path = file_path_cstr.to_str().unwrap();
-        if let Ok(metadata) = fs::metadata(file_path) {
+        let file_path: CString = unsafe { CString::from_raw(z_name.cast_mut()) };
+        let err = Error::new(ErrorKind::Other, "bad file name");
+        let file_path_str = file_path.to_str().map_err(|_| err)?;
+        if let Ok(metadata) = fs::metadata(file_path_str) {
             if metadata.is_file() {
                 self.default_vfs.delete(z_name, sync_dir);
             }
         }
+        file_path.into_raw();
         Ok(())
     }
 
@@ -102,7 +107,8 @@ impl SqliteVfs for IoUringVfs {
             let name = CString::from_raw(z_name.cast_mut());
             let src_ptr = name.as_ptr();
             let dst_ptr = z_out;
-            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), name.as_bytes().len());
+            let len = name.as_bytes().len() + 1;
+            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), len);
             name.into_raw();
         }
 

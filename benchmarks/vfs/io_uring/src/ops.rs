@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::fs::File;
 use std::os::fd::RawFd;
 use std::os::raw::c_void;
@@ -327,6 +327,7 @@ impl<'a> Ops<'a> {
     }
 }
 
+// TODO remove *mut sqlite3_file
 impl SqliteIoMethods for Ops<'_> {
     fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         unsafe { self.o_close() }

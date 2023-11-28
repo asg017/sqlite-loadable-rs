@@ -22,7 +22,7 @@ mod tests {
         assert!(result.is_ok());
 
         unsafe {
-            let _ = ops.o_close();
+            ops.o_close()?;
         }
 
         // Cleanup

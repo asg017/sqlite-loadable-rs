@@ -21,7 +21,8 @@ mod tests {
 
         // let tmp_file = tempfile::NamedTempFile::new().unwrap();
         // let out_path = tmp_file.path().to_str().unwrap();
-        let out_path = "db/main.db";
+        // let out_path = "db/main.db"; // breaks, maybe because docker is protecting the container?
+        let out_path = "/tmp/main.db";
 
         let conn = open_io_uring_connection(out_path)?;
 
