@@ -1,6 +1,6 @@
 use std::ffi::CString;
-use std::os::raw::c_void;
 use std::io::Result;
+use std::os::raw::c_void;
 
 #[cfg(test)]
 mod tests {

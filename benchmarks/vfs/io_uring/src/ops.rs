@@ -1,4 +1,4 @@
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::os::fd::RawFd;
 use std::os::raw::c_void;
@@ -38,27 +38,18 @@ const USER_DATA_CLOSE: u64 = 0x6;
 const USER_DATA_FSYNC: u64 = 0x7;
 
 // Tested on kernels 5.15.49, 6.3.13
-pub struct Ops<'a> {
-    ring: &'a mut IoUring,
+pub struct Ops {
+    ring: IoUring,
     file_path: *mut c_char,
     pub(crate) file_fd: Option<i32>,
     lock: Option<Lock>,
 }
 
-impl<'a> Ops<'a> {
+impl Ops {
     // Used for tests
     pub fn new(file_path: CString, ring_size: u32) -> Self {
-        let mut ring = Box::into_raw(Box::new(IoUring::new(ring_size).unwrap()));
+        let mut ring = IoUring::new(ring_size).unwrap();
 
-        Ops {
-            ring: unsafe { &mut (*ring) },
-            file_path: file_path.clone().into_raw(),
-            file_fd: None,
-            lock: None,
-        }
-    }
-
-    pub fn from_ring(file_path: CString, ring: &'a mut IoUring) -> Self {
         Ops {
             ring,
             file_path: file_path.clone().into_raw(),
@@ -96,16 +87,25 @@ impl<'a> Ops<'a> {
 
         let result = cqe.result();
 
+        unsafe {
+            let path = CStr::from_ptr(self.file_path);
+            log::trace!(
+                "open {} with fd: {}",
+                path.to_string_lossy().to_string(),
+                result
+            )
+        }
+
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("open_file: raw os error result: {}", -cqe.result() as i32),
             ))
-        }else {
+        } else {
             let raw_fd: RawFd = result.try_into().unwrap();
             self.file_fd = Some(raw_fd);
 
-            Ok(())    
+            Ok(())
         }
     }
 
@@ -187,7 +187,7 @@ impl<'a> Ops<'a> {
                 ErrorKind::Other,
                 format!("truncate: raw os error result: {}", result),
             ))
-        }else {
+        } else {
             Ok(())
         }
     }
@@ -276,7 +276,7 @@ impl<'a> Ops<'a> {
                 ErrorKind::Other,
                 format!("fsync: raw os error result: {}", -cqe.result() as i32),
             ))
-        }else {
+        } else {
             Ok(())
         }
     }
@@ -328,7 +328,7 @@ impl<'a> Ops<'a> {
 }
 
 // TODO remove *mut sqlite3_file
-impl SqliteIoMethods for Ops<'_> {
+impl SqliteIoMethods for Ops {
     fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
         log::trace!("file close");
 

@@ -16,13 +16,13 @@ use sqlite_loadable::ext::{
 use sqlite_loadable::vfs::shim::{ShimFile, ShimVfs};
 use sqlite_loadable::vfs::vfs::create_vfs;
 
-use sqlite_loadable::vfs::file::{create_io_methods_boxed, FileWithAux};
+use sqlite_loadable::vfs::file::{create_io_methods_boxed, prepare_file_ptr, FileWithAux};
 use sqlite_loadable::{
     api, define_scalar_function, prelude::*, register_boxed_vfs, vfs::traits::SqliteVfs,
     SqliteIoMethods,
 };
 
-use std::ffi::{CString, CStr};
+use std::ffi::{CStr, CString};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::os::raw::{c_char, c_void};
@@ -48,7 +48,6 @@ pub const RING_SIZE: u32 = 32;
 struct IoUringVfs {
     default_vfs: ShimVfs,
     vfs_name: CString,
-    ring: IoUring,
 }
 
 impl SqliteVfs for IoUringVfs {
@@ -59,25 +58,19 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let file_name = unsafe {
-            CStr::from_ptr(z_name)
-        };
+        let file_name = unsafe { CStr::from_ptr(z_name) };
 
         let str = file_name.to_string_lossy();
 
-        let mut uring_ops = Ops::from_ring(file_name.into(), &mut self.ring);
+        let mut uring_ops = Ops::new(file_name.into(), RING_SIZE);
 
-        let f = unsafe {
-            let mut f = &mut (*p_file.cast::<FileWithAux<Ops>>());
-            std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops<'static>>());
-            std::mem::replace(&mut f.aux, uring_ops); // use pointers and references, stack objects drop
+        uring_ops.open_file();
 
-            f.aux.open_file()?;
-
-            f
+        unsafe {
+            let mut f = &mut *p_file.cast::<FileWithAux<Ops>>();
+            std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops>());
+            f.aux.write(uring_ops);
         };
-
-        log::trace!("open {} with fd: {}", str, f.aux.file_fd.unwrap());
 
         Ok(())
     }
@@ -99,7 +92,7 @@ impl SqliteVfs for IoUringVfs {
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
         log::trace!("access");
-        
+
         unsafe {
             // *p_res_out = if self.wal { 1 } else { 0 };
             *p_res_out = 0;
@@ -166,7 +159,7 @@ impl SqliteVfs for IoUringVfs {
             let cstr = unsafe { CStr::from_ptr(arg3) };
             let err_str = cstr.to_string_lossy();
             log::trace!("get_last_error: {}", err_str);
-        }else {
+        } else {
             log::trace!("get_last_error");
         }
         self.default_vfs.get_last_error(arg2, arg3)
@@ -219,7 +212,6 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
             ShimVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
-        ring: IoUring::new(RING_SIZE).unwrap(),
     };
 
     // allocation is bound to lifetime of struct
@@ -231,7 +223,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
         name_ptr,
         1024,
         // sqlite3 has ownership and thus manages the memory
-        std::mem::size_of::<FileWithAux<Ops>>() as i32
+        std::mem::size_of::<FileWithAux<Ops>>() as i32,
     );
 
     register_boxed_vfs(vfs, false)?;
