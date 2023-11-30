@@ -12,7 +12,7 @@ mod tests {
     fn test_open_and_close_file() -> Result<()> {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
-        let file_path = CString::new(tmpfile.path().to_str().unwrap())?;
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
@@ -37,9 +37,9 @@ mod tests {
         let mut tmpfile = tempfile::NamedTempFile::new()?;
 
         let data_to_write = b"Hello, World!";
-        let _ = tmpfile.write(data_to_write);
+        tmpfile.write(data_to_write)?;
 
-        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
@@ -65,7 +65,7 @@ mod tests {
     fn test_write_then_read() -> Result<()> {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
-        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
@@ -93,10 +93,10 @@ mod tests {
     fn test_file_size() -> Result<()> {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
-        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
 
         let data_to_write = b"Hello, World!";
-        let _ = tmpfile.write(data_to_write);
+        tmpfile.write(data_to_write)?;
 
         let mut ops = Ops::new(file_path.clone(), 16);
 
@@ -121,7 +121,7 @@ mod tests {
     fn test_truncate_then_compare_file_size() -> Result<()> {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
-        let file_path = CString::new(tmpfile.path().to_str().unwrap()).unwrap();
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
         let mut ops = Ops::new(file_path.clone(), 16);
 
         // Perform the open operation
@@ -129,7 +129,7 @@ mod tests {
 
         // Write some data to the file
         let data_to_write = b"Hello, World!";
-        let _ = tmpfile.write(data_to_write);
+        tmpfile.write(data_to_write)?;
 
         // Truncate the file to a smaller size
         let new_size = 5; // Set the new size to 5 bytes

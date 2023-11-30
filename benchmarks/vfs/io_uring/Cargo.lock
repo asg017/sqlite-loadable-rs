@@ -586,6 +586,7 @@ dependencies = [
 name = "sqlite3_vfs_io_uring"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
  "io-uring",
  "libc",
  "libsqlite3-sys",

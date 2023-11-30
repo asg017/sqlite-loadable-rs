@@ -9,6 +9,7 @@ sqlite3ext-sys = {path="../../../sqlite3ext-sys"}
 sqlite-loadable = {path="../../../", features = ["static"]}
 libc = "0.2.148"
 log = "0.4"
+env_logger = "0.9"
 strum = { version = "0.25", features = ["derive"] }
 
 [dev-dependencies]

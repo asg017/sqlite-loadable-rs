@@ -9,6 +9,8 @@ mod tests {
 
     #[test]
     fn test_io_uring_ext() -> rusqlite::Result<()> {
+        env_logger::init();
+
         unsafe {
             sqlite3_auto_extension(Some(std::mem::transmute(
                 sqlite3_iouringvfs_init as *const (),
@@ -19,12 +21,12 @@ mod tests {
         let _conn = Connection::open_in_memory()?;
         _conn.close().expect("error occurred while closing");
 
-        // let tmp_file = tempfile::NamedTempFile::new().unwrap();
-        // let out_path = tmp_file.path().to_str().unwrap();
+        let tmp_file = tempfile::NamedTempFile::new().unwrap();
+        let out_path = tmp_file.path().to_string_lossy().to_string();
         // let out_path = "db/main.db"; // breaks, maybe because docker is protecting the container?
-        let out_path = "/tmp/main.db";
+        // let out_path = "/tmp/main.db"; // OpenAt2 returns 0s
 
-        let conn = open_io_uring_connection(out_path)?;
+        let conn = open_io_uring_connection(out_path.as_str())?;
 
         conn.execute("CREATE TABLE t3(x varchar(10), y integer)", ())?;
         conn.execute(

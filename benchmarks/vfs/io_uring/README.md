@@ -25,7 +25,15 @@ sh run-hyperfine.sh
 If you don't have linux running on your machine (yet), use
 [the docker script provided here](./run-docker.sh).
 
+### Logging
+
+```bash
+RUST_LOG=trace cargo test
+```
+
 ### Results
+
+TODO redo with correct setup
 
 | Test | Desc | Winner |
 | --- | --- | --- |

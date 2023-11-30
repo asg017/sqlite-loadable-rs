@@ -41,7 +41,7 @@ const USER_DATA_FSYNC: u64 = 0x7;
 pub struct Ops<'a> {
     ring: &'a mut IoUring,
     file_path: *mut c_char,
-    file_fd: Option<i32>,
+    pub(crate) file_fd: Option<i32>,
     lock: Option<Lock>,
 }
 
@@ -281,7 +281,7 @@ impl<'a> Ops<'a> {
         }
     }
 
-    fn exclusive_requested_pending_acquired(&mut self, to: LockKind) -> bool {
+    fn is_exclusive_requested_pending_acquired(&mut self, to: LockKind) -> bool {
         if let Some(lock) = &mut self.lock {
             lock.lock(to) && lock.current() == to
         } else {
@@ -312,7 +312,7 @@ impl<'a> Ops<'a> {
     pub fn lock_or_unlock(&mut self, lock_request: i32) -> Result<i32> {
         self.init_lock()?;
         LockKind::from_repr(lock_request)
-            .map(|kind| self.exclusive_requested_pending_acquired(kind))
+            .map(|kind| self.is_exclusive_requested_pending_acquired(kind))
             .map(|ok_or_busy| if ok_or_busy { SQLITE_OK } else { SQLITE_BUSY })
             .ok_or_else(|| Error::new(ErrorKind::Other, "Missing lock"))
     }
@@ -330,10 +330,14 @@ impl<'a> Ops<'a> {
 // TODO remove *mut sqlite3_file
 impl SqliteIoMethods for Ops<'_> {
     fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
+        log::trace!("file close");
+
         unsafe { self.o_close() }
     }
 
     fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+        log::trace!("file read");
+
         unsafe { self.o_read(ofst as u64, s as u32, buf) }
     }
 
@@ -344,30 +348,42 @@ impl SqliteIoMethods for Ops<'_> {
         s: i32,
         ofst: i64,
     ) -> Result<()> {
+        log::trace!("file write");
+
         unsafe { self.o_write(buf, ofst as u64, s as u32) }
     }
 
     fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
+        log::trace!("file truncate");
+
         unsafe { self.o_truncate(size) }
     }
 
     fn sync(&mut self, file: *mut sqlite3_file, flags: i32) -> Result<()> {
+        log::trace!("file sync");
+
         unsafe { self.o_fsync(flags) }
     }
 
     fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()> {
+        log::trace!("file size");
+
         unsafe { self.o_file_size(p_size as *mut u64) }
     }
 
     fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        log::trace!("file lock");
         self.lock_or_unlock(arg2)
     }
 
     fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+        log::trace!("file unlock");
         self.lock_or_unlock(arg2)
     }
 
     fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
+        log::trace!("file check reserved lock");
+
         let lock_reserved = self.lock_reserved()?;
         unsafe {
             *p_res_out = if lock_reserved { 1 } else { 0 };
@@ -378,14 +394,17 @@ impl SqliteIoMethods for Ops<'_> {
     /// See https://www.sqlite.org/c3ref/file_control.html
     /// and also https://www.sqlite.org/c3ref/c_fcntl_begin_atomic_write.html
     fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
+        log::trace!("file control");
         Ok(())
     }
 
     fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        log::trace!("sector size");
         Ok(1024)
     }
 
     fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+        log::trace!("device characteristics");
         let x = SQLITE_IOCAP_ATOMIC
             | SQLITE_IOCAP_POWERSAFE_OVERWRITE
             | SQLITE_IOCAP_SAFE_APPEND
@@ -401,18 +420,22 @@ impl SqliteIoMethods for Ops<'_> {
         arg2: i32,
         arg3: *mut *mut c_void,
     ) -> Result<()> {
+        log::trace!("shm map");
         Ok(())
     }
 
     fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
+        log::trace!("shm lock");
         Ok(())
     }
 
     fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
+        log::trace!("shm barrier");
         Ok(())
     }
 
     fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: i32) -> Result<()> {
+        log::trace!("shm unmap");
         Ok(())
     }
 
@@ -423,10 +446,14 @@ impl SqliteIoMethods for Ops<'_> {
         size: i32,
         pp: *mut *mut c_void,
     ) -> Result<()> {
-        unsafe { self.o_fetch(ofst as u64, size as u32, pp) }
+        unsafe {
+            log::trace!("file fetch");
+            self.o_fetch(ofst as u64, size as u32, pp)
+        }
     }
 
     fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
+        log::trace!("file unfetch");
         Ok(())
     }
 }

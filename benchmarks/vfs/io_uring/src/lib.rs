@@ -43,6 +43,8 @@ use std::io::{Error, ErrorKind, Result};
 pub const EXTENSION_NAME: &str = "iouring";
 pub const RING_SIZE: u32 = 32;
 
+// TODO alternate implementation: write to mmap
+
 struct IoUringVfs {
     default_vfs: ShimVfs,
     vfs_name: CString,
@@ -57,25 +59,32 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-
         let file_name = unsafe {
             CStr::from_ptr(z_name)
         };
 
+        let str = file_name.to_string_lossy();
+
         let mut uring_ops = Ops::from_ring(file_name.into(), &mut self.ring);
 
-        unsafe {
+        let f = unsafe {
             let mut f = &mut (*p_file.cast::<FileWithAux<Ops>>());
             std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops<'static>>());
             std::mem::replace(&mut f.aux, uring_ops); // use pointers and references, stack objects drop
 
             f.aux.open_file()?;
+
+            f
         };
+
+        log::trace!("open {} with fd: {}", str, f.aux.file_fd.unwrap());
 
         Ok(())
     }
 
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
+        log::trace!("delete");
+
         let file_path: CString = unsafe { CString::from_raw(z_name.cast_mut()) };
         let err = Error::new(ErrorKind::Other, "bad file name");
         let file_path_str = file_path.to_str().map_err(|_| err)?;
@@ -89,6 +98,8 @@ impl SqliteVfs for IoUringVfs {
     }
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
+        log::trace!("access");
+        
         unsafe {
             // *p_res_out = if self.wal { 1 } else { 0 };
             *p_res_out = 0;
@@ -102,6 +113,8 @@ impl SqliteVfs for IoUringVfs {
         n_out: i32,
         z_out: *mut c_char,
     ) -> Result<()> {
+        log::trace!("full_pathname");
+
         unsafe {
             // don't rely on type conversion of n_out to determine the end line char
             let name = CString::from_raw(z_name.cast_mut());
@@ -134,22 +147,33 @@ impl SqliteVfs for IoUringVfs {
     // }
 
     fn randomness(&mut self, n_byte: i32, z_out: *mut c_char) -> i32 {
+        log::trace!("randomness");
         self.default_vfs.randomness(n_byte, z_out)
     }
 
     fn sleep(&mut self, microseconds: i32) -> i32 {
+        log::trace!("sleep");
         self.default_vfs.sleep(microseconds)
     }
 
     fn current_time(&mut self, arg2: *mut f64) -> i32 {
+        log::trace!("current_time");
         self.default_vfs.current_time(arg2)
     }
 
     fn get_last_error(&mut self, arg2: i32, arg3: *mut c_char) -> Result<()> {
+        if !arg3.is_null() {
+            let cstr = unsafe { CStr::from_ptr(arg3) };
+            let err_str = cstr.to_string_lossy();
+            log::trace!("get_last_error: {}", err_str);
+        }else {
+            log::trace!("get_last_error");
+        }
         self.default_vfs.get_last_error(arg2, arg3)
     }
 
     fn current_time_int64(&mut self, arg2: *mut i64) -> i32 {
+        log::trace!("current_time_int64");
         self.default_vfs.current_time_int64(arg2)
     }
 
@@ -206,8 +230,8 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
         ring_vfs,
         name_ptr,
         1024,
-        // Either rust or sqlite3 has ownership and thus manages the memory
-        std::mem::size_of::<FileWithAux<Ops>>() as i32, // nope, std::mem::replace's move drops IOUring prematurely
+        // sqlite3 has ownership and thus manages the memory
+        std::mem::size_of::<FileWithAux<Ops>>() as i32
     );
 
     register_boxed_vfs(vfs, false)?;
