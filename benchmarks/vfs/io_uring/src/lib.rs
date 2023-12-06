@@ -58,15 +58,18 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let file_name = unsafe { CStr::from_ptr(z_name) };
+        let file_name = unsafe { CString::from_raw(z_name as *mut u8) };
 
-        let str = file_name.to_string_lossy();
-
-        let mut uring_ops = Ops::new(file_name.into(), RING_SIZE);
+        let mut uring_ops = Ops::new(file_name.clone(), RING_SIZE);
 
         uring_ops.open_file();
 
+        file_name.into_raw();
+
         unsafe {
+            // Box::new + mem::replace
+            // ManuallyDrop::new...
+
             let mut f = &mut *p_file.cast::<FileWithAux<Ops>>();
             std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops>());
             f.aux.write(uring_ops);
