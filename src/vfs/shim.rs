@@ -270,7 +270,7 @@ impl ShimFile {
 }
 
 impl SqliteIoMethods for ShimFile {
-    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn close(&mut self) -> Result<()> {
         unsafe {
             if let Some(xClose) = ((*self.methods_ptr).xClose) {
                 let result = xClose(self.file_ptr);
@@ -291,7 +291,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         unsafe {
             if let Some(xRead) = ((*self.methods_ptr).xRead) {
                 let result = xRead(self.file_ptr, buf, s, ofst);
@@ -314,7 +314,6 @@ impl SqliteIoMethods for ShimFile {
 
     fn write(
         &mut self,
-        file: *mut sqlite3_file,
         buf: *const c_void,
         i_amt: i32,
         i_ofst: i64,
@@ -339,7 +338,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
+    fn truncate(&mut self, size: i64) -> Result<()> {
         unsafe {
             if let Some(xTruncate) = ((*self.methods_ptr).xTruncate) {
                 let result = xTruncate(self.file_ptr, size);
@@ -360,7 +359,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn sync(&mut self, file: *mut sqlite3_file, flags: c_int) -> Result<()> {
+    fn sync(&mut self, flags: c_int) -> Result<()> {
         unsafe {
             if let Some(xSync) = ((*self.methods_ptr).xSync) {
                 let result = xSync(self.file_ptr, flags);
@@ -381,7 +380,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut sqlite3_int64) -> Result<()> {
+    fn file_size(&mut self, p_size: *mut sqlite3_int64) -> Result<()> {
         unsafe {
             if let Some(xFileSize) = ((*self.methods_ptr).xFileSize) {
                 let result = xFileSize(self.file_ptr, p_size);
@@ -402,7 +401,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> Result<i32> {
+    fn lock(&mut self, arg2: c_int) -> Result<i32> {
         unsafe {
             if let Some(xLock) = ((*self.methods_ptr).xLock) {
                 Ok(xLock(self.file_ptr, arg2))
@@ -415,7 +414,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: c_int) -> Result<i32> {
+    fn unlock(&mut self, arg2: c_int) -> Result<i32> {
         unsafe {
             if let Some(xUnlock) = ((*self.methods_ptr).xUnlock) {
                 Ok(xUnlock(self.file_ptr, arg2))
@@ -430,7 +429,6 @@ impl SqliteIoMethods for ShimFile {
 
     fn check_reserved_lock(
         &mut self,
-        file: *mut sqlite3_file,
         p_res_out: *mut c_int,
     ) -> Result<()> {
         unsafe {
@@ -448,7 +446,6 @@ impl SqliteIoMethods for ShimFile {
 
     fn file_control(
         &mut self,
-        file: *mut sqlite3_file,
         op: c_int,
         p_arg: *mut c_void,
     ) -> Result<()> {
@@ -472,7 +469,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<c_int> {
+    fn sector_size(&mut self) -> Result<c_int> {
         unsafe {
             if let Some(xSectorSize) = ((*self.methods_ptr).xSectorSize) {
                 Ok(xSectorSize(self.file_ptr))
@@ -482,7 +479,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<c_int> {
+    fn device_characteristics(&mut self) -> Result<c_int> {
         unsafe {
             if let Some(xDeviceCharacteristics) = ((*self.methods_ptr).xDeviceCharacteristics) {
                 Ok(xDeviceCharacteristics(self.file_ptr))
@@ -497,7 +494,6 @@ impl SqliteIoMethods for ShimFile {
 
     fn shm_map(
         &mut self,
-        file: *mut sqlite3_file,
         i_pg: c_int,
         pgsz: c_int,
         arg2: c_int,
@@ -525,7 +521,7 @@ impl SqliteIoMethods for ShimFile {
 
     fn shm_lock(
         &mut self,
-        file: *mut sqlite3_file,
+
         offset: c_int,
         n: c_int,
         flags: c_int,
@@ -550,7 +546,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn shm_barrier(&mut self) -> Result<()> {
         unsafe {
             if let Some(xShmBarrier) = ((*self.methods_ptr).xShmBarrier) {
                 xShmBarrier(self.file_ptr);
@@ -564,7 +560,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: c_int) -> Result<()> {
+    fn shm_unmap(&mut self, delete_flag: c_int) -> Result<()> {
         unsafe {
             if let Some(xShmUnmap) = ((*self.methods_ptr).xShmUnmap) {
                 let result = xShmUnmap(self.file_ptr, delete_flag);
@@ -587,7 +583,7 @@ impl SqliteIoMethods for ShimFile {
 
     fn fetch(
         &mut self,
-        file: *mut sqlite3_file,
+
         i_ofst: i64,
         i_amt: i32,
         pp: *mut *mut c_void,
@@ -612,7 +608,7 @@ impl SqliteIoMethods for ShimFile {
         }
     }
 
-    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
         unsafe {
             if let Some(xUnfetch) = ((*self.methods_ptr).xUnfetch) {
                 let result = xUnfetch(self.file_ptr, i_ofst, p);

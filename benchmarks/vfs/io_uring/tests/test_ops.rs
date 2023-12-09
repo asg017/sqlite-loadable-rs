@@ -156,7 +156,7 @@ mod tests {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr() as *const char, 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
         ops.open_file()?;

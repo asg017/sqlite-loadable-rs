@@ -23,7 +23,7 @@ use super::vfs::handle_int;
 unsafe extern "C" fn x_close<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.close(file);
+    let result = aux.close();
     handle_error(result, Some(SQLITE_IOERR_CLOSE))
 }
 
@@ -35,7 +35,7 @@ unsafe extern "C" fn x_read<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.read(file, buf, iAmt, iOfst);
+    let result = aux.read(buf, iAmt, iOfst);
     handle_error(result, Some(SQLITE_IOERR_READ))
 }
 
@@ -47,7 +47,7 @@ unsafe extern "C" fn x_write<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.write(file, buf, iAmt, iOfst);
+    let result = aux.write(buf, iAmt, iOfst);
     handle_error(result, Some(SQLITE_IOERR_WRITE))
 }
 
@@ -57,14 +57,14 @@ unsafe extern "C" fn x_truncate<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.truncate(file, size);
+    let result = aux.truncate(size);
     handle_error(result, Some(SQLITE_IOERR_TRUNCATE))
 }
 
 unsafe extern "C" fn x_sync<T: SqliteIoMethods>(file: *mut sqlite3_file, flags: c_int) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.sync(file, flags);
+    let result = aux.sync(flags);
     handle_error(result, Some(SQLITE_IOERR_FSYNC))
 }
 
@@ -74,21 +74,21 @@ unsafe extern "C" fn x_file_size<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.file_size(file, pSize);
+    let result = aux.file_size(pSize);
     handle_error(result, Some(SQLITE_IOERR_FSTAT))
 }
 
 unsafe extern "C" fn x_lock<T: SqliteIoMethods>(file: *mut sqlite3_file, arg2: c_int) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.lock(file, arg2);
+    let result = aux.lock(arg2);
     handle_int(result, Some(SQLITE_IOERR_LOCK))
 }
 
 unsafe extern "C" fn x_unlock<T: SqliteIoMethods>(file: *mut sqlite3_file, arg2: c_int) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.unlock(file, arg2);
+    let result = aux.unlock(arg2);
     handle_int(result, Some(SQLITE_IOERR_UNLOCK))
 }
 
@@ -98,7 +98,7 @@ unsafe extern "C" fn x_check_reserved_lock<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.check_reserved_lock(file, pResOut);
+    let result = aux.check_reserved_lock(pResOut);
     handle_error(result, None)
 }
 
@@ -109,14 +109,14 @@ unsafe extern "C" fn x_file_control<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.file_control(file, op, pArg);
+    let result = aux.file_control(op, pArg);
     handle_error(result, None)
 }
 
 unsafe extern "C" fn x_sector_size<T: SqliteIoMethods>(file: *mut sqlite3_file) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.sector_size(file);
+    let result = aux.sector_size();
     handle_int(result, None)
 }
 
@@ -125,7 +125,7 @@ unsafe extern "C" fn x_device_characteristics<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.device_characteristics(file);
+    let result = aux.device_characteristics();
     handle_int(result, None)
 }
 
@@ -138,7 +138,7 @@ unsafe extern "C" fn x_shm_map<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.shm_map(file, iPg, pgsz, arg2, arg3);
+    let result = aux.shm_map(iPg, pgsz, arg2, arg3);
     handle_error(result, Some(SQLITE_IOERR_SHMMAP))
 }
 
@@ -150,14 +150,14 @@ unsafe extern "C" fn x_shm_lock<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.shm_lock(file, offset, n, flags);
+    let result = aux.shm_lock(offset, n, flags);
     handle_error(result, Some(SQLITE_IOERR_SHMLOCK))
 }
 
 unsafe extern "C" fn x_shm_barrier<T: SqliteIoMethods>(file: *mut sqlite3_file) {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.shm_barrier(file);
+    let result = aux.shm_barrier();
 }
 
 unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
@@ -166,7 +166,7 @@ unsafe extern "C" fn x_shm_unmap<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.shm_unmap(file, deleteFlag);
+    let result = aux.shm_unmap(deleteFlag);
     handle_error(result, Some(SQLITE_IOERR_SHMMAP))
 }
 
@@ -178,7 +178,7 @@ unsafe extern "C" fn x_fetch<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.fetch(file, iOfst, iAmt, pp);
+    let result = aux.fetch(iOfst, iAmt, pp);
     handle_error(result, None)
 }
 
@@ -189,7 +189,7 @@ unsafe extern "C" fn x_unfetch<T: SqliteIoMethods>(
 ) -> c_int {
     let mut f = &mut *file.cast::<FileWithAux<T>>();
     let mut aux = f.aux.assume_init_mut();
-    let result = aux.unfetch(file, iOfst, p);
+    let result = aux.unfetch(iOfst, p);
     handle_error(result, None)
 }
 

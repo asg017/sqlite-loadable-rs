@@ -157,11 +157,11 @@ struct MemFile {
 }
 
 impl SqliteIoMethods for MemFile {
-    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn close(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         let size: usize = s.try_into().unwrap();
         let offset = ofst.try_into().unwrap();
         let source = &mut self.file_contents;
@@ -178,7 +178,7 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn write(&mut self, file: *mut sqlite3_file, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
+    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
         let size = s.try_into().unwrap();
         let offset = ofst.try_into().unwrap();
         let new_length = size + offset;
@@ -195,43 +195,43 @@ impl SqliteIoMethods for MemFile {
         Ok(())
     }
 
-    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
+    fn truncate(&mut self, size: i64) -> Result<()> {
         self.file_contents.resize(size.try_into().unwrap(), 0);
 
         Ok(())
     }
 
-    fn sync(&mut self, file: *mut sqlite3_file, flags: i32) -> Result<()> {
+    fn sync(&mut self, flags: i32) -> Result<()> {
         Ok(())
     }
 
-    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()> {
+    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
         unsafe { *p_size = self.file_contents.len().try_into().unwrap(); }
         Ok(())
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+    fn lock(&mut self, arg2: i32) -> Result<i32> {
         Ok(0) // or SQLITE_LOCK_BUSY
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+    fn unlock(&mut self, arg2: i32) -> Result<i32> {
         Ok(0)
     }
 
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
+    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
         unsafe{ *p_res_out = 0; }
         Ok(())
     }
 
-    fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
+    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
         Ok(())
     }
 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+    fn sector_size(&mut self) -> Result<i32> {
         Ok(1024)
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+    fn device_characteristics(&mut self) -> Result<i32> {
         let settings = SQLITE_IOCAP_ATOMIC | 
         SQLITE_IOCAP_POWERSAFE_OVERWRITE |
         SQLITE_IOCAP_SAFE_APPEND |
@@ -240,31 +240,31 @@ impl SqliteIoMethods for MemFile {
         Ok(settings)
     }
 
-    fn shm_map(&mut self, file: *mut sqlite3_file, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
+    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
         // SQLITE_IOERR_SHMMAP
         Err(Error::new(ErrorKind::Other, "Unsupported"))
     }
 
-    fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
+    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
         // SQLITE_IOERR_SHMLOCK
         Err(Error::new(ErrorKind::Other, "Unsupported"))
     }
 
-    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn shm_barrier(&mut self) -> Result<()> {
         Ok(())
     }
 
-    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: i32) -> Result<()> {
+    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
         Ok(())
     }
 
-    fn fetch(&mut self, file: *mut sqlite3_file, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
+    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
         let memory_location = self.file_contents.as_mut_ptr();
         unsafe { *pp = memory_location.add(ofst.try_into().unwrap()).cast(); }
         Ok(())
     }
 
-    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
         Ok(())
     }
 }

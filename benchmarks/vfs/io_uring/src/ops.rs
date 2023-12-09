@@ -63,7 +63,12 @@ impl Ops {
             file_path,
             file_fd: None,
             lock: None,
-            file_name: unsafe { CStr::from_ptr(file_path as *const _).to_str().unwrap().to_string() },
+            file_name: unsafe {
+                CStr::from_ptr(file_path as *const _)
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            },
         }
     }
 
@@ -85,7 +90,8 @@ impl Ops {
             .flags(flags)
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
-        let open_e: opcode::OpenAt2 = opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow);
+        let open_e: opcode::OpenAt2 =
+            opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow);
 
         unsafe {
             ring.submission()
@@ -175,16 +181,13 @@ impl Ops {
         let mut ring = self.ring.as_ref().borrow_mut();
 
         let fd = types::Fd(self.file_fd.unwrap());
-        let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
-            .offset(0);
+        let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0);
 
-        ring
-            .submission()
+        ring.submission()
             .push(&op.build().user_data(USER_DATA_FALLOCATE))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
-        ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
@@ -261,9 +264,10 @@ impl Ops {
         let mut statx_buf_ptr: *mut libc::statx = &mut statx_buf;
 
         let dirfd = types::Fd(libc::AT_FDCWD);
-        let statx_op = opcode::Statx::new(dirfd, self.file_path as *const _, statx_buf_ptr as *mut _)
-            .flags(libc::AT_EMPTY_PATH)
-            .mask(libc::STATX_ALL);
+        let statx_op =
+            opcode::Statx::new(dirfd, self.file_path as *const _, statx_buf_ptr as *mut _)
+                .flags(libc::AT_EMPTY_PATH)
+                .mask(libc::STATX_ALL);
 
         ring.submission()
             .push(&statx_op.build().user_data(USER_DATA_STATX))
@@ -364,59 +368,53 @@ impl Ops {
 
 // TODO remove *mut sqlite3_file
 impl SqliteIoMethods for Ops {
-    fn close(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn close(&mut self) -> Result<()> {
         log::trace!("file close");
 
         unsafe { self.o_close() }
     }
 
-    fn read(&mut self, file: *mut sqlite3_file, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
+    fn read(&mut self, buf: *mut c_void, s: i32, ofst: i64) -> Result<()> {
         log::trace!("file read");
 
         unsafe { self.o_read(ofst as u64, s as u32, buf) }
     }
 
-    fn write(
-        &mut self,
-        file: *mut sqlite3_file,
-        buf: *const c_void,
-        s: i32,
-        ofst: i64,
-    ) -> Result<()> {
+    fn write(&mut self, buf: *const c_void, s: i32, ofst: i64) -> Result<()> {
         log::trace!("file write");
 
         unsafe { self.o_write(buf, ofst as u64, s as u32) }
     }
 
-    fn truncate(&mut self, file: *mut sqlite3_file, size: i64) -> Result<()> {
+    fn truncate(&mut self, size: i64) -> Result<()> {
         log::trace!("file truncate");
 
         unsafe { self.o_truncate(size) }
     }
 
-    fn sync(&mut self, file: *mut sqlite3_file, flags: i32) -> Result<()> {
+    fn sync(&mut self, flags: i32) -> Result<()> {
         log::trace!("file sync");
 
         unsafe { self.o_fsync(flags) }
     }
 
-    fn file_size(&mut self, file: *mut sqlite3_file, p_size: *mut i64) -> Result<()> {
+    fn file_size(&mut self, p_size: *mut i64) -> Result<()> {
         log::trace!("file size");
 
         unsafe { self.o_file_size(p_size as *mut u64) }
     }
 
-    fn lock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+    fn lock(&mut self, arg2: i32) -> Result<i32> {
         log::trace!("file lock");
         self.lock_or_unlock(arg2)
     }
 
-    fn unlock(&mut self, file: *mut sqlite3_file, arg2: i32) -> Result<i32> {
+    fn unlock(&mut self, arg2: i32) -> Result<i32> {
         log::trace!("file unlock");
         self.lock_or_unlock(arg2)
     }
 
-    fn check_reserved_lock(&mut self, file: *mut sqlite3_file, p_res_out: *mut i32) -> Result<()> {
+    fn check_reserved_lock(&mut self, p_res_out: *mut i32) -> Result<()> {
         log::trace!("file check reserved lock");
 
         let lock_reserved = self.lock_reserved()?;
@@ -428,17 +426,17 @@ impl SqliteIoMethods for Ops {
 
     /// See https://www.sqlite.org/c3ref/file_control.html
     /// and also https://www.sqlite.org/c3ref/c_fcntl_begin_atomic_write.html
-    fn file_control(&mut self, file: *mut sqlite3_file, op: i32, p_arg: *mut c_void) -> Result<()> {
+    fn file_control(&mut self, op: i32, p_arg: *mut c_void) -> Result<()> {
         log::trace!("file control");
         Ok(())
     }
 
-    fn sector_size(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+    fn sector_size(&mut self) -> Result<i32> {
         log::trace!("sector size");
         Ok(1024)
     }
 
-    fn device_characteristics(&mut self, file: *mut sqlite3_file) -> Result<i32> {
+    fn device_characteristics(&mut self) -> Result<i32> {
         log::trace!("device characteristics");
         let x = SQLITE_IOCAP_ATOMIC
             | SQLITE_IOCAP_POWERSAFE_OVERWRITE
@@ -447,47 +445,34 @@ impl SqliteIoMethods for Ops {
         Ok(x)
     }
 
-    fn shm_map(
-        &mut self,
-        file: *mut sqlite3_file,
-        i_pg: i32,
-        pgsz: i32,
-        arg2: i32,
-        arg3: *mut *mut c_void,
-    ) -> Result<()> {
+    fn shm_map(&mut self, i_pg: i32, pgsz: i32, arg2: i32, arg3: *mut *mut c_void) -> Result<()> {
         log::trace!("shm map");
         Ok(())
     }
 
-    fn shm_lock(&mut self, file: *mut sqlite3_file, offset: i32, n: i32, flags: i32) -> Result<()> {
+    fn shm_lock(&mut self, offset: i32, n: i32, flags: i32) -> Result<()> {
         log::trace!("shm lock");
         Ok(())
     }
 
-    fn shm_barrier(&mut self, file: *mut sqlite3_file) -> Result<()> {
+    fn shm_barrier(&mut self) -> Result<()> {
         log::trace!("shm barrier");
         Ok(())
     }
 
-    fn shm_unmap(&mut self, file: *mut sqlite3_file, delete_flag: i32) -> Result<()> {
+    fn shm_unmap(&mut self, delete_flag: i32) -> Result<()> {
         log::trace!("shm unmap");
         Ok(())
     }
 
-    fn fetch(
-        &mut self,
-        file: *mut sqlite3_file,
-        ofst: i64,
-        size: i32,
-        pp: *mut *mut c_void,
-    ) -> Result<()> {
+    fn fetch(&mut self, ofst: i64, size: i32, pp: *mut *mut c_void) -> Result<()> {
         unsafe {
             log::trace!("file fetch");
             self.o_fetch(ofst as u64, size as u32, pp)
         }
     }
 
-    fn unfetch(&mut self, file: *mut sqlite3_file, i_ofst: i64, p: *mut c_void) -> Result<()> {
+    fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()> {
         log::trace!("file unfetch");
         Ok(())
     }
