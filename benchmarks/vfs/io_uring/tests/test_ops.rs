@@ -6,7 +6,7 @@ use std::os::raw::c_void;
 mod tests {
     use super::*;
     use _iouringvfs::ops::Ops;
-    use std::{io::Write, os::fd::AsRawFd};
+    use std::io::Write;
 
     #[test]
     fn test_open_and_close_file() -> Result<()> {
@@ -46,10 +46,6 @@ mod tests {
 
         // Check if the operation was successful
         assert!(result.is_ok());
-
-        let new_file = std::fs::File::open(&new_file_name)?;
-
-        ops.set_fd(new_file.as_raw_fd()); // this works
 
         // Write data to the file
         let data_to_write = b"Hello, World!";
@@ -107,8 +103,7 @@ mod tests {
         let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
-        // ops.open_file()?; // this doesn't
-        ops.set_fd(tmpfile.as_raw_fd()); // this works
+        ops.open_file()?;
 
         // Write data to the file
         let data_to_write = b"Hello, World!";

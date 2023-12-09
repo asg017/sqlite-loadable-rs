@@ -40,15 +40,24 @@ const USER_DATA_FALLOCATE: u64 = 0x5;
 const USER_DATA_CLOSE: u64 = 0x6;
 const USER_DATA_FSYNC: u64 = 0x7;
 
+const FILE_INDEX_MAIN_DB: u32 = 0x0;
+const FILE_INDEX_JOURNAL: u32 = 0x1;
+
 // Tested on kernels 5.15.49, 6.3.13
 pub struct Ops {
     ring: Rc<RefCell<IoUring>>,
     file_path: *const char,
-    file_fd: Option<i32>,
+    file_index: Option<u32>,
     lock: Option<Lock>,
-    file_name: String, // debugging
+    file_name: String,
 }
 
+
+/// I was tempted really often to convert file_path to Path with a lifetime, PathBuf, CString
+/// but it quickly becomes awkward due to libc insistence on read pointers.
+/// A purely oxidized project should work with Path.
+/// Besides, the pointer memset that file_path is stored, is managed by C,
+/// bad things will happen to sqlite3 if you try to take away ownership.
 impl Ops {
     // Used for tests
     pub fn new(file_path: *const char, ring_size: u32) -> Self {
@@ -61,7 +70,7 @@ impl Ops {
         Ops {
             ring,
             file_path,
-            file_fd: None,
+            file_index: None,
             lock: None,
             file_name: unsafe {
                 CStr::from_ptr(file_path as *const _)
@@ -72,18 +81,28 @@ impl Ops {
         }
     }
 
-    // TODO make this only available on tests
-    pub fn set_fd(&mut self, fd: i32) {
-        self.file_fd = Some(fd);
+    fn get_file_index(&self) -> u32 {
+        let suffixes = vec!["-conch", "-journal", "-wal"]; // TODO investigate: what is a conch?
+        let ends_with_suffix = suffixes.iter().any(|s| self.file_name.ends_with(s));
+        if ends_with_suffix { FILE_INDEX_JOURNAL } else { FILE_INDEX_MAIN_DB }
+    }
+
+    fn get_dest_slot(&self) -> Option<types::DestinationSlot> {
+        let result = types::DestinationSlot::try_from_slot_target(self.get_file_index());
+        result.ok()
     }
 
     // TODO investigate as premature optimization: add O_DIRECT and O_SYNC parameters for systems that actually support it
-    // TODO investigate o_TMPFILE for .journal, .wal etc. and disable vfs DELETE event
+    // TODO investigate o_TMPFILE for -journal, -wal etc. and disable vfs DELETE event
     // Things I tried to avoid the -9, invalid fd, [EBADDF](https://www.javatpoint.com/linux-error-codes)
     // * open twice
     // * submitter().register_sparse ... 2, submitter().unregister_files()
     pub fn open_file(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
+
+        // Cleanup all fixed files (if any), then reserve two slots
+        let _ = ring.submitter().unregister_files();
+        ring.submitter().register_files_sparse(1).unwrap();
 
         let dirfd = types::Fd(libc::AT_FDCWD);
 
@@ -96,7 +115,8 @@ impl Ops {
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
         let open_e: opcode::OpenAt2 =
-            opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow);
+            opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow)
+            .file_index(self.get_dest_slot());
 
         unsafe {
             ring.submission()
@@ -110,7 +130,6 @@ impl Ops {
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
-        self.file_fd = Some(result);
 
         // TODO turn on later
         // unsafe {
@@ -128,6 +147,7 @@ impl Ops {
                 format!("open_file: raw os error result: {}", -result as i32),
             ))
         } else {
+            self.file_index = Some(self.get_file_index());
             Ok(())
         }
     }
@@ -135,7 +155,7 @@ impl Ops {
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_index.unwrap());
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
@@ -160,7 +180,7 @@ impl Ops {
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_index.unwrap());
         let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
@@ -191,7 +211,7 @@ impl Ops {
 
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_fd.unwrap());
         // let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0); // before
         let new_size: u64 = size.try_into().unwrap();
         let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
@@ -250,7 +270,7 @@ impl Ops {
     pub unsafe fn o_close(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_index.unwrap());
         let mut op = opcode::Close::new(fd);
 
         ring.submission()
@@ -315,7 +335,7 @@ impl Ops {
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_index.unwrap());
         let op = opcode::Fsync::new(fd);
 
         ring.submission()
