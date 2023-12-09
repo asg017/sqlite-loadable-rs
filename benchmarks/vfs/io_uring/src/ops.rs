@@ -52,7 +52,6 @@ pub struct Ops {
     file_name: String,
 }
 
-
 /// I was tempted really often to convert file_path to Path with a lifetime, PathBuf, CString
 /// but it quickly becomes awkward due to libc insistence on read pointers.
 /// A purely oxidized project should work with Path.
@@ -84,7 +83,11 @@ impl Ops {
     fn get_file_index(&self) -> u32 {
         let suffixes = vec!["-conch", "-journal", "-wal"]; // TODO investigate: what is a conch?
         let ends_with_suffix = suffixes.iter().any(|s| self.file_name.ends_with(s));
-        if ends_with_suffix { FILE_INDEX_JOURNAL } else { FILE_INDEX_MAIN_DB }
+        if ends_with_suffix {
+            FILE_INDEX_JOURNAL
+        } else {
+            FILE_INDEX_MAIN_DB
+        }
     }
 
     fn get_dest_slot(&self) -> Option<types::DestinationSlot> {
@@ -107,7 +110,12 @@ impl Ops {
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
+        // file_size and open and close work
         // let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64;
+
+        // file_size and open and close work
+        // let flags = libc::O_DIRECT as u64 | libc::O_CREAT as u64;
+
         let flags = libc::O_CREAT as u64;
 
         let openhow = types::OpenHow::new()
@@ -116,16 +124,15 @@ impl Ops {
 
         let open_e: opcode::OpenAt2 =
             opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow)
-            .file_index(self.get_dest_slot());
+                .file_index(self.get_dest_slot());
 
         unsafe {
             ring.submission()
                 .push(&open_e.build().user_data(USER_DATA_OPEN))
-                .expect("queue is full");;
+                .expect("queue is full");
         }
 
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -159,9 +166,8 @@ impl Ops {
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
-            .expect("queue is full");;
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+            .expect("queue is full");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -184,9 +190,8 @@ impl Ops {
         let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
-            .expect("queue is full");;
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+            .expect("queue is full");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -202,8 +207,8 @@ impl Ops {
         }
     }
 
-    // This should work but it refuses the fd from open_file and returns -22 (EINVAL, invalid argument)
     /*
+    // This should work but it refuses the fd from open_file and returns -22 (EINVAL, invalid argument)
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         let mut file_size_box = Box::new(0 as u64);
         let mut file_size_ptr = Box::into_raw(file_size_box);
@@ -211,7 +216,7 @@ impl Ops {
 
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_fd.unwrap());
+        let fd = types::Fixed(self.file_index.unwrap());
         // let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0); // before
         let new_size: u64 = size.try_into().unwrap();
         let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
@@ -275,10 +280,9 @@ impl Ops {
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_CLOSE))
-            .expect("queue is full");;
+            .expect("queue is full");
 
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -308,10 +312,9 @@ impl Ops {
 
         ring.submission()
             .push(&statx_op.build().user_data(USER_DATA_STATX))
-            .expect("queue is full");;
+            .expect("queue is full");
 
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -339,10 +342,9 @@ impl Ops {
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_FSYNC))
-            .expect("queue is full");;
+            .expect("queue is full");
 
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+        ring.submit_and_wait(1).expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
