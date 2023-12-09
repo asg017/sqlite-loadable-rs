@@ -102,7 +102,7 @@ impl Ops {
 
         // Cleanup all fixed files (if any), then reserve two slots
         let _ = ring.submitter().unregister_files();
-        ring.submitter().register_files_sparse(1).unwrap();
+        ring.submitter().register_files_sparse(2).unwrap();
 
         let dirfd = types::Fd(libc::AT_FDCWD);
 
@@ -331,7 +331,6 @@ impl Ops {
         }
     }
 
-    // TODO write unit test
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 

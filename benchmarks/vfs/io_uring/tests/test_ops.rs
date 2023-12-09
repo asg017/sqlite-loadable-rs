@@ -111,6 +111,7 @@ mod tests {
         let buf_ptr = buf.as_mut_ptr() as *mut c_void;
         unsafe {
             ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13)?;
+            ops.o_fsync(0)?;
             ops.o_read(0, 13, buf_ptr)?;
         }
 
