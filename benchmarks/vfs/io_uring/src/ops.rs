@@ -121,11 +121,11 @@ impl Ops {
         unsafe {
             ring.submission()
                 .push(&open_e.build().user_data(USER_DATA_OPEN))
-                .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+                .expect("queue is full");;
         }
 
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -159,9 +159,9 @@ impl Ops {
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -184,9 +184,9 @@ impl Ops {
         let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -220,10 +220,10 @@ impl Ops {
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_FALLOCATE))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
 
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -275,10 +275,10 @@ impl Ops {
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_CLOSE))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
 
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -308,10 +308,10 @@ impl Ops {
 
         ring.submission()
             .push(&statx_op.build().user_data(USER_DATA_STATX))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
 
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
@@ -340,10 +340,10 @@ impl Ops {
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_FSYNC))
-            .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
+            .expect("queue is full");;
 
         ring.submit_and_wait(1)
-            .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
+            .expect("submit failed or timed out");
 
         let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
         let cqe = &cqes.as_slice()[0];
