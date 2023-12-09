@@ -43,7 +43,7 @@ const USER_DATA_FSYNC: u64 = 0x7;
 const FILE_INDEX_MAIN_DB: u32 = 0x0;
 const FILE_INDEX_JOURNAL: u32 = 0x1;
 
-// Tested on kernels 5.15.49, 6.3.13
+// Tested on linux 5.15.49, 6.1.0, 6.3.13
 pub struct Ops {
     ring: Rc<RefCell<IoUring>>,
     file_path: *const char,
@@ -187,7 +187,7 @@ impl Ops {
         let mut ring = self.ring.as_ref().borrow_mut();
 
         let fd = types::Fixed(self.file_index.unwrap());
-        let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
+        let mut op = opcode::Write::new(fd, buf_in as _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
             .expect("queue is full");
