@@ -1,9 +1,12 @@
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::os::fd::RawFd;
 use std::os::raw::c_void;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::rc::Rc;
 
 use io_uring::types::Fd;
 use libc::c_char;
@@ -39,62 +42,71 @@ const USER_DATA_FSYNC: u64 = 0x7;
 
 // Tested on kernels 5.15.49, 6.3.13
 pub struct Ops {
-    ring: IoUring,
-    file_path: *mut c_char,
-    pub(crate) file_fd: Option<i32>,
+    ring: Rc<RefCell<IoUring>>,
+    file_path: *mut u8,
+    file_fd: Option<i32>,
     lock: Option<Lock>,
+    file_name: String, // debugging
 }
 
 impl Ops {
     // Used for tests
-    pub fn new(file_path: CString, ring_size: u32) -> Self {
-        let mut ring = IoUring::new(ring_size).unwrap();
+    pub fn new(file_path: *mut u8, ring_size: u32) -> Self {
+        let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).unwrap()));
 
+        Self::from_rc_refcell_ring(file_path, ring)
+    }
+
+    pub fn from_rc_refcell_ring(file_path: *mut u8, ring: Rc<RefCell<IoUring>>) -> Self {
         Ops {
             ring,
-            file_path: file_path.clone().into_raw(),
+            file_path,
             file_fd: None,
             lock: None,
+            file_name: unsafe { CStr::from_ptr(file_path).to_str().unwrap().to_string() },
         }
     }
 
-    // TODO add O_DIRECT and O_SYNC parameters for systems that actually support it
+    // TODO investigate as premature optimization: add O_DIRECT and O_SYNC parameters for systems that actually support it
+    // TODO investigate o_TMPFILE for .journal, .wal etc. and disable vfs DELETE event
     pub fn open_file(&mut self) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let dirfd = types::Fd(libc::AT_FDCWD);
 
         // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
-        // let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64 | libc::O_RDWR as u64;
-        let flags = libc::O_CREAT as u64 | libc::O_RDWR as u64;
+        // let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64;
+        let flags = libc::O_CREAT as u64;
 
         let openhow = types::OpenHow::new()
             .flags(flags)
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
-        let open_e = opcode::OpenAt2::new(dirfd, self.file_path, &openhow);
+        let open_e: opcode::OpenAt2 = opcode::OpenAt2::new(dirfd, self.file_path, &openhow);
 
         unsafe {
-            self.ring
-                .submission()
+            ring.submission()
                 .push(&open_e.build().user_data(USER_DATA_OPEN))
                 .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
         }
 
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        let cqe = self.ring.completion().next().unwrap();
-
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
+        self.file_fd = Some(result);
 
-        unsafe {
-            let path = CStr::from_ptr(self.file_path);
-            log::trace!(
-                "open {} with fd: {}",
-                path.to_string_lossy().to_string(),
-                result
-            )
-        }
+        // TODO turn on later
+        // unsafe {
+        //     let path = CStr::from_ptr(self.file_path);
+        //     log::trace!(
+        //         "open {} with fd: {}",
+        //         path.to_string_lossy().to_string(),
+        //         result
+        //     )
+        // }
 
         if result < 0 {
             Err(Error::new(
@@ -102,24 +114,25 @@ impl Ops {
                 format!("open_file: raw os error result: {}", -cqe.result() as i32),
             ))
         } else {
-            let raw_fd: RawFd = result.try_into().unwrap();
-            self.file_fd = Some(raw_fd);
-
             Ok(())
         }
     }
 
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
-        self.ring
-            .submission()
+        ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
-        let cqe = self.ring.completion().next().unwrap();
+
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
+
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
@@ -131,16 +144,20 @@ impl Ops {
     }
 
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Write::new(fd, buf_in as *const _, size).offset(offset);
-        self.ring
-            .submission()
+        ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
-        let cqe = self.ring.completion().next().unwrap();
+
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
+
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
@@ -154,22 +171,23 @@ impl Ops {
     /*
     // TODO find io_uring op, this doesn't work
     pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
+        let ring = self.ring.borrow().borrow_mut();
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
             .offset(0)
             // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
             .mode(libc::FALLOC_FL_KEEP_SIZE);
 
-        self.ring
+        ring
             .submission()
             .push(&op.build().user_data(USER_DATA_FALLOCATE))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
-        self.ring
+        ring
             .submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        let cqe = self.ring.completion().next().unwrap();
+        let cqe = ring.completion().next().unwrap();
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
@@ -205,32 +223,35 @@ impl Ops {
     }
 
     pub unsafe fn o_close(&mut self) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Close::new(fd);
 
-        self.ring
-            .submission()
+        ring.submission()
             .push(&op.build().user_data(USER_DATA_CLOSE))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        let cqe = self.ring.completion().next().unwrap();
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
+
         if cqe.result() < 0 {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("close: raw os error result: {}", -cqe.result() as i32),
             ))
         } else {
-            // clean up
-            CString::from_raw(self.file_path);
             Ok(())
         }
     }
 
     pub unsafe fn o_file_size(&mut self, out: *mut u64) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let mut statx_buf: libc::statx = unsafe { std::mem::zeroed() };
         let mut statx_buf_ptr: *mut libc::statx = &mut statx_buf;
 
@@ -239,37 +260,48 @@ impl Ops {
             .flags(libc::AT_EMPTY_PATH)
             .mask(libc::STATX_ALL);
 
-        self.ring
-            .submission()
+        ring.submission()
             .push(&statx_op.build().user_data(USER_DATA_STATX))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        unsafe {
-            *out = statx_buf.stx_size as u64;
-        }
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
 
-        Ok(())
+        if result < 0 {
+            Err(Error::new(
+                ErrorKind::Other,
+                format!("file_size: raw os error result: {}", -cqe.result() as i32),
+            ))
+        } else {
+            unsafe {
+                *out = statx_buf.stx_size as u64;
+            }
+
+            Ok(())
+        }
     }
 
     // TODO write unit test
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let fd = types::Fd(self.file_fd.unwrap());
         let op = opcode::Fsync::new(fd);
 
-        self.ring
-            .submission()
+        ring.submission()
             .push(&op.build().user_data(USER_DATA_FSYNC))
             .map_err(|_| Error::new(ErrorKind::Other, "submission queue is full"))?;
 
-        self.ring
-            .submit_and_wait(1)
+        ring.submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        let cqe = self.ring.completion().next().unwrap();
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
 
         if cqe.result() < 0 {
             Err(Error::new(
@@ -291,7 +323,7 @@ impl Ops {
 
     fn init_lock(&mut self) -> Result<()> {
         if self.lock.is_none() {
-            let cstr = unsafe { CString::from_raw(self.file_path) };
+            let cstr = unsafe { CStr::from_ptr(self.file_path) };
 
             let str_result = cstr.to_str();
 
@@ -303,8 +335,6 @@ impl Ops {
             let lock = Lock::new(str)?;
 
             self.lock = Some(lock);
-
-            cstr.into_raw();
         }
         Ok(())
     }

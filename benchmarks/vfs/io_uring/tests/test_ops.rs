@@ -13,7 +13,7 @@ mod tests {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.clone(), 16);
+        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
 
         // Perform the open operation
         let result = ops.open_file();
@@ -32,6 +32,33 @@ mod tests {
     }
 
     #[test]
+    fn test_create_and_close_file() -> Result<()> {
+        // Create a temporary file for testing
+        let tmpfile = tempfile::NamedTempFile::new()?;
+
+        let mut new_file = tmpfile.path().to_string_lossy().to_string();
+        new_file.push_str("-journal");
+
+        let mut ops = Ops::new(new_file.as_ptr().cast_mut(), 16);
+
+        // Perform the open operation
+        let result = ops.open_file();
+
+        // Check if the operation was successful
+        assert!(result.is_ok());
+
+        unsafe {
+            ops.o_close()?;
+            std::fs::remove_file(new_file)?;
+        }
+
+        // Cleanup
+        tmpfile.close()?;
+
+        Ok(())
+    }
+
+    #[test]
     fn test_read() -> Result<()> {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
@@ -40,7 +67,7 @@ mod tests {
         tmpfile.write(data_to_write)?;
 
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.clone(), 16);
+        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -66,7 +93,7 @@ mod tests {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.clone(), 16);
+        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -98,7 +125,7 @@ mod tests {
         let data_to_write = b"Hello, World!";
         tmpfile.write(data_to_write)?;
 
-        let mut ops = Ops::new(file_path.clone(), 16);
+        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -122,7 +149,7 @@ mod tests {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.clone(), 16);
+        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
 
         // Perform the open operation
         ops.open_file()?;

@@ -22,10 +22,13 @@ use sqlite_loadable::{
     SqliteIoMethods,
 };
 
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
+use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_void};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr};
 
@@ -48,8 +51,10 @@ pub const RING_SIZE: u32 = 32;
 struct IoUringVfs {
     default_vfs: ShimVfs,
     vfs_name: CString,
+    ring: Rc<RefCell<IoUring>>,
 }
 
+// TODO replace all unwraps with proper error handling
 impl SqliteVfs for IoUringVfs {
     fn open(
         &mut self,
@@ -58,38 +63,38 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let file_name = unsafe { CString::from_raw(z_name as *mut u8) };
+        let mut uring_ops = Ops::from_rc_refcell_ring(z_name as *mut u8, self.ring.clone());
 
-        let mut uring_ops = Ops::new(file_name.clone(), RING_SIZE);
+        let file_name = unsafe { CStr::from_ptr(z_name).to_str().unwrap() };
 
-        uring_ops.open_file();
-
-        file_name.into_raw();
+        uring_ops.open_file()?;
 
         unsafe {
-            // Box::new + mem::replace
-            // ManuallyDrop::new...
-
-            let mut f = &mut *p_file.cast::<FileWithAux<Ops>>();
-            std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<Ops>());
+            // if you mess with C's managed memory, e.g. like owning a *char managed by C, expect weirdness.
+            let f = (p_file as *mut FileWithAux<Ops>).as_mut().unwrap();
+            f.pMethods = create_io_methods_boxed::<Ops>();
             f.aux.write(uring_ops);
         };
 
         Ok(())
     }
 
+    // TODO replace with io_uring's system call free delete
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
         log::trace!("delete");
 
-        let file_path: CString = unsafe { CString::from_raw(z_name.cast_mut()) };
-        let err = Error::new(ErrorKind::Other, "bad file name");
-        let file_path_str = file_path.to_str().map_err(|_| err)?;
-        if let Ok(metadata) = fs::metadata(file_path_str) {
+        let f = unsafe { CStr::from_ptr(z_name) };
+
+        // TODO handle error
+        let file_path_str = f.to_str().unwrap();
+
+        // TODO handle error
+        if let Ok(metadata) = fs::metadata(std::path::Path::new(file_path_str)) {
             if metadata.is_file() {
                 self.default_vfs.delete(z_name, sync_dir);
             }
         }
-        file_path.into_raw();
+
         Ok(())
     }
 
@@ -111,15 +116,11 @@ impl SqliteVfs for IoUringVfs {
     ) -> Result<()> {
         log::trace!("full_pathname");
 
-        unsafe {
-            // don't rely on type conversion of n_out to determine the end line char
-            let name = CString::from_raw(z_name.cast_mut());
-            let src_ptr = name.as_ptr();
-            let dst_ptr = z_out;
-            let len = name.as_bytes().len() + 1;
-            ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), len);
-            name.into_raw();
-        }
+        let name = unsafe { CStr::from_ptr(z_name) };
+        let src_ptr = name.as_ptr();
+        let dst_ptr = z_out;
+        let len = name.to_bytes_with_nul().len();
+        unsafe { ptr::copy_nonoverlapping(src_ptr, dst_ptr.cast(), len) };
 
         Ok(())
     }
@@ -209,12 +210,15 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
     let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
     let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
 
+    let mut ring = Rc::new(RefCell::new(IoUring::new(RING_SIZE).unwrap()));
+
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {
             // pass thru
             ShimVfs::from_ptr(shimmed_vfs)
         },
         vfs_name,
+        ring,
     };
 
     // allocation is bound to lifetime of struct
