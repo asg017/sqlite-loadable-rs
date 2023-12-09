@@ -13,7 +13,7 @@ mod tests {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
         let result = ops.open_file();
@@ -39,7 +39,7 @@ mod tests {
         let mut new_file = tmpfile.path().to_string_lossy().to_string();
         new_file.push_str("-journal");
 
-        let mut ops = Ops::new(new_file.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(new_file.as_ptr() as *const _, 16);
 
         // Perform the open operation to create the file
         let result = ops.open_file();
@@ -74,7 +74,7 @@ mod tests {
         tmpfile.write(data_to_write)?;
 
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -100,7 +100,7 @@ mod tests {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -132,7 +132,7 @@ mod tests {
         let data_to_write = b"Hello, World!";
         tmpfile.write(data_to_write)?;
 
-        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -156,7 +156,7 @@ mod tests {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr().cast_mut(), 16);
+        let mut ops = Ops::new(file_path.as_ptr() as *const char, 16);
 
         // Perform the open operation
         ops.open_file()?;

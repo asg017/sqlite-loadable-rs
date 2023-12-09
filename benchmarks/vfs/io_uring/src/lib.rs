@@ -63,7 +63,7 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let mut uring_ops = Ops::from_rc_refcell_ring(z_name as *mut u8, self.ring.clone());
+        let mut uring_ops = Ops::from_rc_refcell_ring(z_name as *mut _, self.ring.clone());
 
         let file_name = unsafe { CStr::from_ptr(z_name).to_str().unwrap() };
 

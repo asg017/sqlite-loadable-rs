@@ -43,7 +43,7 @@ const USER_DATA_FSYNC: u64 = 0x7;
 // Tested on kernels 5.15.49, 6.3.13
 pub struct Ops {
     ring: Rc<RefCell<IoUring>>,
-    file_path: *mut u8,
+    file_path: *const char,
     file_fd: Option<i32>,
     lock: Option<Lock>,
     file_name: String, // debugging
@@ -51,19 +51,19 @@ pub struct Ops {
 
 impl Ops {
     // Used for tests
-    pub fn new(file_path: *mut u8, ring_size: u32) -> Self {
+    pub fn new(file_path: *const char, ring_size: u32) -> Self {
         let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).unwrap()));
 
         Self::from_rc_refcell_ring(file_path, ring)
     }
 
-    pub fn from_rc_refcell_ring(file_path: *mut u8, ring: Rc<RefCell<IoUring>>) -> Self {
+    pub fn from_rc_refcell_ring(file_path: *const char, ring: Rc<RefCell<IoUring>>) -> Self {
         Ops {
             ring,
             file_path,
             file_fd: None,
             lock: None,
-            file_name: unsafe { CStr::from_ptr(file_path).to_str().unwrap().to_string() },
+            file_name: unsafe { CStr::from_ptr(file_path as *const _).to_str().unwrap().to_string() },
         }
     }
 
@@ -85,7 +85,7 @@ impl Ops {
             .flags(flags)
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
-        let open_e: opcode::OpenAt2 = opcode::OpenAt2::new(dirfd, self.file_path, &openhow);
+        let open_e: opcode::OpenAt2 = opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow);
 
         unsafe {
             ring.submission()
@@ -261,7 +261,7 @@ impl Ops {
         let mut statx_buf_ptr: *mut libc::statx = &mut statx_buf;
 
         let dirfd = types::Fd(libc::AT_FDCWD);
-        let statx_op = opcode::Statx::new(dirfd, self.file_path, statx_buf_ptr as *mut _)
+        let statx_op = opcode::Statx::new(dirfd, self.file_path as *const _, statx_buf_ptr as *mut _)
             .flags(libc::AT_EMPTY_PATH)
             .mask(libc::STATX_ALL);
 
@@ -328,7 +328,7 @@ impl Ops {
 
     fn init_lock(&mut self) -> Result<()> {
         if self.lock.is_none() {
-            let cstr = unsafe { CStr::from_ptr(self.file_path) };
+            let cstr = unsafe { CStr::from_ptr(self.file_path as *const _) };
 
             let str_result = cstr.to_str();
 
