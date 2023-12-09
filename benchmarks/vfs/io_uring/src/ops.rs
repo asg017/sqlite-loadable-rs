@@ -198,8 +198,10 @@ impl Ops {
     }
     */
 
+    // TODO reimplement as a file resize
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let result = libc::ftruncate(self.file_fd.unwrap(), size);
+        // libc::ftruncate using self.file_fd returns -1
+        let result = libc::truncate(self.file_path, size);
         if result != 0 {
             Err(Error::new(
                 ErrorKind::Other,
