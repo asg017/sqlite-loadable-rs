@@ -6,7 +6,7 @@ use std::os::raw::c_void;
 mod tests {
     use super::*;
     use _iouringvfs::ops::Ops;
-    use std::io::Write;
+    use std::{io::Write, os::fd::AsRawFd};
 
     #[test]
     fn test_open_and_close_file() -> Result<()> {
@@ -36,16 +36,20 @@ mod tests {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
 
-        let mut new_file = tmpfile.path().to_string_lossy().to_string();
-        new_file.push_str("-journal");
+        let mut new_file_name = tmpfile.path().to_string_lossy().to_string();
+        new_file_name.push_str("-journal");
 
-        let mut ops = Ops::new(new_file.as_ptr() as *const _, 16);
+        let mut ops = Ops::new(new_file_name.as_ptr() as *const _, 16);
 
         // Perform the open operation to create the file
         let result = ops.open_file();
 
         // Check if the operation was successful
         assert!(result.is_ok());
+
+        let new_file = std::fs::File::open(&new_file_name)?;
+
+        ops.set_fd(new_file.as_raw_fd()); // this works
 
         // Write data to the file
         let data_to_write = b"Hello, World!";
@@ -56,7 +60,7 @@ mod tests {
 
         unsafe {
             ops.o_close()?;
-            std::fs::remove_file(new_file)?;
+            std::fs::remove_file(new_file_name)?;
         }
 
         // Cleanup
@@ -103,7 +107,8 @@ mod tests {
         let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
         // Perform the open operation
-        ops.open_file()?;
+        // ops.open_file()?; // this doesn't
+        ops.set_fd(tmpfile.as_raw_fd()); // this works
 
         // Write data to the file
         let data_to_write = b"Hello, World!";
@@ -158,8 +163,11 @@ mod tests {
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
         let mut ops = Ops::new(file_path.as_ptr() as *const _, 16);
 
+
         // Perform the open operation
         ops.open_file()?;
+        // let raw_fd = tmpfile.as_raw_fd();
+        // ops.set_fd(raw_fd);
 
         // Write some data to the file
         let data_to_write = b"Hello, World!";

@@ -72,6 +72,11 @@ impl Ops {
         }
     }
 
+    // TODO make this only available on tests
+    pub fn set_fd(&mut self, fd: i32) {
+        self.file_fd = Some(fd);
+    }
+
     // TODO investigate as premature optimization: add O_DIRECT and O_SYNC parameters for systems that actually support it
     // TODO investigate o_TMPFILE for .journal, .wal etc. and disable vfs DELETE event
     // Things I tried to avoid the -9, invalid fd, [EBADDF](https://www.javatpoint.com/linux-error-codes)
@@ -177,11 +182,21 @@ impl Ops {
         }
     }
 
+    // This should work but it refuses the fd from open_file and returns -22 (EINVAL, invalid argument)
+    /*
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let mut file_size_box = Box::new(0 as u64);
+        let mut file_size_ptr = Box::into_raw(file_size_box);
+        self.o_file_size(file_size_ptr);
+
         let mut ring = self.ring.as_ref().borrow_mut();
 
         let fd = types::Fd(self.file_fd.unwrap());
-        let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0);
+        // let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0); // before
+        let new_size: u64 = size.try_into().unwrap();
+        let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
+            .offset((size - 1).try_into().unwrap())
+            .mode(libc::FALLOC_FL_COLLAPSE_RANGE);
 
         ring.submission()
             .push(&op.build().user_data(USER_DATA_FALLOCATE))
@@ -194,19 +209,22 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
+        Box::from_raw(file_size_ptr);
+
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("truncate: raw os error result: {}", -result as i32),
-            ))?;
+            ))
+        }else {
+            Ok(())
         }
-        Ok(())
     }
+    */
 
-    /*
-    pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
+    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         // libc::ftruncate using self.file_fd returns -1
-        let result = libc::truncate(self.file_path, size);
+        let result = libc::truncate(self.file_path as *const _, size);
         if result != 0 {
             Err(Error::new(
                 ErrorKind::Other,
@@ -216,7 +234,6 @@ impl Ops {
             Ok(())
         }
     }
-    */
 
     // SQLite Documentation:
     // Implement this function to read data from the file at the specified offset and store it in `buf_out`.
