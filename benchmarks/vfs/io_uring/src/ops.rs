@@ -69,6 +69,9 @@ impl Ops {
 
     // TODO investigate as premature optimization: add O_DIRECT and O_SYNC parameters for systems that actually support it
     // TODO investigate o_TMPFILE for .journal, .wal etc. and disable vfs DELETE event
+    // Things I tried to avoid the -9, invalid fd, [EBADDF](https://www.javatpoint.com/linux-error-codes)
+    // * open twice
+    // * submitter().register_sparse ... 2, submitter().unregister_files()
     pub fn open_file(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
@@ -111,7 +114,7 @@ impl Ops {
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("open_file: raw os error result: {}", -cqe.result() as i32),
+                format!("open_file: raw os error result: {}", -result as i32),
             ))
         } else {
             Ok(())
@@ -133,10 +136,10 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
-        if cqe.result() < 0 {
+        if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("read: raw os error result: {}", -cqe.result() as i32),
+                format!("read: raw os error result: {}", -result as i32),
             ))
         } else {
             Ok(())
@@ -158,25 +161,22 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
-        if cqe.result() < 0 {
+        if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("write: raw os error result: {}", -cqe.result() as i32),
+                format!("write: raw os error result: {}", -result as i32),
             ))
         } else {
             Ok(())
         }
     }
 
-    /*
-    // TODO find io_uring op, this doesn't work
-    pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
-        let ring = self.ring.borrow().borrow_mut();
+    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+        let mut ring = self.ring.as_ref().borrow_mut();
+
         let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap())
-            .offset(0)
-            // https://github.com/torvalds/linux/blob/633b47cb009d09dc8f4ba9cdb3a0ca138809c7c7/include/uapi/linux/falloc.h#L5
-            .mode(libc::FALLOC_FL_KEEP_SIZE);
+            .offset(0);
 
         ring
             .submission()
@@ -187,19 +187,21 @@ impl Ops {
             .submit_and_wait(1)
             .map_err(|_| Error::new(ErrorKind::Other, "submit failed or timed out"))?;
 
-        let cqe = ring.completion().next().unwrap();
-        if cqe.result() < 0 {
+        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+        let cqe = &cqes.as_slice()[0];
+        let result = cqe.result();
+
+        if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("truncate2: raw os error result: {}", -cqe.result() as i32),
+                format!("truncate: raw os error result: {}", -result as i32),
             ))?;
         }
         Ok(())
     }
-    */
 
-    // TODO reimplement as a file resize
-    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+    /*
+    pub unsafe fn o_truncate2(&mut self, size: i64) -> Result<()> {
         // libc::ftruncate using self.file_fd returns -1
         let result = libc::truncate(self.file_path, size);
         if result != 0 {
@@ -211,6 +213,7 @@ impl Ops {
             Ok(())
         }
     }
+    */
 
     // SQLite Documentation:
     // Implement this function to read data from the file at the specified offset and store it in `buf_out`.
@@ -241,10 +244,10 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
-        if cqe.result() < 0 {
+        if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("close: raw os error result: {}", -cqe.result() as i32),
+                format!("close: raw os error result: {}", -result as i32),
             ))
         } else {
             Ok(())
@@ -276,7 +279,7 @@ impl Ops {
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("file_size: raw os error result: {}", -cqe.result() as i32),
+                format!("file_size: raw os error result: {}", -result as i32),
             ))
         } else {
             unsafe {
@@ -305,10 +308,10 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
-        if cqe.result() < 0 {
+        if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
-                format!("fsync: raw os error result: {}", -cqe.result() as i32),
+                format!("fsync: raw os error result: {}", -result as i32),
             ))
         } else {
             Ok(())

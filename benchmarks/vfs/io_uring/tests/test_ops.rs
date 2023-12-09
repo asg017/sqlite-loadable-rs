@@ -32,7 +32,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_and_close_file() -> Result<()> {
+    fn test_create_write_close_file() -> Result<()> {
         // Create a temporary file for testing
         let tmpfile = tempfile::NamedTempFile::new()?;
 
@@ -41,8 +41,15 @@ mod tests {
 
         let mut ops = Ops::new(new_file.as_ptr().cast_mut(), 16);
 
-        // Perform the open operation
+        // Perform the open operation to create the file
         let result = ops.open_file();
+
+        // Check if the operation was successful
+        assert!(result.is_ok());
+
+        // Write data to the file
+        let data_to_write = b"Hello, World!";
+        unsafe { ops.o_write(data_to_write.as_ptr() as *const c_void, 0, 13) }?;
 
         // Check if the operation was successful
         assert!(result.is_ok());
