@@ -141,6 +141,11 @@ There are two examples of how to apply this library to create your own vfs.
 In summary, you need to extend two traits "SqliteIoMethods" and "SqliteVfs", then attach those together
 in the open function in SqliteVfs.
 
+You can load the custom vfs in a compiled sqlite3 binary, by  doing the following:
+* In Cargo.toml, make sure the feature "static" is disabled: sqlite-loadable = {path="..."}
+* Load the dynamic object, e.g.: sqlite3 -cmd '.load ./target/debug/lib_myvfs'
+* in SQL: ATTACH 'file:my.db?vfs=myvfs' as myvfs
+
 ## Examples
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
