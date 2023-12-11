@@ -60,7 +60,9 @@ pub struct OpsFixed {
 impl OpsFixed {
     // Used for tests
     pub fn new(file_path: *const char, ring_size: u32) -> Self {
-        let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).expect("unable to create a ring")));
+        let mut ring = Rc::new(RefCell::new(
+            IoUring::new(ring_size).expect("unable to create a ring"),
+        ));
 
         Self::from_rc_refcell_ring(file_path, ring)
     }
@@ -105,7 +107,9 @@ impl OpsFixed {
 
         // Cleanup all fixed files (if any), then reserve two slots
         let _ = ring.submitter().unregister_files();
-        ring.submitter().register_files_sparse(2).expect("unable to register sparse files");
+        ring.submitter()
+            .register_files_sparse(2)
+            .expect("unable to register sparse files");
 
         let dirfd = types::Fd(libc::AT_FDCWD);
 

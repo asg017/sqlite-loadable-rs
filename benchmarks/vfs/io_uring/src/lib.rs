@@ -76,11 +76,17 @@ impl SqliteVfs for IoUringVfs {
         if let Ok(metadata) = fs::metadata(std::path::Path::new(file_path_str)) {
             if metadata.is_file() {
                 self.default_vfs.delete(z_name, sync_dir)?;
-            }else {
-                return Err(Error::new(ErrorKind::NotFound, "pointer did not refer to valid file"));
+            } else {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    "pointer did not refer to valid file",
+                ));
             }
-        }else {
-            return Err(Error::new(ErrorKind::NotFound, "failed to fetch metadata on file"));
+        } else {
+            return Err(Error::new(
+                ErrorKind::NotFound,
+                "failed to fetch metadata on file",
+            ));
         }
 
         Ok(())
@@ -194,7 +200,9 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
     let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
     let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
 
-    let mut ring = Rc::new(RefCell::new(IoUring::new(RING_SIZE).expect("unable to create a ring")));
+    let mut ring = Rc::new(RefCell::new(
+        IoUring::new(RING_SIZE).expect("unable to create a ring"),
+    ));
 
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {

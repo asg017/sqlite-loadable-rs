@@ -58,7 +58,9 @@ pub struct OpsFd {
 impl OpsFd {
     // Used for tests
     pub fn new(file_path: *const char, ring_size: u32) -> Self {
-        let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).expect("unable to create a ring")));
+        let mut ring = Rc::new(RefCell::new(
+            IoUring::new(ring_size).expect("unable to create a ring"),
+        ));
 
         Self::from_rc_refcell_ring(file_path, ring)
     }
