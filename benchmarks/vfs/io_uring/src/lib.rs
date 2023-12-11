@@ -5,7 +5,6 @@ pub mod ops;
 
 use io_uring::IoUring;
 use libc::name_t;
-use ops::Ops;
 
 use sqlite_loadable::ext::{
     sqlite3_file, sqlite3_io_methods, sqlite3_syscall_ptr, sqlite3_vfs,
@@ -37,6 +36,8 @@ use sqlite3ext_sys::{SQLITE_CANTOPEN, SQLITE_IOERR_DELETE, SQLITE_OPEN_MAIN_DB, 
 
 use std::io::{Error, ErrorKind, Result};
 
+use crate::ops::OpsFd;
+
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 
 // Based on the following article for default vfs, mem vfs and io uring vfs
@@ -63,7 +64,7 @@ impl SqliteVfs for IoUringVfs {
         flags: i32,
         p_res_out: *mut i32,
     ) -> Result<()> {
-        let mut uring_ops = Ops::from_rc_refcell_ring(z_name as *mut _, self.ring.clone());
+        let mut uring_ops = OpsFd::from_rc_refcell_ring(z_name as *mut _, self.ring.clone());
 
         let file_name = unsafe { CStr::from_ptr(z_name).to_str().unwrap() };
 
@@ -71,8 +72,8 @@ impl SqliteVfs for IoUringVfs {
 
         unsafe {
             // if you mess with C's managed memory, e.g. like owning a *char managed by C, expect weirdness.
-            let f = (p_file as *mut FileWithAux<Ops>).as_mut().unwrap();
-            f.pMethods = create_io_methods_boxed::<Ops>();
+            let f = (p_file as *mut FileWithAux<OpsFd>).as_mut().unwrap();
+            f.pMethods = create_io_methods_boxed::<OpsFd>();
             f.aux.write(uring_ops);
         };
 
@@ -230,7 +231,7 @@ pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> 
         name_ptr,
         1024,
         // sqlite3 has ownership and thus manages the memory
-        std::mem::size_of::<FileWithAux<Ops>>() as i32,
+        std::mem::size_of::<FileWithAux<OpsFd>>() as i32,
     );
 
     register_boxed_vfs(vfs, false)?;

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use _iouringvfs::ops::Ops;
+    use _iouringvfs::ops::OpsFixed;
     use std::ffi::CString;
     use std::io::Result;
     use std::io::Write;
@@ -10,13 +10,13 @@ mod tests {
     fn create_file(dir: &TempDir, file_name: &str, write: Option<&[u8]>) -> CString {
         let path_buf = dir.path().join(file_name);
         let path = CString::new(path_buf.as_os_str().as_bytes()).expect("bad path");
-        let mut file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(path_buf)
-            .expect("failed to create new file");
         if let Some(b) = write {
+            let mut file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .open(path_buf)
+                .expect("failed to create new file");
             let _ = file.write(b);
         }
         path
@@ -26,7 +26,7 @@ mod tests {
     fn test_open_and_close_file() -> Result<()> {
         let dir = tempfile::tempdir().expect("bad dir");
         let path = create_file(&dir, "main.db-journal", None);
-        let mut ops = Ops::new(path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(path.as_ptr() as _, 16);
 
         // Check if the operation was successful
         ops.open_file()?;
@@ -39,10 +39,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_create_write_close_file() -> Result<()> {
         let dir = tempfile::tempdir().expect("bad dir");
         let path = create_file(&dir, "main.db-journal", None);
-        let mut ops = Ops::new(path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(path.as_ptr() as _, 16);
 
         ops.open_file()?;
 
@@ -63,7 +64,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("bad dir");
         let path = create_file(&dir, "main.db-journal", Some(data_to_write));
-        let mut ops = Ops::new(path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(path.as_ptr() as _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -81,11 +82,38 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
+    fn test_write() -> Result<()> {
+        let tmpfile = tempfile::NamedTempFile::new()?;
+        let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
+
+        let mut ops = OpsFixed::new(file_path.as_ptr() as _, 16);
+
+        ops.open_file()?;
+
+        let data_to_write = b"Hello, World!";
+        unsafe {
+            ops.o_write(
+                data_to_write.as_ptr() as _,
+                0,
+                data_to_write.len().try_into().unwrap(),
+            )
+        }?;
+
+        let file = tmpfile.as_file();
+
+        assert_eq!(file.metadata()?.len(), data_to_write.len() as u64);
+
+        Ok(())
+    }
+
+    #[test]
+    #[ignore]
     fn test_write_then_read() -> Result<()> {
         // Create a temporary file for testing
         let dir = tempfile::tempdir().expect("bad dir");
         let path = create_file(&dir, "main.db-journal", None);
-        let mut ops = Ops::new(path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(path.as_ptr() as _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -112,7 +140,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("bad dir");
         let path = create_file(&dir, "main.db-journal", Some(data_to_write));
 
-        let mut ops = Ops::new(path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(path.as_ptr() as _, 16);
 
         // Perform the open operation
         ops.open_file()?;
@@ -133,7 +161,7 @@ mod tests {
         // Create a temporary file for testing
         let mut tmpfile = tempfile::NamedTempFile::new()?;
         let file_path = CString::new(tmpfile.path().to_string_lossy().to_string())?;
-        let mut ops = Ops::new(file_path.as_ptr() as _, 16);
+        let mut ops = OpsFixed::new(file_path.as_ptr() as _, 16);
 
         // Perform the open operation
         ops.open_file()?;

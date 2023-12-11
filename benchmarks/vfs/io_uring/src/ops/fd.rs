@@ -40,14 +40,12 @@ const USER_DATA_FALLOCATE: u64 = 0x5;
 const USER_DATA_CLOSE: u64 = 0x6;
 const USER_DATA_FSYNC: u64 = 0x7;
 
-const FILE_INDEX_MAIN_DB: u32 = 0x0;
-const FILE_INDEX_JOURNAL: u32 = 0x1;
-
 // Tested on linux 5.15.49, 6.1.0, 6.3.13
-pub struct Ops {
+pub struct OpsFd {
     ring: Rc<RefCell<IoUring>>,
     file_path: *const char,
-    file_index: Option<u32>,
+    file_fd: Option<i32>,
+    file: Option<File>,
     lock: Option<Lock>,
     file_name: String,
 }
@@ -57,7 +55,7 @@ pub struct Ops {
 /// A purely oxidized project should work with Path.
 /// Besides, the pointer memset that file_path is stored, is managed by C,
 /// bad things will happen to sqlite3 if you try to take away ownership.
-impl Ops {
+impl OpsFd {
     // Used for tests
     pub fn new(file_path: *const char, ring_size: u32) -> Self {
         let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).unwrap()));
@@ -66,10 +64,11 @@ impl Ops {
     }
 
     pub fn from_rc_refcell_ring(file_path: *const char, ring: Rc<RefCell<IoUring>>) -> Self {
-        Ops {
+        OpsFd {
             ring,
             file_path,
-            file_index: None,
+            file_fd: None,
+            file: None,
             lock: None,
             file_name: unsafe {
                 CStr::from_ptr(file_path as *const _)
@@ -80,41 +79,29 @@ impl Ops {
         }
     }
 
-    fn get_file_index(&self) -> u32 {
-        let suffixes = vec!["-conch", "-journal", "-wal"]; // TODO investigate: what is a conch?
-        let ends_with_suffix = suffixes.iter().any(|s| self.file_name.ends_with(s));
-        if ends_with_suffix {
-            FILE_INDEX_JOURNAL
-        } else {
-            FILE_INDEX_MAIN_DB
-        }
+    // all tests pass
+    pub fn open_file(&mut self) -> Result<()> {
+        // This calls libc::open
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(self.file_name.as_str())?;
+
+        let raw_fd = file.as_raw_fd();
+
+        self.file = Some(file);
+        self.file_fd = Some(raw_fd);
+
+        Ok(())
     }
 
-    fn get_dest_slot(&self) -> Option<types::DestinationSlot> {
-        let result = types::DestinationSlot::try_from_slot_target(self.get_file_index());
-        result.ok()
-    }
-
-    // TODO investigate as premature optimization: add O_DIRECT and O_SYNC parameters for systems that actually support it
-    // TODO investigate o_TMPFILE for -journal, -wal etc. and disable vfs DELETE event
-    // Things I tried to avoid the -9, invalid fd, [EBADDF](https://www.javatpoint.com/linux-error-codes)
-    // * open twice
-    // * submitter().register_sparse ... 2, submitter().unregister_files()
+    // tests pass except anything that writes
+    /*
     pub fn open_file(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        // Cleanup all fixed files (if any), then reserve two slots
-        let _ = ring.submitter().unregister_files();
-        ring.submitter().register_files_sparse(2).unwrap();
-
         let dirfd = types::Fd(libc::AT_FDCWD);
-
-        // source: https://stackoverflow.com/questions/5055859/how-are-the-o-sync-and-o-direct-flags-in-open2-different-alike
-        // file_size and open and close work
-        // let flags = libc::O_DIRECT as u64 | libc::O_SYNC as u64 | libc::O_CREAT as u64;
-
-        // file_size and open and close work
-        // let flags = libc::O_DIRECT as u64 | libc::O_CREAT as u64;
 
         let flags = libc::O_CREAT as u64;
 
@@ -123,8 +110,7 @@ impl Ops {
             .mode(libc::S_IRUSR as u64 | libc::S_IWUSR as u64);
 
         let open_e: opcode::OpenAt2 =
-            opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow)
-                .file_index(self.get_dest_slot());
+            opcode::OpenAt2::new(dirfd, self.file_path as *const _, &openhow);
 
         unsafe {
             ring.submission()
@@ -138,31 +124,22 @@ impl Ops {
         let cqe = &cqes.as_slice()[0];
         let result = cqe.result();
 
-        // TODO turn on later
-        // unsafe {
-        //     let path = CStr::from_ptr(self.file_path);
-        //     log::trace!(
-        //         "open {} with fd: {}",
-        //         path.to_string_lossy().to_string(),
-        //         result
-        //     )
-        // }
-
         if result < 0 {
             Err(Error::new(
                 ErrorKind::Other,
                 format!("open_file: raw os error result: {}", -result as i32),
             ))
         } else {
-            self.file_index = Some(self.get_file_index());
+            self.file_fd = Some(result);
             Ok(())
         }
     }
+    */
 
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_index.unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
@@ -186,7 +163,7 @@ impl Ops {
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_index.unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Write::new(fd, buf_in as _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
@@ -207,45 +184,41 @@ impl Ops {
         }
     }
 
-    /*
-    // This should work but it refuses the fd from open_file and returns -22 (EINVAL, invalid argument)
-    pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
-        let mut file_size_box = Box::new(0 as u64);
-        let mut file_size_ptr = Box::into_raw(file_size_box);
-        self.o_file_size(file_size_ptr);
+    // pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
+    //     let mut file_size_box = Box::new(0 as u64);
+    //     let mut file_size_ptr = Box::into_raw(file_size_box);
+    //     self.o_file_size(file_size_ptr);
 
-        let mut ring = self.ring.as_ref().borrow_mut();
+    //     let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_index.unwrap());
-        // let mut op = opcode::Fallocate::new(fd, size.try_into().unwrap()).offset(0); // before
-        let new_size: u64 = size.try_into().unwrap();
-        let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
-            .offset((size - 1).try_into().unwrap())
-            .mode(libc::FALLOC_FL_COLLAPSE_RANGE);
+    //     let fd = types::Fd(self.file_fd.unwrap());
+    //     let new_size: u64 = size.try_into().unwrap();
+    //     let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
+    //         .offset((size - 1).try_into().unwrap())
+    //         .mode(libc::FALLOC_FL_COLLAPSE_RANGE);
 
-        ring.submission()
-            .push(&op.build().user_data(USER_DATA_FALLOCATE))
-            .expect("queue is full");;
+    //     ring.submission()
+    //         .push(&op.build().user_data(USER_DATA_FALLOCATE))
+    //         .expect("queue is full");;
 
-        ring.submit_and_wait(1)
-            .expect("submit failed or timed out");
+    //     ring.submit_and_wait(1)
+    //         .expect("submit failed or timed out");
 
-        let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
-        let cqe = &cqes.as_slice()[0];
-        let result = cqe.result();
+    //     let cqes: Vec<io_uring::cqueue::Entry> = ring.completion().map(Into::into).collect();
+    //     let cqe = &cqes.as_slice()[0];
+    //     let result = cqe.result();
 
-        Box::from_raw(file_size_ptr);
+    //     Box::from_raw(file_size_ptr);
 
-        if result < 0 {
-            Err(Error::new(
-                ErrorKind::Other,
-                format!("truncate: raw os error result: {}", -result as i32),
-            ))
-        }else {
-            Ok(())
-        }
-    }
-    */
+    //     if result < 0 {
+    //         Err(Error::new(
+    //             ErrorKind::Other,
+    //             format!("truncate: raw os error result: {}", -result as i32),
+    //         ))
+    //     }else {
+    //         Ok(())
+    //     }
+    // }
 
     pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
         // libc::ftruncate using self.file_fd returns -1
@@ -275,7 +248,7 @@ impl Ops {
     pub unsafe fn o_close(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_index.unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let mut op = opcode::Close::new(fd);
 
         ring.submission()
@@ -337,7 +310,7 @@ impl Ops {
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fixed(self.file_index.unwrap());
+        let fd = types::Fd(self.file_fd.unwrap());
         let op = opcode::Fsync::new(fd);
 
         ring.submission()
@@ -405,7 +378,7 @@ impl Ops {
 }
 
 // TODO remove *mut sqlite3_file
-impl SqliteIoMethods for Ops {
+impl SqliteIoMethods for OpsFd {
     fn close(&mut self) -> Result<()> {
         log::trace!("file close");
 
