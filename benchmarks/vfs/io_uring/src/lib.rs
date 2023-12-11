@@ -89,23 +89,7 @@ impl SqliteVfs for IoUringVfs {
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
         log::trace!("access, flags {}", flags);
 
-        let f = unsafe { CStr::from_ptr(z_name) };
-
-        let file_path_str = f.to_str().expect("invalid UTF-8 string");
-
-        if let Ok(metadata) = fs::metadata(std::path::Path::new(file_path_str)) {
-            if metadata.is_file() && !metadata.permissions().readonly() {
-                unsafe { *p_res_out = 0 };
-            }else {
-                unsafe { *p_res_out = 1 };
-                return Err(Error::new(ErrorKind::PermissionDenied, "Not a file or read-only file"));
-            }
-        }else {
-            unsafe { *p_res_out = 1 };
-            return Err(Error::new(ErrorKind::NotFound, "failed to fetch metadata on file"));
-        }
-
-        Ok(())
+        self.default_vfs.access(z_name, flags, p_res_out)
     }
 
     fn full_pathname(
