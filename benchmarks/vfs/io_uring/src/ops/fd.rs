@@ -184,6 +184,7 @@ impl OpsFd {
         }
     }
 
+    // TODO implement with a read then write, also apply linking to guarantee read before write
     // pub unsafe fn o_truncate(&mut self, size: i64) -> Result<()> {
     //     let mut file_size_box = Box::new(0 as u64);
     //     let mut file_size_ptr = Box::into_raw(file_size_box);
