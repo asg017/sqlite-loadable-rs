@@ -38,12 +38,6 @@ use std::io::{Error, ErrorKind, Result};
 
 use crate::ops::OpsFd;
 
-/// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
-
-// Based on the following article for default vfs, mem vfs and io uring vfs
-// source: https://voidstar.tech/sqlite_insert_speed
-// source: https://www.sqlite.org/speed.html
-
 pub const EXTENSION_NAME: &str = "iouring";
 pub const RING_SIZE: u32 = 32;
 
@@ -55,7 +49,6 @@ struct IoUringVfs {
     ring: Rc<RefCell<IoUring>>,
 }
 
-// TODO replace all unwraps with proper error handling
 impl SqliteVfs for IoUringVfs {
     fn open(
         &mut self,
@@ -66,8 +59,6 @@ impl SqliteVfs for IoUringVfs {
     ) -> Result<()> {
         let mut uring_ops = OpsFd::from_rc_refcell_ring(z_name as *mut _, self.ring.clone());
 
-        let file_name = unsafe { CStr::from_ptr(z_name).to_str().unwrap() };
-
         uring_ops.open_file()?;
 
         unsafe { prepare_file_ptr(p_file, uring_ops) };
@@ -75,32 +66,45 @@ impl SqliteVfs for IoUringVfs {
         Ok(())
     }
 
-    // TODO replace with io_uring's system call free delete
     fn delete(&mut self, z_name: *const c_char, sync_dir: i32) -> Result<()> {
         log::trace!("delete");
 
         let f = unsafe { CStr::from_ptr(z_name) };
 
-        // TODO handle error
-        let file_path_str = f.to_str().unwrap();
+        let file_path_str = f.to_str().expect("invalid UTF-8 string");
 
-        // TODO handle error
         if let Ok(metadata) = fs::metadata(std::path::Path::new(file_path_str)) {
             if metadata.is_file() {
-                self.default_vfs.delete(z_name, sync_dir);
+                self.default_vfs.delete(z_name, sync_dir)?;
+            }else {
+                return Err(Error::new(ErrorKind::NotFound, "pointer did not refer to valid file"));
             }
+        }else {
+            return Err(Error::new(ErrorKind::NotFound, "failed to fetch metadata on file"));
         }
 
         Ok(())
     }
 
     fn access(&mut self, z_name: *const c_char, flags: i32, p_res_out: *mut i32) -> Result<()> {
-        log::trace!("access");
+        log::trace!("access, flags {}", flags);
 
-        unsafe {
-            // *p_res_out = if self.wal { 1 } else { 0 };
-            *p_res_out = 0;
+        let f = unsafe { CStr::from_ptr(z_name) };
+
+        let file_path_str = f.to_str().expect("invalid UTF-8 string");
+
+        if let Ok(metadata) = fs::metadata(std::path::Path::new(file_path_str)) {
+            if metadata.is_file() && !metadata.permissions().readonly() {
+                unsafe { *p_res_out = 0 };
+            }else {
+                unsafe { *p_res_out = 1 };
+                return Err(Error::new(ErrorKind::PermissionDenied, "Not a file or read-only file"));
+            }
+        }else {
+            unsafe { *p_res_out = 1 };
+            return Err(Error::new(ErrorKind::NotFound, "failed to fetch metadata on file"));
         }
+
         Ok(())
     }
 
@@ -121,7 +125,7 @@ impl SqliteVfs for IoUringVfs {
         Ok(())
     }
 
-    /// From here onwards, all calls are redirected to the default vfs
+    /// From here onwards, all calls are redirected to the default vfs, e.g. default unix vfs
     // fn dl_open(&mut self, z_filename: *const c_char) -> *mut c_void {
     //     self.default_vfs.dl_open(z_filename)
     // }
@@ -202,11 +206,11 @@ fn vfs_from_file(
 pub fn sqlite3_iouringvfs_init(db: *mut sqlite3) -> sqlite_loadable::Result<()> {
     let vfs_name = CString::new(EXTENSION_NAME).expect("should be fine");
 
-    let shimmed_name = CString::new("unix").unwrap();
+    let shimmed_name = CString::new("unix").expect("cannot find the default linux vfs");
     let shimmed_vfs_char = shimmed_name.as_ptr() as *const c_char;
     let shimmed_vfs = unsafe { sqlite3ext_vfs_find(shimmed_vfs_char) };
 
-    let mut ring = Rc::new(RefCell::new(IoUring::new(RING_SIZE).unwrap()));
+    let mut ring = Rc::new(RefCell::new(IoUring::new(RING_SIZE).expect("unable to create a ring")));
 
     let ring_vfs = IoUringVfs {
         default_vfs: unsafe {

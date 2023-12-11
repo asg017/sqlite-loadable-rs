@@ -58,7 +58,7 @@ pub struct OpsFd {
 impl OpsFd {
     // Used for tests
     pub fn new(file_path: *const char, ring_size: u32) -> Self {
-        let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).unwrap()));
+        let mut ring = Rc::new(RefCell::new(IoUring::new(ring_size).expect("unable to create a ring")));
 
         Self::from_rc_refcell_ring(file_path, ring)
     }
@@ -73,7 +73,7 @@ impl OpsFd {
             file_name: unsafe {
                 CStr::from_ptr(file_path as *const _)
                     .to_str()
-                    .unwrap()
+                    .expect("invalid utf8")
                     .to_string()
             },
         }
@@ -139,7 +139,7 @@ impl OpsFd {
     pub unsafe fn o_read(&mut self, offset: u64, size: u32, buf_out: *mut c_void) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fd(self.file_fd.expect("missing fd"));
         let mut op = opcode::Read::new(fd, buf_out as *mut _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_READ))
@@ -163,7 +163,7 @@ impl OpsFd {
     pub unsafe fn o_write(&mut self, buf_in: *const c_void, offset: u64, size: u32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fd(self.file_fd.expect("missing fd"));
         let mut op = opcode::Write::new(fd, buf_in as _, size).offset(offset);
         ring.submission()
             .push(&op.build().user_data(USER_DATA_WRITE))
@@ -192,7 +192,7 @@ impl OpsFd {
 
     //     let mut ring = self.ring.as_ref().borrow_mut();
 
-    //     let fd = types::Fd(self.file_fd.unwrap());
+    //     let fd = types::Fd(self.file_fd.expect("missing fd"));
     //     let new_size: u64 = size.try_into().unwrap();
     //     let mut op = opcode::Fallocate::new(fd, (*file_size_ptr) - new_size)
     //         .offset((size - 1).try_into().unwrap())
@@ -249,7 +249,7 @@ impl OpsFd {
     pub unsafe fn o_close(&mut self) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fd(self.file_fd.expect("missing fd"));
         let mut op = opcode::Close::new(fd);
 
         ring.submission()
@@ -311,7 +311,7 @@ impl OpsFd {
     pub unsafe fn o_fsync(&mut self, flags: i32) -> Result<()> {
         let mut ring = self.ring.as_ref().borrow_mut();
 
-        let fd = types::Fd(self.file_fd.unwrap());
+        let fd = types::Fd(self.file_fd.expect("missing fd"));
         let op = opcode::Fsync::new(fd);
 
         ring.submission()

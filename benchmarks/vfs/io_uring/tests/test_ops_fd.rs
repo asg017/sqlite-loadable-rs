@@ -1,3 +1,7 @@
+// Sometimes one test will fail randomly
+// when the completion queue takes its sweet time
+// Just run the test again
+
 #[cfg(test)]
 mod tests {
     use _iouringvfs::ops::OpsFd;

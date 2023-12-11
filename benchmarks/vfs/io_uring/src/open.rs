@@ -1,7 +1,3 @@
-#![allow(clippy::question_mark)]
-//! Create a custom SQLite virtual file system by implementing the [Vfs] trait and registering it
-//! using [register].
-
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::{c_void, CStr, CString};
@@ -24,9 +20,6 @@ pub struct OpenOptions {
 
     /// The access an object is opened with.
     pub access: OpenAccess,
-
-    /// The file should be deleted when it is closed.
-    delete_on_close: bool,
 }
 
 /*
@@ -80,5 +73,5 @@ pub enum OpenAccess {
     Create = 6,
 
     /// Create the file, but throw if it it already exist (includes write and read access).
-    CreateNewThrowIfExists = 8, // TODO figure out how to support on io_uring
+    CreateNewThrowIfExists = 8,
 }
