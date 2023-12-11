@@ -70,12 +70,7 @@ impl SqliteVfs for IoUringVfs {
 
         uring_ops.open_file()?;
 
-        unsafe {
-            // if you mess with C's managed memory, e.g. like owning a *char managed by C, expect weirdness.
-            let f = (p_file as *mut FileWithAux<OpsFd>).as_mut().unwrap();
-            f.pMethods = create_io_methods_boxed::<OpsFd>();
-            f.aux.write(uring_ops);
-        };
+        unsafe { prepare_file_ptr(p_file, uring_ops) };
 
         Ok(())
     }

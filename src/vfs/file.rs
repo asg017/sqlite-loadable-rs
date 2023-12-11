@@ -205,11 +205,11 @@ pub unsafe fn prepare_file_ptr<T: SqliteIoMethods>(
     file_ptr: *mut sqlite3_file,
     aux: T,
 ) -> *const sqlite3_file {
-    let mut f = &mut *file_ptr.cast::<FileWithAux<T>>();
-    std::mem::replace(&mut f.pMethods, create_io_methods_boxed::<T>());
+    let f = (file_ptr as *mut FileWithAux<T>).as_mut().unwrap();
+    f.pMethods = create_io_methods_boxed::<T>();
     f.aux.write(aux);
 
-    file_ptr // in case other fields have to be modified
+    file_ptr
 }
 
 pub fn create_io_methods_boxed<T: SqliteIoMethods>() -> Box<sqlite3_io_methods> {
