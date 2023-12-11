@@ -17,13 +17,6 @@ use sqlite3ext_sys::{
 
 use std::io::{Error, Result, ErrorKind};
 
-/// There is some duplication between rusqlite / sqlite3ext / libsqlite3
-/// 
-/// The following dependency has to be copied by users to use this vfs implementation:
-/// sqlite3ext-sys = {version="0.0.1", path="./sqlite3ext-sys"}
-// TODO This lib should be released as the new 0.0.2 version, with the previously missing
-// .default_macro_constant_type(bindgen::MacroTypeVariation::Signed) parameter
-
 /// Inspired by https://www.sqlite.org/src/file/ext/misc/memvfs.c
 /// See https://www.sqlite.org/debugging.html for debugging methods
 struct MemVfs {

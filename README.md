@@ -138,6 +138,9 @@ There are two examples of how to apply this library to create your own vfs.
 1. [io_uring_vfs](./benchmarks/vfs/io_uring/)
 2. [mem_vfs](./examples/mem_vfs.rs)
 
+In summary, you need to extend two traits "SqliteIoMethods" and "SqliteVfs", then attach those together
+in the open function in SqliteVfs.
+
 ## Examples
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
