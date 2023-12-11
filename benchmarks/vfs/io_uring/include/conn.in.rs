@@ -28,16 +28,24 @@ fn create_test_database(args: Vec<String>) -> rusqlite::Result<Connection> {
         )));
     }
 
+    // Necessary to load the custom vfs
     let _conn = Connection::open_in_memory()?;
     _conn.close().expect("error occurred while closing");
 
     let conn = if args.len() == 2 {
         let file_path = args[1].as_str();
-        if file_path.contains("ring") {
+
+        let conn = if file_path.contains("ring") {
             open_io_uring_connection(file_path)?
         }else {
             Connection::open(file_path)?
+        };
+
+        if file_path.contains("wal") {
+            conn.execute_batch("PRAGMA journal_mode = WAL")?;
         }
+
+        conn    
     }else {
         Connection::open_in_memory()?
     };
