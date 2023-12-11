@@ -60,7 +60,7 @@ Your mileage might vary.
 
 Lower "Relative" speed is better.
 
-### Apple M2, Docker
+### Apple M2, Docker, Linux 6.3.13-linuxkit
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 | --- | --- | --- | --- | --- |
@@ -190,7 +190,7 @@ Lower "Relative" speed is better.
 | `test_16 db/test_16.ring.wal.db` | 53.7 ± 1.9 | 51.0 | 64.1 | 1.61 ± 0.07 |
 | `test_16 db/test_16.wal.db` | 64.0 ± 1.2 | 61.6 | 66.5 | 1.91 ± 0.05 |
 
-### x86_64 intel, VirtualBox
+### x86_64 intel, VirtualBox, 6.1.0-14-amd64
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 | --- | --- | --- | --- | --- |
