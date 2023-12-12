@@ -9,8 +9,11 @@ use sqlite3ext_sys::{
     SQLITE_IOERR_TRUNCATE, SQLITE_IOERR_UNLOCK, SQLITE_IOERR_WRITE,
 };
 
-use std::{os::raw::{c_int, c_void}, mem::MaybeUninit, fs::File}
-;
+use std::{
+    fs::File,
+    mem::MaybeUninit,
+    os::raw::{c_int, c_void},
+};
 
 use crate::vfs::traits::SqliteIoMethods;
 use crate::vfs::vfs::handle_error;

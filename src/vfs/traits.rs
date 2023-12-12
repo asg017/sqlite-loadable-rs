@@ -10,7 +10,13 @@ use sqlite3ext_sys::sqlite3_vfs;
 #[cfg(feature = "vfs_syscall")]
 use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_vfs};
 
+/// There was no attempt to idiomize the parameters or functions, because the shims, that reuse
+/// existing sqlite3 C-based vfs functionality, e.g. unix vfs, also must conform to how the C parameters work.
+///
+/// Idiomizing the functions / parameters / types, or "oxidizing" them is left to the user.
+
 // TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
+// TODO even better read the asm and verify that this extra indirection was removed
 /// See https://www.sqlite.org/c3ref/io_methods.html for hints on how to implement
 pub trait SqliteIoMethods {
     fn close(&mut self) -> Result<()>;
@@ -58,24 +64,14 @@ pub trait SqliteIoMethods {
         arg2: c_int,
         arg3: *mut *mut c_void,
     ) -> Result<()>;
-    fn shm_lock(
-        &mut self,
-        offset: c_int,
-        n: c_int,
-        flags: c_int,
-    ) -> Result<()>;
+    fn shm_lock(&mut self, offset: c_int, n: c_int, flags: c_int) -> Result<()>;
     fn shm_barrier(&mut self) -> Result<()>;
     fn shm_unmap(&mut self, delete_flag: c_int) -> Result<()>;
-    fn fetch(
-        &mut self,
-        i_ofst: i64,
-        i_amt: c_int,
-        pp: *mut *mut c_void,
-    ) -> Result<()>;
+    fn fetch(&mut self, i_ofst: i64, i_amt: c_int, pp: *mut *mut c_void) -> Result<()>;
     fn unfetch(&mut self, i_ofst: i64, p: *mut c_void) -> Result<()>;
 }
 
-// TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks)
+// TODO compare dynamic (indirection via trait) vs static dispatch (just callbacks), same as upstairs
 pub trait SqliteVfs {
     fn open(
         &mut self,
