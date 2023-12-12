@@ -16,7 +16,9 @@ use crate::ext::{
     sqlite3ext_value_subtype, sqlite3ext_value_text, sqlite3ext_value_type,
 };
 use crate::Error;
-use sqlite3ext_sys::{SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT, SQLITE_OK};
+use sqlite3ext_sys::{
+    SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_TEXT,
+};
 use std::os::raw::c_int;
 use std::slice::from_raw_parts;
 use std::str::Utf8Error;

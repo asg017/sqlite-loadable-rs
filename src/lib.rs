@@ -12,8 +12,8 @@ pub mod ext; // TODO dont expose
 pub mod prelude;
 pub mod scalar;
 pub mod table;
-pub mod vtab_argparse;
 pub mod vfs;
+pub mod vtab_argparse;
 
 #[doc(inline)]
 pub use errors::{Error, ErrorKind, Result};
@@ -30,6 +30,6 @@ pub use table::{
     define_virtual_table_writeable, define_virtual_table_writeablex, BestIndexError,
 };
 
+pub use vfs::traits::{SqliteIoMethods, SqliteVfs};
 #[doc(inline)]
 pub use vfs::vfs::register_boxed_vfs;
-pub use vfs::traits::{SqliteIoMethods, SqliteVfs};
