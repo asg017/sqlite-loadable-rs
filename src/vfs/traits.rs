@@ -10,10 +10,13 @@ use sqlite3ext_sys::sqlite3_vfs;
 #[cfg(feature = "vfs_syscall")]
 use sqlite3ext_sys::{sqlite3_syscall_ptr, sqlite3_vfs};
 
-/// There was no attempt to idiomize the parameters or functions, because the shims, that reuse
+/// There was no attempt to rustify the parameters or functions, because the shims, that reuse
 /// existing sqlite3 C-based vfs functionality, e.g. unix vfs, also must conform to how the C parameters work.
+/// 
+/// Also, maintaining the function signatures as-is, help keep the existing documentation relevant:
+/// e.g.: https://www.sqlite.org/vfs.html
 ///
-/// Idiomizing the functions / parameters / types, or "oxidizing" them is left to the user.
+/// Rustifying functions / parameters / types, or "oxidizing" them is left to the user.
 
 // TODO compare performance of dynamic (indirection via trait) vs static dispatch (just callbacks)
 // TODO even better read the asm and verify that this extra indirection was removed
