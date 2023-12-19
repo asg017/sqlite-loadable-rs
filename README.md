@@ -23,7 +23,7 @@ SQLite's [runtime loadable extensions](https://www.sqlite.org/loadext.html) allo
 
 Historically, the main way one could create these _loadable_ SQLite extensions were with C/C++, such as [spatilite](https://www.gaia-gis.it/fossil/libspatialite/index), the wonderful [sqlean project](https://github.com/nalgeon/sqlean), or SQLite's [official miscellaneous extensions](https://www.sqlite.org/src/file/ext/misc).
 
-But C is difficult to use safely, and integrating 3rd party libraries can be a nightmare. Riyaz Ali wrote a [Go library](https://github.com/riyaz-ali/sqlite) that allows one to easily write loadable extensions in Go, but it comes with a large performance cost and binary size. For Rust, [rusqlite](https://github.com/rusqlite/rusqlite) has had a few different PRs that attempted to add loadable extension support in that library, but none have been merged.
+But C is difficult to use safely, and integrating 3rd party libraries can be a nightmare. Riyaz Ali wrote a [Go library](https://github.com/riyaz-ali/sqlite) that allows one to easily write loadable extensions in Go, but it comes with a large performance cost and binary size. ~~For Rust, [rusqlite](https://github.com/rusqlite/rusqlite) has had a few different PRs that attempted to add loadable extension support in that library, but none have been merged.~~ **UPDATE December 2023:** as of [rusqlite 0.30.0](https://github.com/rusqlite/rusqlite/releases/tag/v0.30.0), they now support loadable extensions with the `loadable_extension` feature!
 
 So, `sqlite-loadable-rs` is the first and most involved framework for writing loadable SQLite extensions in Rust!
 
