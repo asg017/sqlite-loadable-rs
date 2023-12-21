@@ -45,6 +45,7 @@ impl Error {
             ErrorKind::CStringUtf8Error(_) => "utf8 err".to_owned(),
             ErrorKind::Message(msg) => msg,
             ErrorKind::TableFunction(_) => "table func error".to_owned(),
+            ErrorKind::DefineWindowFunction(_) => "Error defining window function".to_owned(),
         }
     }
 }
@@ -53,6 +54,7 @@ impl Error {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     DefineScalarFunction(c_int),
+    DefineWindowFunction(c_int),
     CStringError(NulError),
     CStringUtf8Error(std::str::Utf8Error),
     TableFunction(c_int),

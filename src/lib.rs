@@ -14,12 +14,20 @@ pub mod prelude;
 pub mod scalar;
 pub mod table;
 pub mod vtab_argparse;
+pub mod window;
+pub mod bit_flags;
 
 #[doc(inline)]
 pub use errors::{Error, ErrorKind, Result};
 
 #[doc(inline)]
-pub use scalar::{define_scalar_function, define_scalar_function_with_aux, FunctionFlags};
+pub use bit_flags::FunctionFlags;
+
+#[doc(inline)]
+pub use scalar::{define_scalar_function, define_scalar_function_with_aux};
+
+#[doc(inline)]
+pub use window::{define_window_function,define_window_function_with_aux};
 
 #[doc(inline)]
 pub use collation::define_collation;

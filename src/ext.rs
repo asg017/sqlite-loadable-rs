@@ -29,7 +29,7 @@ pub use sqlite3ext_sys::{
     sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_index_info,
     sqlite3_index_info_sqlite3_index_constraint, sqlite3_index_info_sqlite3_index_constraint_usage,
     sqlite3_index_info_sqlite3_index_orderby, sqlite3_module, sqlite3_stmt, sqlite3_value,
-    sqlite3_vtab, sqlite3_vtab_cursor,
+    sqlite3_vtab, sqlite3_vtab_cursor, sqlite3_create_window_function
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
@@ -411,6 +411,42 @@ pub unsafe fn sqlite3ext_get_auxdata(context: *mut sqlite3_context, n: c_int) ->
 #[cfg(not(feature = "static"))]
 pub unsafe fn sqlite3ext_get_auxdata(context: *mut sqlite3_context, n: c_int) -> *mut c_void {
     ((*SQLITE3_API).get_auxdata.expect(EXPECT_MESSAGE))(context, n)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_create_window_function(
+    db: *mut sqlite3,
+    s: *const c_char,
+    argc: i32,
+    text_rep: i32,
+    p_app: *mut c_void,
+    x_step: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_value: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_inverse: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>
+) -> c_int {
+    sqlite3_create_window_function(
+        db, s, argc, text_rep, p_app, x_step, x_final, x_value, x_inverse, destroy,
+    )
+}
+
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_create_window_function(
+    db: *mut sqlite3,
+    s: *const c_char,
+    argc: i32,
+    text_rep: i32,
+    p_app: *mut c_void,
+    x_step: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    x_final: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_value: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
+    x_inverse: Option<unsafe extern "C" fn(*mut sqlite3_context, i32, *mut *mut sqlite3_value)>,
+    destroy: Option<unsafe extern "C" fn(*mut c_void)>
+) -> c_int {
+    ((*SQLITE3_API).create_window_function.expect(EXPECT_MESSAGE))(
+        db, s, argc, text_rep, p_app, x_step, x_final, x_value, x_inverse, destroy,
+    )
 }
 
 #[cfg(feature = "static")]
