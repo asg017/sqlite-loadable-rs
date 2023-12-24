@@ -1,0 +1,6 @@
+*.db
+*-journal
+sqlite3
+leaky.txt
+db/**
+md/**

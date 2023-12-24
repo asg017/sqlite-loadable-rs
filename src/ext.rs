@@ -17,23 +17,27 @@ use std::{
 
 #[cfg(feature = "static")]
 pub use libsqlite3_sys::{
-    sqlite3, sqlite3_api_routines, sqlite3_context,
-    sqlite3_index_constraint as sqlite3_index_info_sqlite3_index_constraint,
+    sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_database_file_object, sqlite3_file,
+    sqlite3_file_control, sqlite3_index_constraint as sqlite3_index_info_sqlite3_index_constraint,
     sqlite3_index_constraint_usage as sqlite3_index_info_sqlite3_index_constraint_usage,
     sqlite3_index_info, sqlite3_index_orderby as sqlite3_index_info_sqlite3_index_orderby,
-    sqlite3_module, sqlite3_stmt, sqlite3_value, sqlite3_vtab, sqlite3_vtab_cursor,
+    sqlite3_int64, sqlite3_io_methods, sqlite3_module, sqlite3_stmt, sqlite3_syscall_ptr,
+    sqlite3_value, sqlite3_vfs, sqlite3_vfs_find, sqlite3_vfs_register, sqlite3_vfs_unregister,
+    sqlite3_vtab, sqlite3_vtab_cursor,
 };
 
 #[cfg(not(feature = "static"))]
 pub use sqlite3ext_sys::{
-    sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_index_info,
-    sqlite3_index_info_sqlite3_index_constraint, sqlite3_index_info_sqlite3_index_constraint_usage,
-    sqlite3_index_info_sqlite3_index_orderby, sqlite3_module, sqlite3_stmt, sqlite3_value,
+    sqlite3, sqlite3_api_routines, sqlite3_context, sqlite3_file, sqlite3_file_control,
+    sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
+    sqlite3_index_info_sqlite3_index_constraint_usage, sqlite3_index_info_sqlite3_index_orderby,
+    sqlite3_int64, sqlite3_io_methods, sqlite3_module, sqlite3_stmt, sqlite3_syscall_ptr,
+    sqlite3_value, sqlite3_vfs, sqlite3_vfs_find, sqlite3_vfs_register, sqlite3_vfs_unregister,
     sqlite3_vtab, sqlite3_vtab_cursor,
 };
 
 /// If creating a dynmically loadable extension, this MUST be redefined to point
-/// to a proper sqlite3_api_rountines module (from a entrypoint function).
+/// to a proper sqlite3_api_routines module (from a entrypoint function).
 /// The "sqlite_entrypoint" macro will do this for you usually.
 static mut SQLITE3_API: *mut sqlite3_api_routines = std::ptr::null_mut();
 
@@ -592,6 +596,62 @@ pub unsafe fn sqlite3ext_context_db_handle(context: *mut sqlite3_context) -> *mu
 }
 
 #[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_vfs_unregister(vfs_ptr: *mut sqlite3_vfs) -> i32 {
+    return libsqlite3_sys::sqlite3_vfs_unregister(vfs_ptr);
+}
+
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_vfs_unregister(vfs_ptr: *mut sqlite3_vfs) -> i32 {
+    ((*SQLITE3_API).vfs_unregister.expect(EXPECT_MESSAGE))(vfs_ptr)    
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_vfs_register(
+    vfs_ptr: *mut sqlite3_vfs,
+    make_default: i32,
+) -> i32 {
+    return libsqlite3_sys::sqlite3_vfs_register(vfs_ptr, make_default);
+}
+
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_vfs_register(
+    vfs_ptr: *mut sqlite3_vfs,
+    make_default: i32,
+) -> i32 {
+    ((*SQLITE3_API).vfs_register.expect(EXPECT_MESSAGE))(vfs_ptr, make_default)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_vfs_find(name: *const c_char) -> *mut sqlite3_vfs {
+    return libsqlite3_sys::sqlite3_vfs_find(name);
+}
+
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_vfs_find(name: *const c_char) -> *mut sqlite3_vfs {
+    ((*SQLITE3_API).vfs_find.expect(EXPECT_MESSAGE))(name)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_file_control(
+    db: *mut sqlite3,
+    name: *const c_char,
+    option: c_int,
+    data: *mut c_void,
+) -> c_int {
+    return libsqlite3_sys::sqlite3_file_control(db, name, option, data);
+}
+
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_file_control(
+    db: *mut sqlite3,
+    name: *const c_char,
+    option: c_int,
+    data: *mut c_void,
+) -> c_int {
+    ((*SQLITE3_API).file_control.expect(EXPECT_MESSAGE))(db, name, option, data)
+}
+
+#[cfg(feature = "static")]
 pub unsafe fn sqlite3ext_user_data(context: *mut sqlite3_context) -> *mut c_void {
     libsqlite3_sys::sqlite3_user_data(context)
 }
@@ -615,4 +675,13 @@ pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
 #[cfg(not(feature = "static"))]
 pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
     ((*SQLITE3_API).auto_extension.expect(EXPECT_MESSAGE))(Some(f))
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_database_file_object(s: *const c_char) -> *mut sqlite3_file {
+    libsqlite3_sys::sqlite3_database_file_object(s)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_database_file_object(s: *const c_char) -> *mut sqlite3_file {
+    ((*SQLITE3_API).database_file_object.expect(EXPECT_MESSAGE))(s)
 }

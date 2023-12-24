@@ -132,6 +132,20 @@ select * from xxx;
 
 Some real-world non-Rust examples of traditional virtual tables in SQLite include the [CSV virtual table](https://www.sqlite.org/csv.html), the full-text search [fts5 extension](https://www.sqlite.org/fts5.html#fts5_table_creation_and_initialization), and the [R-Tree extension](https://www.sqlite.org/rtree.html#creating_an_r_tree_index).
 
+### Virtual file system
+
+There are two examples of how to apply this library to create your own vfs.
+1. [io_uring_vfs](./benchmarks/vfs/io_uring/)
+2. [mem_vfs](./examples/mem_vfs.rs)
+
+In summary, you need to extend two traits "SqliteIoMethods" and "SqliteVfs", then attach those together
+in the open function in SqliteVfs.
+
+You can load the custom vfs in a compiled sqlite3 binary, by  doing the following:
+* In Cargo.toml, make sure the feature "static" is disabled: sqlite-loadable = {path="..."}
+* Load the dynamic object, e.g.: sqlite3 -cmd '.load ./target/debug/lib_myvfs'
+* in SQL: ATTACH 'file:my.db?vfs=myvfs' as myvfs
+
 ## Examples
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
@@ -243,7 +257,7 @@ A hello world extension in C is `17KB`, while one in Rust is `469k`. It's still 
 - [ ] Stabilize virtual table interface
 - [ ] Support [aggregate window functions](https://www.sqlite.org/windowfunctions.html#udfwinfunc) ([#1](https://github.com/asg017/sqlite-loadable-rs/issues/1))
 - [ ] Support [collating sequences](https://www.sqlite.org/c3ref/create_collation.html) ([#2](https://github.com/asg017/sqlite-loadable-rs/issues/2))
-- [ ] Support [virtual file systems](sqlite.org/vfs.html) ([#3](https://github.com/asg017/sqlite-loadable-rs/issues/3))
+- [x] Support [virtual file systems](sqlite.org/vfs.html) ([#3](https://github.com/asg017/sqlite-loadable-rs/issues/3))
 
 ## Supporting
 
