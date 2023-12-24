@@ -20,6 +20,7 @@ libsqlite3-sys = {version="0.26.0", optional=true, features=["bundled"]}
 [dev-dependencies]
 rusqlite = "0.29.0"
 libsqlite3-sys = {version="0.26.0", default-features = false, features=["bundled"]}
+rand = "0.8.5"
 
 [features]
 static = ["libsqlite3-sys"]
