@@ -16,9 +16,12 @@ fn main() {
     */
     println!("cargo:rerun-if-changed=wrapper.h");
 
-    let bindings = bindgen::Builder::default()
+    let bindings = bindgen::builder()
+        .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
+        .disable_nested_struct_naming()
+        .trust_clang_mangling(false)
         .header("sqlite3/sqlite3ext.h")
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
 

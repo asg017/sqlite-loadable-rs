@@ -12,6 +12,6 @@ pub use crate::ext::{
 pub use sqlite_loadable_macros::sqlite_entrypoint;
 pub use sqlite_loadable_macros::sqlite_entrypoint_permanent;
 
-pub use std::os::raw::{c_char, c_uint};
+pub use std::os::raw::{c_char, c_int};
 
 pub use crate::FunctionFlags;

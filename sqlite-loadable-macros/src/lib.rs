@@ -33,7 +33,7 @@ pub fn sqlite_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     db: *mut sqlite3,
                     pz_err_msg: *mut *mut c_char,
                     p_api: *mut sqlite3_api_routines,
-                ) -> c_uint {
+                ) -> c_int {
                     register_entrypoint(db, pz_err_msg, p_api, #prefixed_original_function)
                 }
 
@@ -73,7 +73,7 @@ pub fn sqlite_entrypoint_permanent(_attr: TokenStream, item: TokenStream) -> Tok
                     db: *mut sqlite3,
                     pz_err_msg: *mut *mut c_char,
                     p_api: *mut sqlite3_api_routines,
-                ) -> c_uint {
+                ) -> c_int {
                     register_entrypoint_load_permanently(db, pz_err_msg, p_api, #prefixed_original_function)
                 }
 

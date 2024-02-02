@@ -1,21 +1,15 @@
-/// rust bindgen for some reason is defining many SQLite constants
-/// as u32, which can't safely be casted into i32. So, here we
-/// hardcode some of those codes to avoid unwrapping
+#[cfg(feature = "static")]
+pub use libsqlite3_sys::{
+    SQLITE_BLOB, SQLITE_CONSTRAINT, SQLITE_DETERMINISTIC, SQLITE_DIRECTONLY, SQLITE_DONE,
+    SQLITE_ERROR, SQLITE_FLOAT, SQLITE_INNOCUOUS, SQLITE_INTEGER, SQLITE_INTERNAL, SQLITE_NULL,
+    SQLITE_OK, SQLITE_OK_LOAD_PERMANENTLY, SQLITE_ROW, SQLITE_SUBTYPE, SQLITE_TEXT, SQLITE_UTF16,
+    SQLITE_UTF16BE, SQLITE_UTF16LE, SQLITE_UTF8,
+};
 
-/// https://www.sqlite.org/rescode.html#ok
-pub const SQLITE_OKAY: i32 = 0;
-
-/// https://www.sqlite.org/rescode.html#internal
-pub const SQLITE_INTERNAL: i32 = 2;
-
-/// https://www.sqlite.org/rescode.html#row
-pub const SQLITE_ROW: i32 = 100;
-
-/// https://www.sqlite.org/rescode.html#done
-pub const SQLITE_DONE: i32 = 101;
-
-/// https://www.sqlite.org/rescode.html#error
-pub const SQLITE_ERROR: i32 = 1;
-
-/// https://www.sqlite.org/rescode.html#constraint
-pub const SQLITE_CONSTRAINT: i32 = 19;
+#[cfg(all(not(feature = "static"), feature = "dynamic"))]
+pub use sqlite3ext_sys::{
+    SQLITE_BLOB, SQLITE_CONSTRAINT, SQLITE_DETERMINISTIC, SQLITE_DIRECTONLY, SQLITE_DONE,
+    SQLITE_ERROR, SQLITE_FLOAT, SQLITE_INNOCUOUS, SQLITE_INTEGER, SQLITE_INTERNAL, SQLITE_NULL,
+    SQLITE_OK, SQLITE_OK_LOAD_PERMANENTLY, SQLITE_ROW, SQLITE_SUBTYPE, SQLITE_TEXT, SQLITE_UTF16,
+    SQLITE_UTF16BE, SQLITE_UTF16LE, SQLITE_UTF8,
+};

@@ -2,13 +2,11 @@
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 use crate::{
-    constants::SQLITE_OKAY,
+    constants::{SQLITE_OK, SQLITE_UTF8},
     errors::{Error, ErrorKind, Result},
     ext::{sqlite3, sqlite3ext_collation_v2},
 };
 use std::{ffi::CString, os::raw::c_void};
-
-use sqlite3ext_sys::SQLITE_UTF8;
 
 pub fn define_collation<F>(db: *mut sqlite3, name: &str, x_func: F) -> Result<()>
 where
@@ -43,7 +41,7 @@ where
         )
     };
 
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         Err(Error::new(ErrorKind::DefineScalarFunction(result)))
     } else {
         Ok(())
