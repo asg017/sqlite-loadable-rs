@@ -41,7 +41,7 @@ Though there's no `crate_type="cdylib"` macro we can use, so gotta introduce a n
 pub unsafe fn sqlite3ext_user_data2(context: *mut sqlite3_context) -> *mut c_void {
     libsqlite3_sys::sqlite3_user_data(context)
 }
-#[cfg(not(feature = "static"))]
+#[cfg(all(not(feature = "static"), feature = "dynamic"))]
 pub unsafe fn sqlite3ext_user_data2(context: *mut sqlite3_context) -> *mut c_void {
     ((*SQLITE3_API).user_data.expect(EXPECT_MESSAGE))(context)
 }
@@ -58,7 +58,7 @@ macro_rules! export_sqlite_function {
           concat_idents!(libsqlite3_sys::, sqlite3_, $func)(context)
         }
 
-        #[cfg(not(feature = "static"))]
+        #[cfg(all(not(feature = "static"), feature = "dynamic"))]
         pub unsafe fn $func(context: *mut sqlite3_context) -> *mut c_void {
             ((*SQLITE3_API).$func.expect(EXPECT_MESSAGE))(context)
         }
@@ -99,7 +99,7 @@ make sqlite3_wasm_extra_init.c=../../../../target/wasm32-unknown-emscripten/debu
 
 //#[cfg(target_os = "emscripten")]
 pub extern "C" fn sqlite3_wasm_extra_init(_unused: *const std::ffi::c_char) -> std::ffi::c_int {
-    use sqlite_loadable::SQLITE_OKAY;
+    use sqlite_loadable::SQLITE_OK;
     println!("sqlite3_wasm_extra_init");
     unsafe {
         sqlite_loadable::ext::sqlite3ext_auto_extension(std::mem::transmute(
@@ -107,7 +107,7 @@ pub extern "C" fn sqlite3_wasm_extra_init(_unused: *const std::ffi::c_char) -> s
         ));
     }
 
-    SQLITE_OKAY
+    SQLITE_OK
 }
 
 ```

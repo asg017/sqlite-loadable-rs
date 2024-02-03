@@ -10,7 +10,7 @@ keywords = ["sqlite"]
 license = "MIT/Apache-2.0"
 
 [dependencies]
-sqlite3ext-sys = {version="0.0.1", path="./sqlite3ext-sys"}
+sqlite3ext-sys = {version="0.0.1", optional = true, path="./sqlite3ext-sys"}
 sqlite-loadable-macros={version="0.0.3", path="./sqlite-loadable-macros"}
 serde = {version="1.0.147", features = ["derive"]}
 serde_json = "1.0.87"
@@ -22,6 +22,8 @@ rusqlite = "0.29.0"
 libsqlite3-sys = {version="0.26.0", default-features = false, features=["bundled"]}
 
 [features]
+default = ["dynamic"]
+dynamic = ["sqlite3ext-sys"]
 static = ["libsqlite3-sys"]
 exec = []
 
