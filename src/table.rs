@@ -348,6 +348,8 @@ pub fn define_table_function<'vtab, T: VTab<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -404,6 +406,8 @@ pub fn define_table_function_with_find<'vtab, T: VTabFind<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -470,6 +474,8 @@ pub fn define_virtual_table<'vtab, T: VTab<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -524,6 +530,8 @@ pub fn define_virtual_table_with_find<'vtab, T: VTabFind<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -580,6 +588,8 @@ pub fn define_virtual_table_writeable<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -640,6 +650,8 @@ pub fn define_virtual_table_writeable_with_transactions<
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
@@ -697,6 +709,8 @@ pub fn define_virtual_table_writeablex<'vtab, T: VTabWriteable<'vtab> + 'vtab>(
             xRelease: None,
             xRollbackTo: None,
             xShadowName: None,
+            #[cfg(feature = "static")]
+            xIntegrity: None,
         },
         phantom: PhantomData::<&'vtab T>,
     };
