@@ -375,23 +375,29 @@ pub fn result_pointer<T>(context: *mut sqlite3_context, name: &[u8], object: T) 
     };
 }
 
-// TODO maybe take in a Box<T>?
-/// [`sqlite3_set_auxdata`](https://www.sqlite.org/c3ref/get_auxdata.html)
-pub fn auxdata_set(
-    context: *mut sqlite3_context,
-    col: i32,
-    p: *mut c_void,
-    d: Option<unsafe extern "C" fn(*mut c_void)>,
-) {
+/// Calls [`sqlite3_set_auxdata`](https://www.sqlite.org/c3ref/get_auxdata.html)
+/// passing ownership of `p` to sqlite.
+pub fn auxdata_set<T>(context: *mut sqlite3_context, col: i32, p: Box<T>) {
+    unsafe extern "C" fn cleanup<U>(p: *mut c_void) {
+        drop(Box::from_raw(p.cast::<U>()));
+    }
+
+    let raw = Box::into_raw(p).cast::<c_void>();
     unsafe {
-        sqlite3ext_set_auxdata(context, col, p, d);
+        sqlite3ext_set_auxdata(context, col, raw, Some(cleanup::<T>));
     }
 }
 
-// TODO maybe return a Box<T>?
-/// [`sqlite3_get_auxdata`](https://www.sqlite.org/c3ref/get_auxdata.html)
-pub fn auxdata_get(context: *mut sqlite3_context, col: i32) -> *mut c_void {
-    unsafe { sqlite3ext_get_auxdata(context, col) }
+/// Calls [`sqlite3_get_auxdata`](https://www.sqlite.org/c3ref/get_auxdata.html) and returns a
+/// reference to any matching auxiliary data held by this context. Note that data is not shared
+/// across evaluation contexts, thus making this mechanism ill suited for longer lived caches.
+pub fn auxdata_get<'a, T>(context: *mut sqlite3_context, col: i32) -> Option<&'a mut T> {
+    let ptr = unsafe { sqlite3ext_get_auxdata(context, col).cast::<T>() };
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { &mut *ptr })
+    }
 }
 
 pub fn context_db_handle(context: *mut sqlite3_context) -> *mut sqlite3 {
