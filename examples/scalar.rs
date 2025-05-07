@@ -1,8 +1,10 @@
 //! cargo build --example scalar
 //! sqlite3 :memory: '.read examples/test.sql'
 
-use sqlite_loadable::prelude::*;
+use sqlite_loadable::{prelude::*, define_scalar_function_with_aux};
 use sqlite_loadable::{api, define_scalar_function, Result};
+
+use rand::{self, Rng};
 
 // yo()
 fn yo(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
@@ -38,6 +40,12 @@ fn connect(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Resu
     Ok(())
 }
 
+fn random_int64(context: *mut sqlite3_context, _values: &[*mut sqlite3_value],  rng: &mut rand::rngs::ThreadRng) -> Result<()> {
+    let random_int64: i64 = rng.gen();
+    api::result_int64(context, random_int64);
+    Ok(())
+}
+
 #[sqlite_entrypoint]
 pub fn sqlite3_scalarrs_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC;
@@ -45,5 +53,7 @@ pub fn sqlite3_scalarrs_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "connect", -1, connect, flags)?;
     define_scalar_function(db, "yo_rs", 0, yo, flags)?;
     define_scalar_function(db, "add_rs", 2, add, flags)?;
+    let rng = rand::thread_rng();
+    define_scalar_function_with_aux(db, "random_int64", 0, random_int64, flags, rng)?;
     Ok(())
 }
