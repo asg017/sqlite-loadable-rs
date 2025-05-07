@@ -9,7 +9,6 @@ use std::{
 
 use crate::{
     api,
-    constants::{SQLITE_INTERNAL, SQLITE_OKAY},
     errors::{Error, ErrorKind, Result},
     ext::{
         sqlite3, sqlite3_context, sqlite3_value, sqlite3ext_create_function_v2,
@@ -21,7 +20,7 @@ use bitflags::bitflags;
 
 use sqlite3ext_sys::{
     SQLITE_DETERMINISTIC, SQLITE_DIRECTONLY, SQLITE_INNOCUOUS, SQLITE_SUBTYPE, SQLITE_UTF16,
-    SQLITE_UTF16BE, SQLITE_UTF16LE, SQLITE_UTF8,
+    SQLITE_UTF16BE, SQLITE_UTF16LE, SQLITE_UTF8, SQLITE_OK, SQLITE_INTERNAL,
 };
 
 bitflags! {
@@ -71,7 +70,7 @@ fn create_function_v2(
         )
     };
 
-    if result != SQLITE_OKAY {
+    if result != SQLITE_OK {
         Err(Error::new(ErrorKind::DefineScalarFunction(result)))
     } else {
         Ok(())

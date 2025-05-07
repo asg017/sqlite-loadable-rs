@@ -1,4 +1,7 @@
 target/
 *.db
-
+*.cdtor.c
+*.res
+*.cdtor.o
+rustc*/
 wasm/

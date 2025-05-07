@@ -3,7 +3,6 @@
 
 pub mod api;
 pub mod collation;
-mod constants;
 pub mod entrypoints;
 pub mod errors;
 
@@ -13,6 +12,7 @@ pub mod ext; // TODO dont expose
 pub mod prelude;
 pub mod scalar;
 pub mod table;
+pub mod vfs;
 pub mod vtab_argparse;
 
 #[doc(inline)]
@@ -30,4 +30,6 @@ pub use table::{
     define_virtual_table_writeable, define_virtual_table_writeablex, BestIndexError,
 };
 
-pub use constants::*;
+pub use vfs::traits::{SqliteIoMethods, SqliteVfs};
+#[doc(inline)]
+pub use vfs::vfs::register_boxed_vfs;
