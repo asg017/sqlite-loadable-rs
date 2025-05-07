@@ -1,10 +1,5 @@
 //! Custom Error/Result for sqlite-loadable-rs APIs.
-use std::{
-    ffi::NulError,
-    fmt,
-    os::raw::{c_int, c_uint},
-    result,
-};
+use std::{ffi::NulError, fmt, os::raw::c_int, result};
 
 /// A type alias for `Result<T, xxx::Error>`.
 pub type Result<T> = result::Result<T, Error>;
@@ -33,9 +28,6 @@ impl Error {
     }
 
     pub fn code(self) -> c_int {
-        1
-    }
-    pub fn code_extended(self) -> c_uint {
         1
     }
     pub fn result_error_message(self) -> String {

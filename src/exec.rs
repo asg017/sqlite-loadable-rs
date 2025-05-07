@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    constants::SQLITE_OKAY,
+    constants::SQLITE_OK,
     ext::{
         sqlite3ext_bind_int, sqlite3ext_bind_text, sqlite3ext_column_bytes,
         sqlite3ext_column_int64, sqlite3ext_column_text, sqlite3ext_finalize,
@@ -29,7 +29,7 @@ impl Statement {
         let mut stmt: *mut sqlite3_stmt = std::ptr::null_mut();
         let result =
             unsafe { sqlite3ext_prepare_v2(db, s.as_ptr(), n, &mut stmt, std::ptr::null_mut()) };
-        if result != SQLITE_OKAY {
+        if result != SQLITE_OK {
             Err("".into())
         } else {
             Ok(Statement { stmt })
@@ -37,7 +37,7 @@ impl Statement {
     }
     pub fn bind_i32(&mut self, param_idx: i32, value: i32) -> Result<(), Box<dyn Error>> {
         let result = unsafe { sqlite3ext_bind_int(self.stmt, param_idx, value) };
-        if result == SQLITE_OKAY {
+        if result == SQLITE_OK {
             Ok(())
         } else {
             Err("".into())
