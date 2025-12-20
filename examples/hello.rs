@@ -28,7 +28,7 @@ pub fn sqlite3_hello_init(db: *mut sqlite3) -> Result<()> {
 }
 
 #[cfg(target_os = "emscripten")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wasm_extra_init(_unused: *const std::ffi::c_char) -> std::ffi::c_int {
     use sqlite_loadable::SQLITE_OKAY;
     unsafe {
