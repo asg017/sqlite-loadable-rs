@@ -93,7 +93,7 @@ make sqlite3_wasm_extra_init.c=../../../../target/wasm32-unknown-emscripten/debu
 ```
 
 ```rs
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// in hello.rs
 
 
