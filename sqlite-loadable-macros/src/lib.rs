@@ -28,7 +28,7 @@ pub fn sqlite_entrypoint(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 ///
                 /// Should only be called by underlying SQLite C APIs,
                 /// like sqlite3_auto_extension and sqlite3_cancel_auto_extension.
-                #[no_mangle]
+                #[unsafe(no_mangle)]
                 pub unsafe extern "C" fn #c_entrypoint(
                     db: *mut sqlite3,
                     pz_err_msg: *mut *mut c_char,
@@ -68,7 +68,7 @@ pub fn sqlite_entrypoint_permanent(_attr: TokenStream, item: TokenStream) -> Tok
                 ///
                 /// Should only be called by underlying SQLite C APIs,
                 /// like sqlite3_auto_extension and sqlite3_cancel_auto_extension.
-                #[no_mangle]
+                #[unsafe(no_mangle)]
                 pub unsafe extern "C" fn #c_entrypoint(
                     db: *mut sqlite3,
                     pz_err_msg: *mut *mut c_char,
