@@ -11,7 +11,7 @@ use std::ptr;
 use std::slice;
 use std::str::Utf8Error;
 
-use crate::api::{mprintf, value_type, MprintfError, ValueType};
+use crate::api::{mprintf, value_int64, value_type, MprintfError, ValueType};
 use crate::errors::{Error, ErrorKind, Result};
 use crate::ext::{
     sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
@@ -1048,10 +1048,11 @@ fn determine_update_operation<'a>(
         .get(1)
         .expect("argv[1] should be defined on all non-delete operations");
 
-    //  argc > 1 AND argv[0] = NULL
+    // argc > 1 AND argv[0] = NULL → INSERT
     // "INSERT: A new row is inserted with column values taken from argv[2] and following."
-    if value_type(argv1) == ValueType::Null {
-        let rowid = if value_type(argv0) == ValueType::Null {
+    // If argv[1] is NULL, SQLite will generate the rowid. Otherwise argv[1] is the explicit rowid.
+    if value_type(argv0) == ValueType::Null {
+        let rowid = if value_type(argv1) == ValueType::Null {
             None
         } else {
             Some(argv1)
@@ -1059,27 +1060,33 @@ fn determine_update_operation<'a>(
         UpdateOperation::Insert {
             values: args
                 .get(2..)
-                .expect("argv[0-1] should be defined on INSERT operations"),
+                .expect("argv[2..] should contain column values for INSERT operations"),
             rowid,
         }
     }
     // argc > 1 AND argv[0] ≠ NULL AND argv[0] = argv[1]
-    // "UPDATE: The row with rowid or PRIMARY KEY argv[0] is updated with new values in argv[2] and following parameters.'
-    else if argv0 == argv1 {
+    // "UPDATE: The row with rowid or PRIMARY KEY argv[0] is updated with new values in argv[2] and following parameters."
+    // Compare values, not pointers, since argv[0] and argv[1] contain the same rowid value
+    else if value_type(argv0) == value_type(argv1)
+        && value_type(argv0) == ValueType::Integer
+        && value_int64(argv0) == value_int64(argv1)
+    {
         UpdateOperation::Update {
             _values: args
                 .get(2..)
-                .expect("argv[0-1] should be defined on INSERT operations"),
+                .expect("argv[2..] should contain column values for UPDATE operations"),
         }
     }
-    //argc > 1 AND argv[0] ≠ NULL AND argv[0] ≠ argv[1]
-    // "UPDATE with rowid or PRIMARY KEY change: The row with rowid or PRIMARY KEY argv[0] is updated with
-    // the rowid or PRIMARY KEY in argv[1] and new values in argv[2] and following parameters. "
-    // what the hell does this even mean
-    else if true {
-        todo!();
-    } else {
-        todo!("some unsupported update operation?")
+    // argc > 1 AND argv[0] ≠ NULL AND argv[0] ≠ argv[1]
+    // "UPDATE with rowid or PRIMARY KEY change: The row with rowid argv[0] is updated with
+    // the new rowid in argv[1] and new values in argv[2] and following parameters."
+    else {
+        // Treat as regular update - caller can handle rowid change if needed
+        UpdateOperation::Update {
+            _values: args
+                .get(2..)
+                .expect("argv[2..] should contain column values for UPDATE operations"),
+        }
     }
 }
 /// <https://www.sqlite.org/vtab.html#the_xupdate_method>
