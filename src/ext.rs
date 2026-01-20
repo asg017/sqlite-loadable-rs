@@ -616,3 +616,63 @@ pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
 pub unsafe fn sqlite3ext_auto_extension(f: unsafe extern "C" fn()) -> i32 {
     ((*SQLITE3_API).auto_extension.expect(EXPECT_MESSAGE))(Some(f))
 }
+
+// Additional functions for sqlite-tantivy
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_bind_blob(
+    stmt: *mut sqlite3_stmt,
+    c: c_int,
+    p: *const c_void,
+    n: c_int,
+    destructor: Option<unsafe extern "C" fn(*mut c_void)>,
+) -> i32 {
+    libsqlite3_sys::sqlite3_bind_blob(stmt, c, p, n, destructor)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_bind_blob(
+    stmt: *mut sqlite3_stmt,
+    c: c_int,
+    p: *const c_void,
+    n: c_int,
+    destructor: Option<unsafe extern "C" fn(*mut c_void)>,
+) -> i32 {
+    ((*SQLITE3_API).bind_blob.expect(EXPECT_MESSAGE))(stmt, c, p, n, destructor)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_bind_null(stmt: *mut sqlite3_stmt, c: c_int) -> i32 {
+    libsqlite3_sys::sqlite3_bind_null(stmt, c)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_bind_null(stmt: *mut sqlite3_stmt, c: c_int) -> i32 {
+    ((*SQLITE3_API).bind_null.expect(EXPECT_MESSAGE))(stmt, c)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_open_v2(
+    filename: *const c_char,
+    ppdb: *mut *mut sqlite3,
+    flags: c_int,
+    vfs: *const c_char,
+) -> i32 {
+    libsqlite3_sys::sqlite3_open_v2(filename, ppdb, flags, vfs)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_open_v2(
+    filename: *const c_char,
+    ppdb: *mut *mut sqlite3,
+    flags: c_int,
+    vfs: *const c_char,
+) -> i32 {
+    ((*SQLITE3_API).open_v2.expect(EXPECT_MESSAGE))(filename, ppdb, flags, vfs)
+}
+
+#[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_db_filename(db: *mut sqlite3, db_name: *const c_char) -> *const c_char {
+    libsqlite3_sys::sqlite3_db_filename(db, db_name)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_db_filename(db: *mut sqlite3, db_name: *const c_char) -> *const c_char {
+    ((*SQLITE3_API).db_filename.expect(EXPECT_MESSAGE))(db, db_name)
+}
