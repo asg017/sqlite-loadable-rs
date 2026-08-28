@@ -5,6 +5,7 @@
 //!   select source_range('_http_api', 'https://…', 10, 5);    -- range blob
 //!   select source_get_len('_http_api', 'https://…');         -- streamed byte count
 //!   select source_range('_http_api', 'https://…', 10, 5, '"etag"');  -- with If-Match
+//!   select source_list('_s3_api', 's3://bucket/prefix/');   -- JSON array of entries
 //!
 //! Build: cargo build --example source_consumer --features source
 use sqlite_loadable::prelude::*;
@@ -67,6 +68,23 @@ fn source_range(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) ->
     Ok(())
 }
 
+/// `source_list(fn, prefix)`: the producer's listing as a JSON array of
+/// `{url, size, etag, last_modified_ms}`, in the producer's order.
+fn source_list(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let entries = resolve(context, values)?.list(api::value_text(&values[1])?)?;
+    let items: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "url": e.url, "size": e.size, "etag": e.etag,
+                "last_modified_ms": e.last_modified_ms,
+            })
+        })
+        .collect();
+    api::result_text(context, serde_json::Value::Array(items).to_string())?;
+    Ok(())
+}
+
 #[sqlite_entrypoint]
 pub fn sqlite3_sourceconsumer_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8;
@@ -75,5 +93,6 @@ pub fn sqlite3_sourceconsumer_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "source_get_len", 2, source_get_len, flags)?;
     define_scalar_function(db, "source_range", 4, source_range, flags)?;
     define_scalar_function(db, "source_range", 5, source_range, flags)?;
+    define_scalar_function(db, "source_list", 2, source_list, flags)?;
     Ok(())
 }

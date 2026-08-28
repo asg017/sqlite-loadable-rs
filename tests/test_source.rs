@@ -5,7 +5,8 @@
 
 use sqlite_loadable::prelude::*;
 use sqlite_loadable::source::{
-    self, resolve_source_api, SourceApi, SourceError, SourceMeta, SourceResult,
+    self, resolve_source_api, RemoteGlob, SourceApi, SourceEntry, SourceError, SourceMeta,
+    SourceResult,
 };
 use sqlite_loadable::{api, define_scalar_function, Result};
 use std::collections::HashMap;
@@ -13,6 +14,7 @@ use std::io::Read;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 static MEM_API_DROPS: AtomicUsize = AtomicUsize::new(0);
+static MEM_API_HEADS: AtomicUsize = AtomicUsize::new(0);
 
 struct MemApi {
     objects: HashMap<String, Vec<u8>>,
@@ -44,6 +46,7 @@ impl MemApi {
 }
 impl SourceApi for MemApi {
     fn head(&self, url: &str) -> SourceResult<SourceMeta> {
+        MEM_API_HEADS.fetch_add(1, Ordering::SeqCst);
         let o = self.object(url)?;
         Ok(SourceMeta {
             size: Some(o.len() as u64),
@@ -66,6 +69,36 @@ impl SourceApi for MemApi {
             return Err("range start past end".into());
         }
         Ok(o[start..end].to_vec())
+    }
+    fn supports_list(&self) -> bool {
+        true
+    }
+    fn list(&self, prefix: &str) -> SourceResult<Vec<SourceEntry>> {
+        if prefix == "mem://boom/" {
+            return Err("mem: list exploded".into());
+        }
+        let mut urls: Vec<&String> = self.objects.keys().filter(|k| k.starts_with(prefix)).collect();
+        // deliberately not sorted: consumers sort
+        urls.sort_by(|a, b| b.cmp(a));
+        Ok(urls
+            .into_iter()
+            .map(|url| {
+                let o = &self.objects[url];
+                SourceEntry {
+                    url: url.clone(),
+                    size: Some(o.len() as u64),
+                    // objects under mem://nometa/ come back without etag/size
+                    etag: (!url.starts_with("mem://nometa/")).then(|| Self::etag(o)),
+                    last_modified_ms: Some(1_700_000_000_000),
+                }
+            })
+            .map(|mut e| {
+                if e.url.starts_with("mem://nometa/") {
+                    e.size = None;
+                }
+                e
+            })
+            .collect())
     }
 }
 
@@ -92,6 +125,12 @@ fn mem_api(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Res
     let mut objects = HashMap::new();
     objects.insert("mem://hello.txt".to_string(), b"hello, world\n".to_vec());
     objects.insert("mem://big.bin".to_string(), (0..200_000u32).map(|i| (i % 251) as u8).collect());
+    objects.insert("mem://data/2024/01/part-1.csv".to_string(), b"a,b\n1,2\n".to_vec());
+    objects.insert("mem://data/2024/01/part-2.csv".to_string(), b"a,b\n3,4\n".to_vec());
+    objects.insert("mem://data/2024/02/part-1.csv".to_string(), b"a,b\n5,6\n".to_vec());
+    objects.insert("mem://data/2024/02/notes.txt".to_string(), b"x".to_vec());
+    objects.insert("mem://data/2024/summary.csv".to_string(), b"a,b\n".to_vec());
+    objects.insert("mem://nometa/x.csv".to_string(), b"a\n".to_vec());
     source::result_source_api(context, MemApi { objects });
     Ok(())
 }
@@ -172,6 +211,40 @@ fn t_refcount(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> R
     api::result_int64(context, (after - before) as i64);
     Ok(())
 }
+fn entries_json(entries: &[SourceEntry]) -> String {
+    let items: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|e| {
+            serde_json::json!({
+                "url": e.url, "size": e.size, "etag": e.etag,
+                "last_modified_ms": e.last_modified_ms,
+            })
+        })
+        .collect();
+    serde_json::Value::Array(items).to_string()
+}
+/// `t_list(fn, prefix)` -> JSON array of entries, in the producer's order.
+fn t_list(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let h = resolve(context, values)?;
+    let entries = h.list(api::value_text(&values[1])?)?;
+    api::result_text(context, entries_json(&entries))?;
+    Ok(())
+}
+/// `t_glob(fn, url)` -> JSON array of the entries matching a remote glob
+/// (sorted), or the string "not a glob".
+fn t_glob(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let h = resolve(context, values)?;
+    match RemoteGlob::parse(api::value_text(&values[1])?)? {
+        Some(g) => api::result_text(context, entries_json(&g.expand(&h)?))?,
+        None => api::result_text(context, "not a glob")?,
+    }
+    Ok(())
+}
+fn t_supports_list(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let h = resolve(context, values)?;
+    api::result_bool(context, h.supports_list());
+    Ok(())
+}
 fn t_for_source(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let db = api::context_db_handle(context);
     match source::resolve_for_source(db, api::value_text(&values[0])?) {
@@ -196,6 +269,9 @@ pub fn sqlite3_sourcetest_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "t_get_if", 3, t_get_if, flags)?;
     define_scalar_function(db, "t_refcount", 1, t_refcount, flags)?;
     define_scalar_function(db, "t_for_source", 1, t_for_source, flags)?;
+    define_scalar_function(db, "t_list", 2, t_list, flags)?;
+    define_scalar_function(db, "t_glob", 2, t_glob, flags)?;
+    define_scalar_function(db, "t_supports_list", 1, t_supports_list, flags)?;
     Ok(())
 }
 
@@ -312,6 +388,72 @@ mod tests {
         let before = MEM_API_DROPS.load(Ordering::SeqCst);
         q::<String>(&db, "select typeof(_mem_api())");
         assert_eq!(MEM_API_DROPS.load(Ordering::SeqCst), before + 1);
+    }
+
+    #[test]
+    fn list() {
+        let (db, _g) = conn();
+        assert_eq!(q::<bool>(&db, "select t_supports_list('_mem_api')"), true);
+        assert_eq!(q::<bool>(&db, "select t_supports_list('_file_api')"), false);
+
+        let out: String = q(&db, "select t_list('_mem_api', 'mem://data/2024/01/')");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let urls: Vec<&str> = v.as_array().unwrap().iter().map(|e| e["url"].as_str().unwrap()).collect();
+        // producer order is preserved by list() itself
+        assert_eq!(urls, ["mem://data/2024/01/part-2.csv", "mem://data/2024/01/part-1.csv"]);
+        assert_eq!(v[0]["size"], 8);
+        assert_eq!(v[0]["etag"], "\"etag-8\"");
+        assert_eq!(v[0]["last_modified_ms"], 1_700_000_000_000i64);
+        // unknown metadata comes back as null
+        let out: String = q(&db, "select t_list('_mem_api', 'mem://nometa/')");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v[0]["size"], serde_json::Value::Null);
+        assert_eq!(v[0]["etag"], serde_json::Value::Null);
+        // empty listing is fine
+        assert_eq!(q::<String>(&db, "select t_list('_mem_api', 'mem://nothing/')"), "[]");
+
+        // NULL slot: the file provider does not list
+        let e = err(&db, "select t_list('_file_api', 'file:///tmp/')");
+        assert!(e.contains("listing is not supported by this source"), "{}", e);
+        let e = err(&db, "select t_glob('_file_api', 'file:///tmp/*.csv')");
+        assert!(e.contains("listing is not supported by this source"), "{}", e);
+        // producer errors pass through
+        let e = err(&db, "select t_list('_mem_api', 'mem://boom/')");
+        assert!(e.contains("mem: list exploded"), "{}", e);
+    }
+
+    #[test]
+    fn remote_glob() {
+        let (db, _g) = conn();
+        let heads = MEM_API_HEADS.load(Ordering::SeqCst);
+        let urls = |sql: &str| -> Vec<String> {
+            let out: String = q(&db, sql);
+            let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+            v.as_array().unwrap().iter().map(|e| e["url"].as_str().unwrap().to_owned()).collect()
+        };
+        assert_eq!(
+            urls("select t_glob('_mem_api', 'mem://data/2024/*/part-*.csv')"),
+            ["mem://data/2024/01/part-1.csv", "mem://data/2024/01/part-2.csv", "mem://data/2024/02/part-1.csv"]
+        );
+        assert_eq!(
+            urls("select t_glob('_mem_api', 'mem://data/2024/*.csv')"),
+            ["mem://data/2024/summary.csv"]
+        );
+        assert_eq!(
+            urls("select t_glob('_mem_api', 'mem://data/**/*.csv')"),
+            [
+                "mem://data/2024/01/part-1.csv",
+                "mem://data/2024/01/part-2.csv",
+                "mem://data/2024/02/part-1.csv",
+                "mem://data/2024/summary.csv",
+            ]
+        );
+        assert_eq!(urls("select t_glob('_mem_api', 'mem://data/2024/0[2]/*')"), ["mem://data/2024/02/notes.txt", "mem://data/2024/02/part-1.csv"]);
+        assert_eq!(q::<String>(&db, "select t_glob('_mem_api', 'mem://hello.txt')"), "not a glob");
+        let e = err(&db, "select t_glob('_mem_api', 'mem://data/2024/*.parquet')");
+        assert!(e.contains("no files matched 'mem://data/2024/*.parquet'"), "{}", e);
+        // expanding a glob is one list() call, never a head()
+        assert_eq!(MEM_API_HEADS.load(Ordering::SeqCst), heads);
     }
 
     #[test]

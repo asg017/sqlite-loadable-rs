@@ -24,11 +24,21 @@
 **    producer-allocated; free them with `free_string`.
 **  - `get_range` buffers are freed with `free_buffer(ctx, buf, buf_len)`.
 **  - Streams are freed with `stream->close(stream)`.
-**  - `list` is reserved and must be NULL in ABI version 1.
+**  - `list` is optional. Producers that cannot enumerate objects (plain
+**    HTTP) leave it NULL, and consumers must then fail with a clear error
+**    ("listing is not supported by this source") rather than guessing.
+**    When present it lists every object under a directory-like prefix
+**    (`s3://b/data/` and `s3://b/data` both list `data/...`), recursively,
+**    each entry carrying its full URL plus whatever metadata the listing
+**    returned so a consumer can skip a `head` per object. The returned
+**    `sqlite_source_list` (entries, their strings and the struct itself) is
+**    freed with `free_list(ctx, list)`.
 **
 ** Layout check (64-bit): sizeof(sqlite_source_meta)   == 32
 **                        sizeof(sqlite_source_stream) == 24
-**                        sizeof(sqlite_source_api)    == 80
+**                        sizeof(sqlite_source_entry)  == 32
+**                        sizeof(sqlite_source_list)   == 16
+**                        sizeof(sqlite_source_api)    == 88
 ** The Rust mirror lives in sqlite-loadable-rs `src/source.rs`.
 */
 #ifndef SQLITE_SOURCE_H
@@ -62,6 +72,19 @@ struct sqlite_source_stream {
   void (*close)(sqlite_source_stream *stream);
 };
 
+/* One object from `list`. */
+typedef struct sqlite_source_entry {
+  char *url;                 /* full URL (s3://bucket/key); producer-allocated */
+  uint64_t size;             /* SQLITE_SOURCE_SIZE_UNKNOWN if unknown */
+  char *etag;                /* NULL or producer-allocated */
+  int64_t last_modified_ms;  /* SQLITE_SOURCE_LAST_MODIFIED_UNKNOWN if unknown */
+} sqlite_source_entry;
+
+typedef struct sqlite_source_list {
+  uint64_t count;
+  sqlite_source_entry *entries;  /* NULL when count == 0 */
+} sqlite_source_list;
+
 typedef struct sqlite_source_api {
   uint32_t abi_version;   /* SQLITE_SOURCE_ABI_VERSION */
   uint32_t struct_size;   /* sizeof(sqlite_source_api) as built by the producer */
@@ -75,7 +98,9 @@ typedef struct sqlite_source_api {
                    const char *if_match, uint8_t **buf, uint64_t *buf_len, char **errmsg);
   void (*free_string)(void *ctx, char *s);
   void (*free_buffer)(void *ctx, uint8_t *p, uint64_t len);
-  void *list;             /* reserved; NULL in ABI v1 */
+  /* NULL if the producer cannot list; otherwise every object under `prefix` */
+  int (*list)(void *ctx, const char *prefix, sqlite_source_list **out, char **errmsg);
+  void (*free_list)(void *ctx, sqlite_source_list *list);
 } sqlite_source_api;
 
 #endif /* SQLITE_SOURCE_H */

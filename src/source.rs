@@ -9,7 +9,9 @@
 //! [`SOURCE_API_POINTER_NAME`]). A *consumer* extension (e.g. `sqlite-xsv`,
 //! `sqlite-parquet`) calls [`resolve_source_api`] with the function name, gets
 //! back a refcounted [`SourceHandle`], and uses [`SourceHandle::head`],
-//! [`SourceHandle::get`] and [`SourceHandle::get_range`].
+//! [`SourceHandle::get`], [`SourceHandle::get_range`] and, for producers
+//! that can enumerate objects, [`SourceHandle::list`] ([`RemoteGlob`] turns
+//! `s3://b/p/*.parquet` into one `list` call plus pattern matching).
 //!
 //! The C struct layout is documented in `sqlite-source.h` at the crate root;
 //! the two must be kept in sync (see the `layout` test at the bottom).
@@ -28,6 +30,10 @@
 //! - `get` and `get_range` take an optional `if_match` ETag (NULL = none) so
 //!   a consumer that spreads one logical read over many requests can detect
 //!   the object changing underneath it.
+//! - `list` is optional: the slot is NULL for producers without a listing
+//!   operation, and [`SourceHandle::list`] then fails with
+//!   [`LIST_UNSUPPORTED`]. Lists are producer-allocated and returned through
+//!   `free_list`.
 //! - `sqlite3_result_pointer` frees the vtable struct when the producing
 //!   statement is reset, so consumers copy the struct and `retain` the ctx
 //!   while the statement is still live. [`resolve_source_api`] does this.
@@ -119,8 +125,35 @@ pub struct SourceApiRaw {
     ) -> i32,
     pub free_string: unsafe extern "C" fn(ctx: *mut c_void, s: *mut c_char),
     pub free_buffer: unsafe extern "C" fn(ctx: *mut c_void, p: *mut u8, len: u64),
-    /// Reserved for a future `list(prefix)`; always NULL in ABI v1.
-    pub list: *mut c_void,
+    /// List the objects under `prefix`. NULL when the producer cannot list
+    /// (plain HTTP); consumers must then fail with a clear error.
+    pub list: Option<SourceListFn>,
+    /// Frees a list returned by `list` (entries, their strings, the struct).
+    pub free_list: unsafe extern "C" fn(ctx: *mut c_void, list: *mut SourceListRaw),
+}
+
+/// Signature of [`SourceApiRaw::list`].
+pub type SourceListFn = unsafe extern "C" fn(
+    ctx: *mut c_void,
+    prefix: *const c_char,
+    out: *mut *mut SourceListRaw,
+    errmsg: *mut *mut c_char,
+) -> i32;
+
+/// One object from `list`. Mirrors `sqlite_source_entry` in `sqlite-source.h`.
+#[repr(C)]
+pub struct SourceEntryRaw {
+    pub url: *mut c_char,
+    pub size: u64,
+    pub etag: *mut c_char,
+    pub last_modified_ms: i64,
+}
+
+/// Result of `list`. Mirrors `sqlite_source_list` in `sqlite-source.h`.
+#[repr(C)]
+pub struct SourceListRaw {
+    pub count: u64,
+    pub entries: *mut SourceEntryRaw,
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +168,20 @@ pub struct SourceMeta {
     pub etag: Option<String>,
     pub content_type: Option<String>,
 }
+
+/// One object returned by `list`: its full URL (ready for `head`/`get`) and
+/// whatever metadata the listing carried, so consumers can skip a `head()`
+/// per object when `size` and `etag` are both present.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SourceEntry {
+    pub url: String,
+    pub size: Option<u64>,
+    pub etag: Option<String>,
+    pub last_modified_ms: Option<i64>,
+}
+
+/// The error message for `list` on a source that cannot list.
+pub const LIST_UNSUPPORTED: &str = "listing is not supported by this source";
 
 /// Errors from resolving or using a source API.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -290,6 +337,19 @@ pub trait SourceApi: Send + Sync + 'static {
         len: u64,
         if_match: Option<&str>,
     ) -> SourceResult<Vec<u8>>;
+    /// Whether this producer implements [`Self::list`]. Rust cannot tell a
+    /// default method from an override, so producers that list must return
+    /// `true` here; otherwise the `list` slot of the vtable is left NULL.
+    fn supports_list(&self) -> bool {
+        false
+    }
+    /// Every object whose URL starts with `prefix` (recursively), each with
+    /// its full URL. Prefixes are directory-like: `s3://b/data/` and
+    /// `s3://b/data` both list `data/…`.
+    fn list(&self, prefix: &str) -> SourceResult<Vec<SourceEntry>> {
+        let _ = prefix;
+        Err(SourceError::Message(LIST_UNSUPPORTED.to_owned()))
+    }
 }
 
 /// The thing `ctx` points at on the producer side. Sized so the Arc pointer is thin.
@@ -306,6 +366,7 @@ struct ProducerCtx {
 /// }
 /// ```
 pub fn result_source_api<T: SourceApi>(context: *mut sqlite3_context, api: T) {
+    let list = api.supports_list().then_some(producer_list as SourceListFn);
     let ctx: Arc<ProducerCtx> = Arc::new(ProducerCtx { api: Box::new(api) });
     let raw = SourceApiRaw {
         abi_version: SOURCE_ABI_VERSION,
@@ -318,7 +379,8 @@ pub fn result_source_api<T: SourceApi>(context: *mut sqlite3_context, api: T) {
         get_range: producer_get_range,
         free_string: producer_free_string,
         free_buffer: producer_free_buffer,
-        list: std::ptr::null_mut(),
+        list,
+        free_list: producer_free_list,
     };
     // Boxed struct owns one reference to ctx; released by the destructor
     // SQLite calls when the value is freed.
@@ -563,6 +625,67 @@ unsafe extern "C" fn producer_free_buffer(_ctx: *mut c_void, p: *mut u8, len: u6
     }
 }
 
+unsafe extern "C" fn producer_list(
+    ctx: *mut c_void,
+    prefix: *const c_char,
+    out: *mut *mut SourceListRaw,
+    errmsg: *mut *mut c_char,
+) -> i32 {
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<Vec<SourceEntry>, String> {
+        let prefix = url_from_c(prefix)?;
+        ctx_api(ctx).list(prefix).map_err(|e| e.user_message(None))
+    }));
+    match result {
+        Ok(Ok(entries)) => {
+            if out.is_null() {
+                set_errmsg(errmsg, "out is NULL");
+                return 1;
+            }
+            let raw: Box<[SourceEntryRaw]> = entries
+                .into_iter()
+                .map(|e| SourceEntryRaw {
+                    url: opt_cstring(Some(e.url)),
+                    size: e.size.unwrap_or(SOURCE_SIZE_UNKNOWN),
+                    etag: opt_cstring(e.etag),
+                    last_modified_ms: e.last_modified_ms.unwrap_or(SOURCE_LAST_MODIFIED_UNKNOWN),
+                })
+                .collect();
+            let count = raw.len() as u64;
+            let entries = if count == 0 {
+                std::ptr::null_mut()
+            } else {
+                Box::into_raw(raw) as *mut SourceEntryRaw
+            };
+            *out = Box::into_raw(Box::new(SourceListRaw { count, entries }));
+            0
+        }
+        Ok(Err(msg)) => {
+            set_errmsg(errmsg, msg);
+            1
+        }
+        Err(e) => {
+            set_errmsg(errmsg, panic_message(e));
+            1
+        }
+    }
+}
+
+unsafe extern "C" fn producer_free_list(_ctx: *mut c_void, list: *mut SourceListRaw) {
+    if list.is_null() {
+        return;
+    }
+    let list: Box<SourceListRaw> = Box::from_raw(list);
+    if list.entries.is_null() {
+        return;
+    }
+    let entries = std::ptr::slice_from_raw_parts_mut(list.entries, list.count as usize);
+    let entries: Box<[SourceEntryRaw]> = Box::from_raw(entries);
+    for e in entries.iter() {
+        producer_free_string(_ctx, e.url);
+        producer_free_string(_ctx, e.etag);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Consumer side
 // ---------------------------------------------------------------------------
@@ -758,6 +881,143 @@ impl SourceHandle {
         unsafe { (self.raw.free_buffer)(self.raw.ctx, buf, buf_len) };
         Ok(out)
     }
+
+    /// True if the producer filled the `list` slot.
+    pub fn supports_list(&self) -> bool {
+        self.raw.list.is_some()
+    }
+
+    /// Every object under `prefix`, in the producer's order. Fails with
+    /// [`LIST_UNSUPPORTED`] when the producer left the `list` slot NULL.
+    pub fn list(&self, prefix: &str) -> SourceResult<Vec<SourceEntry>> {
+        let Some(list) = self.raw.list else {
+            return Err(SourceError::Message(LIST_UNSUPPORTED.to_owned()));
+        };
+        let c_prefix =
+            CString::new(prefix).map_err(|_| SourceError::Message("prefix contains NUL".into()))?;
+        let mut out: *mut SourceListRaw = std::ptr::null_mut();
+        let mut errmsg: *mut c_char = std::ptr::null_mut();
+        let rc = unsafe { list(self.raw.ctx, c_prefix.as_ptr(), &mut out, &mut errmsg) };
+        if rc != 0 {
+            return Err(self.take_errmsg(errmsg, "list failed"));
+        }
+        if out.is_null() {
+            return Ok(Vec::new());
+        }
+        let mut entries = Vec::new();
+        unsafe {
+            let raw = &*out;
+            if !raw.entries.is_null() {
+                for e in std::slice::from_raw_parts(raw.entries, raw.count as usize) {
+                    let url = if e.url.is_null() {
+                        String::new()
+                    } else {
+                        CStr::from_ptr(e.url).to_string_lossy().into_owned()
+                    };
+                    let etag = if e.etag.is_null() {
+                        None
+                    } else {
+                        Some(CStr::from_ptr(e.etag).to_string_lossy().into_owned())
+                    };
+                    entries.push(SourceEntry {
+                        url,
+                        size: (e.size != SOURCE_SIZE_UNKNOWN).then_some(e.size),
+                        etag,
+                        last_modified_ms: (e.last_modified_ms != SOURCE_LAST_MODIFIED_UNKNOWN)
+                            .then_some(e.last_modified_ms),
+                    });
+                }
+            }
+            (self.raw.free_list)(self.raw.ctx, out);
+        }
+        Ok(entries)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Remote globs
+// ---------------------------------------------------------------------------
+
+/// A URL containing glob metacharacters (`*` or `[`), split into the
+/// directory-like prefix to `list` and the pattern to match the remainder of
+/// each listed URL against.
+///
+/// `s3://b/2024/*/part-*.parquet` → prefix `s3://b/2024/`, pattern
+/// `*/part-*.parquet`. Patterns use the `glob` crate's syntax with
+/// `require_literal_separator`, so `*` never crosses a `/` (use `**` for
+/// that). Only the URL *path* is inspected: a `?` in an `http` query string
+/// is not a wildcard, and query/fragment are not part of the pattern.
+#[derive(Debug, Clone)]
+pub struct RemoteGlob {
+    url: String,
+    prefix: String,
+    pattern: glob::Pattern,
+}
+
+impl RemoteGlob {
+    /// `Ok(None)` when `url` has no glob metacharacters in its path.
+    pub fn parse(url: &str) -> SourceResult<Option<RemoteGlob>> {
+        let Some((scheme, rest)) = url.split_once("://") else {
+            return Ok(None);
+        };
+        let path_end = rest.find(['?', '#']).unwrap_or(rest.len());
+        let path = &rest[..path_end];
+        let Some(meta) = path.find(['*', '[']) else {
+            return Ok(None);
+        };
+        // The prefix ends at the last '/' before the first metacharacter.
+        let cut = path[..meta].rfind('/').map_or(0, |i| i + 1);
+        let prefix = format!("{}://{}", scheme, &path[..cut]);
+        let pattern_str = &path[cut..];
+        let pattern = glob::Pattern::new(pattern_str).map_err(|e| {
+            SourceError::Message(format!("invalid glob pattern '{}': {}", url, e))
+        })?;
+        Ok(Some(RemoteGlob { url: url.to_owned(), prefix, pattern }))
+    }
+
+    /// The URL as given.
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// The directory-like prefix to pass to [`SourceHandle::list`].
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// The pattern matched against the part of each URL after the prefix.
+    pub fn pattern(&self) -> &str {
+        self.pattern.as_str()
+    }
+
+    /// True if `url` starts with the prefix and its remainder matches.
+    pub fn matches(&self, url: &str) -> bool {
+        let Some(rest) = url.strip_prefix(&self.prefix) else {
+            return false;
+        };
+        let options = glob::MatchOptions {
+            case_sensitive: true,
+            require_literal_separator: true,
+            require_literal_leading_dot: false,
+        };
+        self.pattern.matches_with(rest, options)
+    }
+
+    /// One `list` request for the prefix, filtered by the pattern and sorted
+    /// by URL. Fails with [`LIST_UNSUPPORTED`] if the producer cannot list,
+    /// and with `no files matched '<url>'` when nothing does.
+    pub fn expand(&self, handle: &SourceHandle) -> SourceResult<Vec<SourceEntry>> {
+        let mut entries: Vec<SourceEntry> = handle
+            .list(&self.prefix)?
+            .into_iter()
+            .filter(|e| self.matches(&e.url))
+            .collect();
+        if entries.is_empty() {
+            return Err(SourceError::Message(format!("no files matched '{}'", self.url)));
+        }
+        entries.sort_by(|a, b| a.url.cmp(&b.url));
+        Ok(entries)
+    }
 }
 
 fn opt_cstring_arg(s: Option<&str>) -> SourceResult<Option<CString>> {
@@ -876,8 +1136,66 @@ mod tests {
         // (64-bit pointers).
         assert_eq!(std::mem::size_of::<SourceMetaRaw>(), 32);
         assert_eq!(std::mem::size_of::<SourceStreamRaw>(), 24);
-        assert_eq!(std::mem::size_of::<SourceApiRaw>(), 8 + 8 * 9);
+        assert_eq!(std::mem::size_of::<SourceEntryRaw>(), 32);
+        assert_eq!(std::mem::size_of::<SourceListRaw>(), 16);
+        assert_eq!(std::mem::size_of::<SourceApiRaw>(), 8 + 8 * 10);
         assert_eq!(std::mem::align_of::<SourceApiRaw>(), 8);
+        // `list` is nullable: Option<fn> must be pointer-sized with None == NULL.
+        assert_eq!(std::mem::size_of::<Option<SourceListFn>>(), 8);
+        let none: Option<SourceListFn> = None;
+        assert_eq!(unsafe { std::mem::transmute::<_, usize>(none) }, 0);
+    }
+
+    #[test]
+    fn remote_glob_split() {
+        let g = RemoteGlob::parse("s3://b/x/*.csv").unwrap().unwrap();
+        assert_eq!(g.prefix(), "s3://b/x/");
+        assert_eq!(g.pattern(), "*.csv");
+        assert!(g.matches("s3://b/x/a.csv"));
+        assert!(!g.matches("s3://b/x/deep/a.csv")); // `*` does not cross `/`
+        assert!(!g.matches("s3://b/x/a.parquet"));
+        assert!(!g.matches("s3://other/x/a.csv"));
+
+        let g = RemoteGlob::parse("s3://b/2024/*/part-*.parquet").unwrap().unwrap();
+        assert_eq!(g.prefix(), "s3://b/2024/");
+        assert_eq!(g.pattern(), "*/part-*.parquet");
+        assert!(g.matches("s3://b/2024/01/part-1.parquet"));
+        assert!(!g.matches("s3://b/2024/part-1.parquet"));
+        assert!(!g.matches("s3://b/2024/01/02/part-1.parquet"));
+
+        let g = RemoteGlob::parse("s3://b/**/x.csv").unwrap().unwrap();
+        assert_eq!(g.prefix(), "s3://b/");
+        assert!(g.matches("s3://b/x.csv"));
+        assert!(g.matches("s3://b/a/b/c/x.csv"));
+
+        // a metacharacter mid-segment: the prefix still ends at a `/`
+        let g = RemoteGlob::parse("s3://b/data-[0-9].csv").unwrap().unwrap();
+        assert_eq!(g.prefix(), "s3://b/");
+        assert_eq!(g.pattern(), "data-[0-9].csv");
+        assert!(g.matches("s3://b/data-1.csv"));
+        assert!(!g.matches("s3://b/data-x.csv"));
+
+        // whole-bucket glob
+        let g = RemoteGlob::parse("s3://b/*").unwrap().unwrap();
+        assert_eq!(g.prefix(), "s3://b/");
+
+        // no glob: passthrough
+        assert!(RemoteGlob::parse("s3://b/x/a.csv").unwrap().is_none());
+        assert!(RemoteGlob::parse("data/*.csv").unwrap().is_none()); // local, not a URL
+        // `?` is not a glob character, in a query string or anywhere else
+        assert!(RemoteGlob::parse("https://h/p/a.csv?token=x").unwrap().is_none());
+        assert!(RemoteGlob::parse("https://h/p/a?.csv").unwrap().is_none());
+        // metacharacters in the query string / fragment don't count either
+        assert!(RemoteGlob::parse("https://h/p/a.csv?q=*").unwrap().is_none());
+        assert!(RemoteGlob::parse("https://h/p/a.csv#[x]").unwrap().is_none());
+        // ... and a real glob's pattern stops at the query string
+        let g = RemoteGlob::parse("https://h/p/*.csv?token=x").unwrap().unwrap();
+        assert_eq!(g.prefix(), "https://h/p/");
+        assert_eq!(g.pattern(), "*.csv");
+        assert_eq!(g.url(), "https://h/p/*.csv?token=x");
+
+        let e = RemoteGlob::parse("s3://b/x/[.csv").unwrap_err();
+        assert!(e.to_string().contains("invalid glob pattern"), "{}", e);
     }
 
     #[test]
