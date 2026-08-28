@@ -17,7 +17,7 @@ use crate::ext::{
     sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_index_info_sqlite3_index_constraint,
     sqlite3_index_info_sqlite3_index_constraint_usage, sqlite3_index_info_sqlite3_index_orderby,
     sqlite3_module, sqlite3_value, sqlite3_vtab, sqlite3_vtab_cursor, sqlite3ext_create_module_v2,
-    sqlite3ext_declare_vtab, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in,
+    sqlite3ext_declare_vtab, sqlite3ext_errmsg, sqlite3ext_vtab_distinct, sqlite3ext_vtab_in,
     sqlite3ext_vtab_in_first, sqlite3ext_vtab_in_next,
 };
 use serde::{Deserialize, Serialize};
@@ -886,6 +886,12 @@ where
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
                     SQLITE_OKAY
                 } else {
+                    // Surface SQLite's own reason (e.g. "duplicate column name: x")
+                    // instead of the generic "vtable constructor failed".
+                    let reason = std::ffi::CStr::from_ptr(sqlite3ext_errmsg(db)).to_string_lossy();
+                    if let Ok(err) = mprintf(&format!("invalid virtual table schema: {}", reason)) {
+                        *err_msg = err;
+                    }
                     rc
                 }
             }
@@ -929,6 +935,12 @@ where
                     *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
                     SQLITE_OKAY
                 } else {
+                    // Surface SQLite's own reason (e.g. "duplicate column name: x")
+                    // instead of the generic "vtable constructor failed".
+                    let reason = std::ffi::CStr::from_ptr(sqlite3ext_errmsg(db)).to_string_lossy();
+                    if let Ok(err) = mprintf(&format!("invalid virtual table schema: {}", reason)) {
+                        *err_msg = err;
+                    }
                     rc
                 }
             }
