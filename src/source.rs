@@ -714,22 +714,28 @@ pub fn resolve_source_api(db: *mut sqlite3, function: &str) -> SourceResult<Sour
             });
         }
     };
-    let row = match stmt.execute().next() {
-        Some(Ok(row)) => row,
-        _ => {
-            return Err(SourceError::Resolve {
-                function: function.to_owned(),
-                message: "function returned no row".into(),
-            })
-        }
-    };
-    let value = row.value(0);
+    // Step by hand so an error raised *inside* the provider function (bad
+    // config row, etc.) reaches the caller verbatim.
+    let rc = unsafe { crate::ext::sqlite3ext_step(stmt.as_ptr()) };
+    if rc != crate::constants::SQLITE_ROW {
+        let message = unsafe { crate::exec::errmsg(db) };
+        return Err(SourceError::Resolve {
+            function: function.to_owned(),
+            message: if message.is_empty() {
+                format!("function returned no row (rc={})", rc)
+            } else {
+                message
+            },
+        });
+    }
+    let value = unsafe { crate::ext::sqlite3ext_column_value(stmt.as_ptr(), 0) };
     let p = unsafe { api::value_pointer::<SourceApiRaw>(&value, SOURCE_API_POINTER_NAME) };
-    match p {
+    let result = match p {
         Some(p) => unsafe { SourceHandle::from_raw_ptr(p, function) },
         None => Err(SourceError::NotASourceApi { function: function.to_owned() }),
-    }
-    // `stmt` is finalized here, after the handle has retained ctx.
+    };
+    drop(stmt); // finalized after the handle has retained ctx
+    result
 }
 
 /// Convenience: dispatch on `source`'s scheme and resolve the provider.

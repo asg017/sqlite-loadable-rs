@@ -86,6 +86,10 @@ fn file_api(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Re
     source::result_source_api(context, FileApi);
     Ok(())
 }
+/// A provider whose resolver function itself fails (e.g. bad config).
+fn err_api(_context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
+    Err(sqlite_loadable::Error::new_message("bad config row"))
+}
 /// A function that returns *some other* pointer type, to test NotASourceApi.
 fn other_pointer(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     api::result_pointer(context, b"something-else\0", 42i32);
@@ -102,13 +106,11 @@ fn resolve(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Resu
 fn t_head(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let h = resolve(context, values)?;
     let meta = h.head(api::value_text(&values[1])?)?;
-    api::result_json(
-        context,
-        serde_json::json!({
-            "size": meta.size, "last_modified_ms": meta.last_modified_ms,
-            "etag": meta.etag, "content_type": meta.content_type,
-        }),
-    )?;
+    let json = serde_json::json!({
+        "size": meta.size, "last_modified_ms": meta.last_modified_ms,
+        "etag": meta.etag, "content_type": meta.content_type,
+    });
+    api::result_text(context, json.to_string())?;
     Ok(())
 }
 fn t_get(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
@@ -163,6 +165,7 @@ pub fn sqlite3_sourcetest_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "_mem_api", 0, mem_api, flags)?;
     define_scalar_function(db, "_file_api", 0, file_api, flags)?;
     define_scalar_function(db, "_other_pointer", 0, other_pointer, flags)?;
+    define_scalar_function(db, "_err_api", 0, err_api, flags)?;
     define_scalar_function(db, "t_head", 2, t_head, flags)?;
     define_scalar_function(db, "t_get", 2, t_get, flags)?;
     define_scalar_function(db, "t_range", 4, t_range, flags)?;
@@ -242,6 +245,8 @@ mod tests {
         let (db, _g) = conn();
         let e = err(&db, "select t_get('_nope_api', 'mem://x')");
         assert!(e.contains("no source extension loaded (expected a _nope_api() function)"), "{}", e);
+        let e = err(&db, "select t_get('_err_api', 'mem://x')");
+        assert!(e.contains("could not resolve source API _err_api(): bad config row"), "{}", e);
         let e = err(&db, "select t_get('_other_pointer', 'mem://x')");
         assert!(e.contains("_other_pointer() did not return a sqlite-source-api-v1 pointer"), "{}", e);
         let e = err(&db, "select t_get('_mem_api', 'mem://missing')");

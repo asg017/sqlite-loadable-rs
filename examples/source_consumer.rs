@@ -18,13 +18,13 @@ fn resolve(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Resu
 
 fn source_head(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let meta = resolve(context, values)?.head(api::value_text(&values[1])?)?;
-    api::result_json(
-        context,
-        serde_json::json!({
-            "size": meta.size, "last_modified_ms": meta.last_modified_ms,
-            "etag": meta.etag, "content_type": meta.content_type,
-        }),
-    )?;
+    let json = serde_json::json!({
+        "size": meta.size, "last_modified_ms": meta.last_modified_ms,
+        "etag": meta.etag, "content_type": meta.content_type,
+    });
+    // result_text rather than result_json: the latter sets a subtype, which
+    // recent SQLite CLIs reject unless the function declares RESULT_SUBTYPE.
+    api::result_text(context, json.to_string())?;
     Ok(())
 }
 fn source_get(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
