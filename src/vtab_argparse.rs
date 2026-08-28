@@ -151,8 +151,9 @@ pub fn parse_argument(argument: &str) -> std::result::Result<Argument, String> {
 /// TODO renamed "parameter" to "named argument"
 fn arg_is_config_option(arg: &str) -> Result<Option<ConfigOption>, String> {
     let mut split = arg.split('=');
+    // `key = value` with spaces around `=` is common in hand-written SQL.
     let key = match split.next() {
-        Some(k) => k,
+        Some(k) => k.trim(),
         None => return Ok(None),
     };
     let value = match split.next() {
