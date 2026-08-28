@@ -24,6 +24,7 @@ libsqlite3-sys = {version="0.26.0", default-features = false, features=["bundled
 [features]
 static = ["libsqlite3-sys"]
 exec = []
+source = ["exec"]
 
 [lib]
 doctest = false

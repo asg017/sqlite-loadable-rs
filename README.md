@@ -132,6 +132,19 @@ select * from xxx;
 
 Some real-world non-Rust examples of traditional virtual tables in SQLite include the [CSV virtual table](https://www.sqlite.org/csv.html), the full-text search [fts5 extension](https://www.sqlite.org/fts5.html#fts5_table_creation_and_initialization), and the [R-Tree extension](https://www.sqlite.org/rtree.html#creating_an_r_tree_index).
 
+## Source API (`features = ["source"]`)
+
+`sqlite_loadable::source` defines a small, versioned **C-ABI "source" API** so
+one extension can read remote objects (HTTP, S3, ...) through another, without
+sharing Rust types across the cdylib boundary. A *producer* (e.g.
+`sqlite-fetch`'s `_http_api()`, `sqlite-objectstore`'s `_s3_api()`) implements
+`SourceApi { head, get, get_range }` and returns it with
+`source::result_source_api(context, api)`. A *consumer* (e.g. `sqlite-xsv`,
+`sqlite-parquet`) calls `source::resolve_source_api(db, "_http_api")` (or
+`resolve_for_source(db, url)` for scheme dispatch) and gets a refcounted
+`SourceHandle`. The C layout is in [`sqlite-source.h`](./sqlite-source.h);
+`tests/test_source.rs` is a complete producer + consumer example.
+
 ## Examples
 
 The [`examples/`](./examples/) directory has a few bare-bones examples of extensions, which you can build with:
