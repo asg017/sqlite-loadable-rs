@@ -1,4 +1,4 @@
-use sqlite3ext_sys::{sqlite3, sqlite3_stmt};
+use crate::ext::{sqlite3, sqlite3_stmt, sqlite3_value};
 use std::{
     error::Error,
     ffi::{c_char, c_void, CString},
@@ -8,8 +8,8 @@ use crate::{
     constants::SQLITE_OKAY,
     ext::{
         sqlite3ext_bind_int, sqlite3ext_bind_text, sqlite3ext_column_bytes,
-        sqlite3ext_column_int64, sqlite3ext_column_text, sqlite3ext_finalize,
-        sqlite3ext_prepare_v2, sqlite3ext_step,
+        sqlite3ext_column_int64, sqlite3ext_column_text, sqlite3ext_column_value,
+        sqlite3ext_errmsg, sqlite3ext_finalize, sqlite3ext_prepare_v2, sqlite3ext_step,
     },
 };
 
@@ -30,10 +30,15 @@ impl Statement {
         let result =
             unsafe { sqlite3ext_prepare_v2(db, s.as_ptr(), n, &mut stmt, std::ptr::null_mut()) };
         if result != SQLITE_OKAY {
-            Err("".into())
+            Err(unsafe { errmsg(db) }.into())
         } else {
             Ok(Statement { stmt })
         }
+    }
+    /// Raw `sqlite3_stmt` pointer, for callers that need column accessors
+    /// not wrapped here.
+    pub fn as_ptr(&self) -> *mut sqlite3_stmt {
+        self.stmt
     }
     pub fn bind_i32(&mut self, param_idx: i32, value: i32) -> Result<(), Box<dyn Error>> {
         let result = unsafe { sqlite3ext_bind_int(self.stmt, param_idx, value) };
@@ -98,6 +103,20 @@ impl Row {
     pub fn get<T: Value>(&self, idx: i32) -> Result<T, ()> {
         Value::value_result(self.stmt, idx)
     }
+    /// The raw [`sqlite3_value`](https://www.sqlite.org/c3ref/column_blob.html)
+    /// of column `idx`. Only valid until the next `step`/`reset`/`finalize`.
+    pub fn value(&self, idx: i32) -> *mut sqlite3_value {
+        unsafe { sqlite3ext_column_value(self.stmt, idx) }
+    }
+}
+
+/// The current error message of `db`, as an owned String.
+pub(crate) unsafe fn errmsg(db: *mut sqlite3) -> String {
+    let p = sqlite3ext_errmsg(db);
+    if p.is_null() {
+        return String::new();
+    }
+    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
 }
 
 pub trait Value: Sized {

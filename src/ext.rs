@@ -117,6 +117,14 @@ pub unsafe fn sqlite3ext_bind_pointer(
     ((*SQLITE3_API).bind_pointer.expect(EXPECT_MESSAGE))(db, i, p, t, None)
 }
 #[cfg(feature = "static")]
+pub unsafe fn sqlite3ext_errmsg(db: *mut sqlite3) -> *const c_char {
+    libsqlite3_sys::sqlite3_errmsg(db)
+}
+#[cfg(not(feature = "static"))]
+pub unsafe fn sqlite3ext_errmsg(db: *mut sqlite3) -> *const c_char {
+    ((*SQLITE3_API).errmsg.expect(EXPECT_MESSAGE))(db)
+}
+#[cfg(feature = "static")]
 pub unsafe fn sqlite3ext_step(stmt: *mut sqlite3_stmt) -> c_int {
     libsqlite3_sys::sqlite3_step(stmt)
 }

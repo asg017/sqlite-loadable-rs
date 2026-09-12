@@ -375,6 +375,26 @@ pub fn result_pointer<T>(context: *mut sqlite3_context, name: &[u8], object: T) 
     };
 }
 
+/// Like [`result_pointer`], but with a caller-supplied destructor that
+/// receives the raw `Box<T>` pointer (the caller must `Box::from_raw` it).
+pub fn result_pointer_with_destructor<T>(
+    context: *mut sqlite3_context,
+    name: &[u8],
+    object: T,
+    destructor: Option<unsafe extern "C" fn(*mut c_void)>,
+) {
+    let b = Box::new(object);
+    let pointer = Box::into_raw(b).cast::<c_void>();
+    unsafe {
+        sqlite3ext_result_pointer(
+            context,
+            pointer,
+            name.as_ptr().cast::<c_char>().cast_mut(),
+            destructor,
+        )
+    };
+}
+
 // TODO maybe take in a Box<T>?
 /// [`sqlite3_set_auxdata`](https://www.sqlite.org/c3ref/get_auxdata.html)
 pub fn auxdata_set(
