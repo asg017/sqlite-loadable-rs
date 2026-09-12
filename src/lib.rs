@@ -9,6 +9,8 @@ pub mod errors;
 
 #[cfg(feature = "exec")]
 pub mod exec;
+#[cfg(feature = "source")]
+pub mod source;
 pub mod ext; // TODO dont expose
 pub mod prelude;
 pub mod scalar;
