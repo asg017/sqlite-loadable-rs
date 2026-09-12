@@ -115,12 +115,17 @@ where
         let boxed_function: *mut F = sqlite3ext_user_data(context).cast::<F>();
         // .collect slows things waaaay down, so stick with slice for now
         let args = slice::from_raw_parts(argv, argc as usize);
-        match (*boxed_function)(context, args) {
-            Ok(()) => (),
-            Err(e) => {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (*boxed_function)(context, args)
+        })) {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => {
                 if api::result_error(context, &e.result_error_message()).is_err() {
                     api::result_error_code(context, SQLITE_INTERNAL);
                 }
+            }
+            Err(e) => {
+                let _ = api::result_error(context, &crate::table::panic_message(&*e));
             }
         }
     }
@@ -168,16 +173,22 @@ where
         let aux = (*x).1;
         // .collect slows things waaaay down, so stick with slice for now
         let args = slice::from_raw_parts(argv, argc as usize);
-        let b = Box::from_raw(aux);
-        match (*boxed_function)(context, args, &*b) {
-            Ok(()) => (),
-            Err(e) => {
+        // `aux` is owned by the registration (freed by the destructor passed
+        // to create_function_v2, if any); only borrow it here.
+        let aux: &T = &*aux;
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (*boxed_function)(context, args, aux)
+        })) {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => {
                 if api::result_error(context, &e.result_error_message()).is_err() {
                     api::result_error_code(context, SQLITE_INTERNAL);
                 }
             }
+            Err(e) => {
+                let _ = api::result_error(context, &crate::table::panic_message(&*e));
+            }
         }
-        Box::into_raw(b);
     }
     create_function_v2(
         db,
@@ -230,12 +241,17 @@ where
     {
         let boxed_function: *mut F = sqlite3ext_user_data(context).cast::<F>();
         let args = slice::from_raw_parts(argv, argc as usize);
-        match (*boxed_function)(context, args) {
-            Ok(()) => (),
-            Err(e) => {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (*boxed_function)(context, args)
+        })) {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => {
                 if api::result_error(context, &e.result_error_message()).is_err() {
                     api::result_error_code(context, SQLITE_INTERNAL);
                 }
+            }
+            Err(e) => {
+                let _ = api::result_error(context, &crate::table::panic_message(&*e));
             }
         }
     }
@@ -269,16 +285,22 @@ where
         let aux = (*x).1;
 
         let args = slice::from_raw_parts(argv, argc as usize);
-        let b = Box::from_raw(aux);
-        match (*boxed_function)(context, args, &*b) {
-            Ok(()) => (),
-            Err(e) => {
+        // `aux` is owned by the registration (freed by the destructor passed
+        // to create_function_v2, if any); only borrow it here.
+        let aux: &T = &*aux;
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (*boxed_function)(context, args, aux)
+        })) {
+            Ok(Ok(())) => (),
+            Ok(Err(e)) => {
                 if api::result_error(context, &e.result_error_message()).is_err() {
                     api::result_error_code(context, SQLITE_INTERNAL);
                 }
             }
+            Err(e) => {
+                let _ = api::result_error(context, &crate::table::panic_message(&*e));
+            }
         }
-        Box::into_raw(b);
     }
 
     (x_func_wrapper::<F, T>, app_pointer.cast())

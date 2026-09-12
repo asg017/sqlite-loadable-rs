@@ -859,6 +859,49 @@ fn process_create_args(
         arguments: arguments.to_vec(),
     })
 }
+
+/// Text for a caught panic payload.
+pub(crate) fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = e.downcast_ref::<&str>() {
+        format!("panic: {}", s)
+    } else if let Some(s) = e.downcast_ref::<String>() {
+        format!("panic: {}", s)
+    } else {
+        "panic (non-string payload)".to_owned()
+    }
+}
+
+/// Runs a virtual-table callback, turning a Rust panic into `SQLITE_ERROR`
+/// with a message on the vtab instead of unwinding across the C boundary
+/// (which aborts the host process).
+unsafe fn guard_vtab(vtab: *mut sqlite3_vtab, f: impl FnOnce() -> c_int) -> c_int {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(rc) => rc,
+        Err(e) => {
+            if !vtab.is_null() {
+                if let Ok(msg) = mprintf(&panic_message(&*e)) {
+                    (*vtab).zErrMsg = msg;
+                }
+            }
+            SQLITE_ERROR
+        }
+    }
+}
+
+/// Like [`guard_vtab`] for xCreate/xConnect, which report through `*err_msg`.
+unsafe fn guard_errmsg(err_msg: *mut *mut c_char, f: impl FnOnce() -> c_int) -> c_int {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(rc) => rc,
+        Err(e) => {
+            if !err_msg.is_null() {
+                if let Ok(msg) = mprintf(&panic_message(&*e)) {
+                    *err_msg = msg;
+                }
+            }
+            SQLITE_ERROR
+        }
+    }
+}
 /// <https://www.sqlite.org/vtab.html#the_xcreate_method>
 // TODO set error message properly
 unsafe extern "C" fn rust_create<'vtab, T>(
@@ -872,6 +915,7 @@ unsafe extern "C" fn rust_create<'vtab, T>(
 where
     T: VTab<'vtab>,
 {
+    guard_errmsg(err_msg, || {
     let aux = aux.cast::<T::Aux>();
     let args = match process_create_args(argc, argv) {
         Ok(args) => args,
@@ -906,6 +950,7 @@ where
             err.code()
         }
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xconnect_method>
@@ -921,6 +966,7 @@ unsafe extern "C" fn rust_connect<'vtab, T>(
 where
     T: VTab<'vtab>,
 {
+    guard_errmsg(err_msg, || {
     let aux = aux.cast::<T::Aux>();
     let args = match process_create_args(argc, argv) {
         Ok(args) => args,
@@ -955,6 +1001,7 @@ where
             err.code()
         }
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xbestindex_method>
@@ -966,6 +1013,7 @@ unsafe extern "C" fn rust_best_index<'vtab, T>(
 where
     T: VTab<'vtab>,
 {
+    guard_vtab(vtab, || {
     let vt = vtab.cast::<T>();
     match (*vt).best_index(IndexInfo { index_info }) {
         Ok(_) => SQLITE_OKAY,
@@ -974,6 +1022,7 @@ where
             BestIndexError::Error => SQLITE_ERROR,
         },
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xdisconnect_method>
@@ -1015,6 +1064,7 @@ unsafe extern "C" fn rust_open<'vtab, T: 'vtab>(
 where
     T: VTab<'vtab>,
 {
+    guard_vtab(vtab, || {
     let vt = vtab.cast::<T>();
     match (*vt).open() {
         Ok(cursor) => {
@@ -1024,6 +1074,7 @@ where
         }
         Err(err) => err.code(),
     }
+})
 }
 
 // https://www.sqlite.org/vtab.html#the_xupdate_method
@@ -1105,12 +1156,14 @@ unsafe extern "C" fn rust_update<'vtab, T: 'vtab>(
 where
     T: VTabWriteable<'vtab>,
 {
+    guard_vtab(vtab, || {
     let vt = vtab.cast::<T>();
 
     match (*vt).update(determine_update_operation(argc, argv), p_rowid) {
         Ok(_) => SQLITE_OKAY,
         Err(err) => err.code(),
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xbegin_method>
@@ -1216,6 +1269,7 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
+    guard_vtab((*cursor).pVtab, || {
     use std::str;
     let idx_name = if idx_str.is_null() {
         None
@@ -1237,6 +1291,7 @@ where
             err.code()
         }
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xnext_method>
@@ -1245,6 +1300,7 @@ unsafe extern "C" fn rust_next<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
 where
     C: VTabCursor,
 {
+    guard_vtab((*cursor).pVtab, || {
     let cr = cursor.cast::<C>();
     //cursor_error(cursor, (*cr).next())
     match (*cr).next() {
@@ -1258,6 +1314,7 @@ where
             err.code()
         }
     }
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xeof_method>
@@ -1266,8 +1323,10 @@ unsafe extern "C" fn rust_eof<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
 where
     C: VTabCursor,
 {
+    guard_vtab((*cursor).pVtab, || {
     let cr = cursor.cast::<C>();
     (*cr).eof() as c_int
+})
 }
 
 /// <https://www.sqlite.org/vtab.html#the_xcolumn_method>
@@ -1280,6 +1339,7 @@ unsafe extern "C" fn rust_column<C>(
 where
     C: VTabCursor,
 {
+    guard_vtab((*cursor).pVtab, || {
     let cr = cursor.cast::<C>();
     //result_error(ctx, (*cr).column(&mut ctxt, i))
     match (*cr).column(ctx, i) {
@@ -1293,6 +1353,7 @@ where
             err.code()
         }
     }
+})
 }
 
 /// "A successful invocation of this method will cause *pRowid to be filled with the rowid of row
@@ -1304,6 +1365,7 @@ unsafe extern "C" fn rust_rowid<C>(cursor: *mut sqlite3_vtab_cursor, p_rowid: *m
 where
     C: VTabCursor,
 {
+    guard_vtab((*cursor).pVtab, || {
     let cr = cursor.cast::<C>();
     match (*cr).rowid() {
         Ok(rowid) => {
@@ -1312,4 +1374,5 @@ where
         }
         Err(err) => err.code(),
     }
+})
 }
