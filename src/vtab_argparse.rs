@@ -150,15 +150,13 @@ pub fn parse_argument(argument: &str) -> std::result::Result<Argument, String> {
 
 /// TODO renamed "parameter" to "named argument"
 fn arg_is_config_option(arg: &str) -> Result<Option<ConfigOption>, String> {
-    let mut split = arg.split('=');
-    let key = match split.next() {
-        Some(k) => k,
-        None => return Ok(None),
+    // Split on the first `=` only: values such as Hive-partitioned URLs
+    // (`source='s3://b/theme=places/type=place/*'`) contain their own.
+    // `key = value` with spaces around `=` is common in hand-written SQL.
+    let Some((key, value)) = arg.split_once('=') else {
+        return Ok(None);
     };
-    let value = match split.next() {
-        Some(k) => k,
-        None => return Ok(None),
-    };
+    let key = key.trim();
     Ok(Some(ConfigOption {
         key: key.to_owned(),
         value: parse_config_option_value(key.to_string(), value)?,
@@ -239,6 +237,21 @@ mod tests {
             Ok(Argument::Config(ConfigOption {
                 key: "option".to_owned(),
                 value: ConfigOptionValue::Bareword("bareword".to_owned())
+            }))
+        );
+        // values keep their own '=' (Hive-style partitioned paths)
+        assert_eq!(
+            parse_argument("source='s3://b/theme=places/type=place/*'"),
+            Ok(Argument::Config(ConfigOption {
+                key: "source".to_owned(),
+                value: ConfigOptionValue::Quoted("s3://b/theme=places/type=place/*".to_owned())
+            }))
+        );
+        assert_eq!(
+            parse_argument("source = s3://b/a=1/x.parquet"),
+            Ok(Argument::Config(ConfigOption {
+                key: "source".to_owned(),
+                value: ConfigOptionValue::Bareword("s3://b/a=1/x.parquet".to_owned())
             }))
         );
     }
