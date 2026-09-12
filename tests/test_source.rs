@@ -121,6 +121,35 @@ impl SourceApi for FileApi {
     }
 }
 
+/// A producer whose function name (`_claimy_api`) matches no scheme: it is
+/// only reachable through the claim pass, and claims `t3://` URLs the way a
+/// configured objectstore would.
+struct ClaimyApi;
+impl SourceApi for ClaimyApi {
+    fn head(&self, _url: &str) -> SourceResult<SourceMeta> {
+        Ok(SourceMeta { size: Some(3), ..Default::default() })
+    }
+    fn get(&self, _url: &str, _if_match: Option<&str>) -> SourceResult<Box<dyn Read + Send>> {
+        Ok(Box::new(std::io::Cursor::new(b"t3!".to_vec())))
+    }
+    fn get_range(&self, _url: &str, _s: u64, _l: u64, _m: Option<&str>) -> SourceResult<Vec<u8>> {
+        Ok(b"t3!".to_vec())
+    }
+    fn supports_claims(&self) -> bool {
+        true
+    }
+    fn claims(&self, url: &str) -> bool {
+        if url == "t3://panic" {
+            panic!("claims boom");
+        }
+        url.starts_with("t3://")
+    }
+}
+fn claimy_api(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
+    source::result_source_api(context, ClaimyApi);
+    Ok(())
+}
+
 fn mem_api(context: *mut sqlite3_context, _values: &[*mut sqlite3_value]) -> Result<()> {
     let mut objects = HashMap::new();
     objects.insert("mem://hello.txt".to_string(), b"hello, world\n".to_vec());
@@ -254,12 +283,18 @@ fn t_for_source(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) ->
     }
     Ok(())
 }
-
+/// `t_claims(fn, url)` -> whether that producer claims the URL.
+fn t_claims(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let h = resolve(context, values)?;
+    api::result_bool(context, h.claims(api::value_text(&values[1])?));
+    Ok(())
+}
 #[sqlite_entrypoint]
 pub fn sqlite3_sourcetest_init(db: *mut sqlite3) -> Result<()> {
     let flags = FunctionFlags::UTF8;
     define_scalar_function(db, "_mem_api", 0, mem_api, flags)?;
     define_scalar_function(db, "_file_api", 0, file_api, flags)?;
+    define_scalar_function(db, "_claimy_api", 0, claimy_api, flags)?;
     define_scalar_function(db, "_other_pointer", 0, other_pointer, flags)?;
     define_scalar_function(db, "_err_api", 0, err_api, flags)?;
     define_scalar_function(db, "t_head", 2, t_head, flags)?;
@@ -272,6 +307,7 @@ pub fn sqlite3_sourcetest_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "t_list", 2, t_list, flags)?;
     define_scalar_function(db, "t_glob", 2, t_glob, flags)?;
     define_scalar_function(db, "t_supports_list", 1, t_supports_list, flags)?;
+    define_scalar_function(db, "t_claims", 2, t_claims, flags)?;
     Ok(())
 }
 
@@ -349,7 +385,7 @@ mod tests {
         let e = err(&db, "select t_get('_err_api', 'mem://x')");
         assert!(e.contains("could not resolve source API _err_api(): bad config row"), "{}", e);
         let e = err(&db, "select t_get('_other_pointer', 'mem://x')");
-        assert!(e.contains("_other_pointer() did not return a sqlite-source-api-v1 pointer"), "{}", e);
+        assert!(e.contains("_other_pointer() did not return a sqlite-source-api-v2 pointer"), "{}", e);
         let e = err(&db, "select t_get('_mem_api', 'mem://missing')");
         assert!(e.contains("mem: mem://missing not found"), "{}", e);
         let e = err(&db, "select t_range('_mem_api', 'mem://hello.txt', 99, 1)");
@@ -460,10 +496,29 @@ mod tests {
     fn dispatch() {
         let (db, _g) = conn();
         assert_eq!(q::<String>(&db, "select t_for_source('data/x.csv')"), "local");
+        // const map: a mapped scheme with no producer errors immediately, no fallthrough
         assert_eq!(
             q::<String>(&db, "select t_for_source('https://example.com/x.csv')"),
             "error: no source extension loaded for \"https://\" URLs (expected a _http_api() function)"
         );
+        // derived probe: mem:// finds _mem_api by naming convention
+        assert_eq!(q::<String>(&db, "select t_for_source('mem://hello.txt')"), "_mem_api");
+        assert_eq!(q::<String>(&db, "select t_for_source('MEM://hello.txt')"), "_mem_api");
+        // claim pass: no _t3_api exists, but _claimy_api claims t3:// URLs
+        assert_eq!(q::<String>(&db, "select t_for_source('t3://bucket/k.csv')"), "_claimy_api");
+        // a panicking claims() is caught and treated as "does not claim"
+        assert_eq!(q::<String>(&db, "select t_for_source('t3://panic')"), "local");
+        // nothing serves or claims zzz:// (the broken _err_api is skipped, not fatal)
+        assert_eq!(q::<String>(&db, "select t_for_source('zzz://x/y.csv')"), "local");
         db.execute_batch("").unwrap();
+    }
+
+    #[test]
+    fn claims() {
+        let (db, _g) = conn();
+        assert_eq!(q::<bool>(&db, "select t_claims('_claimy_api', 't3://b/k')"), true);
+        assert_eq!(q::<bool>(&db, "select t_claims('_claimy_api', 's3://b/k')"), false);
+        // NULL claims slot on producers that don't opt in
+        assert_eq!(q::<bool>(&db, "select t_claims('_mem_api', 't3://b/k')"), false);
     }
 }

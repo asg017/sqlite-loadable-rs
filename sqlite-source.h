@@ -33,12 +33,18 @@
 **    returned so a consumer can skip a `head` per object. The returned
 **    `sqlite_source_list` (entries, their strings and the struct itself) is
 **    freed with `free_list(ctx, list)`.
+**  - `claims` is optional (v2). A consumer dispatching a URL whose scheme has
+**    no statically-known producer asks each loaded producer
+**    `claims(ctx, url)`; return 1 to claim the URL (e.g. a user-configured
+**    custom scheme like `t3://`), 0 to pass. Claims MUST be decided from
+**    config snapshotted when the API function was evaluated — no network or
+**    filesystem access. There is no errmsg channel; failures mean "pass".
 **
 ** Layout check (64-bit): sizeof(sqlite_source_meta)   == 32
 **                        sizeof(sqlite_source_stream) == 24
 **                        sizeof(sqlite_source_entry)  == 32
 **                        sizeof(sqlite_source_list)   == 16
-**                        sizeof(sqlite_source_api)    == 88
+**                        sizeof(sqlite_source_api)    == 96
 ** The Rust mirror lives in sqlite-loadable-rs `src/source.rs`.
 */
 #ifndef SQLITE_SOURCE_H
@@ -46,8 +52,8 @@
 
 #include <stdint.h>
 
-#define SQLITE_SOURCE_API_POINTER_NAME "sqlite-source-api-v1"
-#define SQLITE_SOURCE_ABI_VERSION 1
+#define SQLITE_SOURCE_API_POINTER_NAME "sqlite-source-api-v2"
+#define SQLITE_SOURCE_ABI_VERSION 2
 
 #define SQLITE_SOURCE_RC_OK 0
 #define SQLITE_SOURCE_RC_ERROR 1
@@ -101,6 +107,8 @@ typedef struct sqlite_source_api {
   /* NULL if the producer cannot list; otherwise every object under `prefix` */
   int (*list)(void *ctx, const char *prefix, sqlite_source_list **out, char **errmsg);
   void (*free_list)(void *ctx, sqlite_source_list *list);
+  /* NULL if the producer never claims; 1 = claims `url`, 0 = passes (v2) */
+  int (*claims)(void *ctx, const char *url);
 } sqlite_source_api;
 
 #endif /* SQLITE_SOURCE_H */

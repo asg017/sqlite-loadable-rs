@@ -16,7 +16,14 @@
 //! The C struct layout is documented in `sqlite-source.h` at the crate root;
 //! the two must be kept in sync (see the `layout` test at the bottom).
 //!
-//! Ownership rules (ABI v1):
+//! Consumers usually don't name a function directly: [`resolve_for_source`]
+//! dispatches a URL through three layers — a const map for the well-known
+//! schemes, the `_{scheme}_api()` naming convention for everything else, and
+//! finally a "claim pass" that asks every loaded producer whether it wants
+//! the URL (`claims` slot), so producers can serve user-configured custom
+//! schemes like `t3://`.
+//!
+//! Ownership rules (ABI v2):
 //! - `ctx` is owned by the producer and refcounted via `retain`/`release`.
 //!   It must be safe to use from any thread.
 //! - Every `char *` / buffer handed to the consumer is allocated by the
@@ -49,9 +56,9 @@ use crate::exec::Statement;
 use crate::ext::{sqlite3, sqlite3_context};
 
 /// Pointer type name passed to `sqlite3_result_pointer` / `sqlite3_value_pointer`.
-pub const SOURCE_API_POINTER_NAME: &[u8] = b"sqlite-source-api-v1\0";
+pub const SOURCE_API_POINTER_NAME: &[u8] = b"sqlite-source-api-v2\0";
 /// ABI version stored in [`SourceApiRaw::abi_version`].
-pub const SOURCE_ABI_VERSION: u32 = 1;
+pub const SOURCE_ABI_VERSION: u32 = 2;
 
 /// Return codes for `head` / `get` / `get_range` / stream `read`.
 pub const SOURCE_RC_OK: i32 = 0;
@@ -130,7 +137,14 @@ pub struct SourceApiRaw {
     pub list: Option<SourceListFn>,
     /// Frees a list returned by `list` (entries, their strings, the struct).
     pub free_list: unsafe extern "C" fn(ctx: *mut c_void, list: *mut SourceListRaw),
+    /// Whether this producer claims `url` — e.g. a user-configured custom
+    /// scheme (`t3://…`). Returns 1 to claim, 0 to pass. NULL = never claims.
+    /// Must decide from already-snapshotted config only: no network, no I/O.
+    pub claims: Option<SourceClaimsFn>,
 }
+
+/// Signature of [`SourceApiRaw::claims`].
+pub type SourceClaimsFn = unsafe extern "C" fn(ctx: *mut c_void, url: *const c_char) -> i32;
 
 /// Signature of [`SourceApiRaw::list`].
 pub type SourceListFn = unsafe extern "C" fn(
@@ -275,33 +289,68 @@ fn pointer_name_str() -> &'static str {
 }
 
 // ---------------------------------------------------------------------------
-// Scheme dispatch (hard-coded allowlist, by design)
+// Scheme dispatch: const map -> derived `_{scheme}_api` -> claim pass
 // ---------------------------------------------------------------------------
 
-/// A URL scheme that has a known source provider function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A URL scheme paired with the provider function that serves it.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceScheme {
-    /// e.g. `"https"`
-    pub scheme: &'static str,
+    /// e.g. `"https"` (always lowercase)
+    pub scheme: String,
     /// e.g. `"_http_api"`
-    pub function: &'static str,
+    pub function: String,
 }
 
-const SCHEMES: &[SourceScheme] = &[
-    SourceScheme { scheme: "http", function: "_http_api" },
-    SourceScheme { scheme: "https", function: "_http_api" },
-    SourceScheme { scheme: "s3", function: "_s3_api" },
+/// Well-known schemes and aliases the naming convention cannot express
+/// (`https` also resolves through `_http_api`). Everything else is reached
+/// dynamically: `xyz://` probes a `_xyz_api()` function, and producers can
+/// claim arbitrary configured schemes via [`SourceApi::claims`].
+const SCHEMES: &[(&str, &str)] = &[
+    ("http", "_http_api"),
+    ("https", "_http_api"),
+    ("s3", "_s3_api"),
 ];
 
-/// If `source` starts with a supported `scheme://`, return the scheme and the
+/// If `source` starts with a well-known `scheme://` (const map only — see
+/// [`resolve_for_source`] for the dynamic layers), return the scheme and the
 /// provider function to resolve. Local paths (including Windows drive letters
-/// like `C:\…`) and unknown schemes return `None`.
+/// like `C:\…`) and other schemes return `None`.
 pub fn source_function_for(source: &str) -> Option<SourceScheme> {
     let (scheme, _) = source.split_once("://")?;
     SCHEMES
         .iter()
-        .find(|s| s.scheme.eq_ignore_ascii_case(scheme))
-        .copied()
+        .find(|(s, _)| s.eq_ignore_ascii_case(scheme))
+        .map(|(s, f)| SourceScheme { scheme: (*s).to_owned(), function: (*f).to_owned() })
+}
+
+/// The provider function name derived from a scheme by convention:
+/// `ssh` → `_ssh_api`. Only for schemes that are valid inside a function
+/// name (ASCII alphanumerics starting with a letter); returns `None` for
+/// schemes with `+`/`-`/`.` in them.
+pub fn derived_function_for(scheme: &str) -> Option<String> {
+    let scheme = scheme.to_ascii_lowercase();
+    let mut bytes = scheme.bytes();
+    match bytes.next() {
+        Some(b) if b.is_ascii_lowercase() => {}
+        _ => return None,
+    }
+    if !bytes.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!("_{}_api", scheme))
+}
+
+/// Every function on this connection matching the `_<name>_api` producer
+/// naming convention (zero-arg), sorted for deterministic claim order.
+fn producer_functions(db: *mut sqlite3) -> Vec<String> {
+    let sql = "SELECT DISTINCT name FROM pragma_function_list \
+               WHERE name LIKE '\\_%\\_api' ESCAPE '\\' AND narg = 0 ORDER BY name";
+    let Ok(mut stmt) = Statement::prepare(db, sql) else {
+        return Vec::new();
+    };
+    stmt.execute()
+        .filter_map(|row| row.ok().and_then(|r| r.get::<String>(0).ok()))
+        .collect()
 }
 
 /// True if `source` looks like a URL with *any* scheme (`xyz://…`), whether or
@@ -350,6 +399,21 @@ pub trait SourceApi: Send + Sync + 'static {
         let _ = prefix;
         Err(SourceError::Message(LIST_UNSUPPORTED.to_owned()))
     }
+    /// Whether this producer implements [`Self::claims`]; same
+    /// default-vs-override rule as [`Self::supports_list`]. Producers that
+    /// return `false` leave the `claims` slot of the vtable NULL.
+    fn supports_claims(&self) -> bool {
+        false
+    }
+    /// Whether this producer wants URLs like `url` even though its scheme is
+    /// not statically mapped to it — e.g. a scheme the user configured
+    /// (`t3://…` pointed at an S3-compatible endpoint). Must decide from
+    /// config that was snapshotted when the API function was evaluated:
+    /// no network, no filesystem.
+    fn claims(&self, url: &str) -> bool {
+        let _ = url;
+        false
+    }
 }
 
 /// The thing `ctx` points at on the producer side. Sized so the Arc pointer is thin.
@@ -367,6 +431,7 @@ struct ProducerCtx {
 /// ```
 pub fn result_source_api<T: SourceApi>(context: *mut sqlite3_context, api: T) {
     let list = api.supports_list().then_some(producer_list as SourceListFn);
+    let claims = api.supports_claims().then_some(producer_claims as SourceClaimsFn);
     let ctx: Arc<ProducerCtx> = Arc::new(ProducerCtx { api: Box::new(api) });
     let raw = SourceApiRaw {
         abi_version: SOURCE_ABI_VERSION,
@@ -381,6 +446,7 @@ pub fn result_source_api<T: SourceApi>(context: *mut sqlite3_context, api: T) {
         free_buffer: producer_free_buffer,
         list,
         free_list: producer_free_list,
+        claims,
     };
     // Boxed struct owns one reference to ctx; released by the destructor
     // SQLite calls when the value is freed.
@@ -670,6 +736,18 @@ unsafe extern "C" fn producer_list(
     }
 }
 
+unsafe extern "C" fn producer_claims(ctx: *mut c_void, url: *const c_char) -> i32 {
+    // There is no errmsg channel here: any failure (bad UTF-8, panic) means
+    // "does not claim", which the dispatcher treats as a pass, not an error.
+    let result = catch_unwind(AssertUnwindSafe(|| -> bool {
+        match url_from_c(url) {
+            Ok(url) => ctx_api(ctx).claims(url),
+            Err(_) => false,
+        }
+    }));
+    matches!(result, Ok(true)) as i32
+}
+
 unsafe extern "C" fn producer_free_list(_ctx: *mut c_void, list: *mut SourceListRaw) {
     if list.is_null() {
         return;
@@ -885,6 +963,23 @@ impl SourceHandle {
     /// True if the producer filled the `list` slot.
     pub fn supports_list(&self) -> bool {
         self.raw.list.is_some()
+    }
+
+    /// True if the producer filled the `claims` slot.
+    pub fn supports_claims(&self) -> bool {
+        self.raw.claims.is_some()
+    }
+
+    /// Whether the producer claims `url` (see [`SourceApi::claims`]). A NULL
+    /// slot, a NUL in the URL, or a producer-side failure all mean `false`.
+    pub fn claims(&self, url: &str) -> bool {
+        let Some(claims) = self.raw.claims else {
+            return false;
+        };
+        let Ok(c_url) = CString::new(url) else {
+            return false;
+        };
+        unsafe { claims(self.raw.ctx, c_url.as_ptr()) != 0 }
     }
 
     /// Every object under `prefix`, in the producer's order. Fails with
@@ -1109,21 +1204,71 @@ pub fn resolve_source_api(db: *mut sqlite3, function: &str) -> SourceResult<Sour
 }
 
 /// Convenience: dispatch on `source`'s scheme and resolve the provider.
-/// Returns `Ok(None)` for local paths.
+/// Returns `Ok(None)` for local paths and for URL schemes no loaded producer
+/// serves or claims.
+///
+/// Three layers, first hit wins:
+/// 1. the const map ([`source_function_for`]): `http`/`https` → `_http_api`,
+///    `s3` → `_s3_api`. A mapped scheme whose function is missing is an error
+///    (the classic "load fetch0/objectstore0" message) — it never falls
+///    through to the later layers.
+/// 2. the naming convention ([`derived_function_for`]): `xyz://` probes
+///    `_xyz_api()`; a missing function falls through, any other resolve
+///    failure (bad config, wrong pointer type) surfaces as the error it is.
+/// 3. the claim pass: every `_<name>_api()` zero-arg function on the
+///    connection is resolved and asked [`SourceHandle::claims`]`(source)`, in
+///    sorted name order; the first claimer wins. Functions that fail to
+///    resolve are skipped — this layer is best-effort by design.
 pub fn resolve_for_source(
     db: *mut sqlite3,
     source: &str,
 ) -> SourceResult<Option<(SourceScheme, SourceHandle)>> {
-    match source_function_for(source) {
-        None => Ok(None),
-        Some(scheme) => match resolve_source_api(db, scheme.function) {
+    // 1. const map
+    if let Some(scheme) = source_function_for(source) {
+        return match resolve_source_api(db, &scheme.function) {
             Ok(h) => Ok(Some((scheme, h))),
             Err(SourceError::NotLoaded { function }) => Err(SourceError::Message(
-                SourceError::NotLoaded { function }.user_message(Some(scheme.scheme)),
+                SourceError::NotLoaded { function }.user_message(Some(&scheme.scheme)),
             )),
             Err(e) => Err(e),
-        },
+        };
     }
+    if !looks_like_url(source) {
+        return Ok(None);
+    }
+    let scheme = source
+        .split_once("://")
+        .map(|(s, _)| s.to_ascii_lowercase())
+        .unwrap_or_default();
+
+    // 2. derived `_{scheme}_api()`
+    let derived = derived_function_for(&scheme);
+    if let Some(function) = &derived {
+        match resolve_source_api(db, function) {
+            Ok(h) => {
+                return Ok(Some((
+                    SourceScheme { scheme, function: function.clone() },
+                    h,
+                )))
+            }
+            Err(SourceError::NotLoaded { .. }) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    // 3. claim pass over every `_<name>_api()` on the connection
+    for function in producer_functions(db) {
+        if Some(&function) == derived.as_ref() {
+            continue; // already probed above
+        }
+        let Ok(handle) = resolve_source_api(db, &function) else {
+            continue; // not a source API (or broken); claims are best-effort
+        };
+        if handle.claims(source) {
+            return Ok(Some((SourceScheme { scheme, function }, handle)));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -1138,11 +1283,14 @@ mod tests {
         assert_eq!(std::mem::size_of::<SourceStreamRaw>(), 24);
         assert_eq!(std::mem::size_of::<SourceEntryRaw>(), 32);
         assert_eq!(std::mem::size_of::<SourceListRaw>(), 16);
-        assert_eq!(std::mem::size_of::<SourceApiRaw>(), 8 + 8 * 10);
+        assert_eq!(std::mem::size_of::<SourceApiRaw>(), 8 + 8 * 11);
         assert_eq!(std::mem::align_of::<SourceApiRaw>(), 8);
-        // `list` is nullable: Option<fn> must be pointer-sized with None == NULL.
+        // `list`/`claims` are nullable: Option<fn> must be pointer-sized with None == NULL.
         assert_eq!(std::mem::size_of::<Option<SourceListFn>>(), 8);
         let none: Option<SourceListFn> = None;
+        assert_eq!(unsafe { std::mem::transmute::<_, usize>(none) }, 0);
+        assert_eq!(std::mem::size_of::<Option<SourceClaimsFn>>(), 8);
+        let none: Option<SourceClaimsFn> = None;
         assert_eq!(unsafe { std::mem::transmute::<_, usize>(none) }, 0);
     }
 
@@ -1205,8 +1353,21 @@ mod tests {
         assert_eq!(source_function_for("s3://b/k").unwrap().function, "_s3_api");
         assert!(source_function_for("/tmp/x.csv").is_none());
         assert!(source_function_for("C:\\data\\x.csv").is_none());
+        // not in the const map — served by the derived probe / claim pass
         assert!(source_function_for("gs://b/k").is_none());
         assert!(looks_like_url("gs://b/k"));
         assert!(!looks_like_url("data/x.csv"));
+    }
+
+    #[test]
+    fn derived_function_names() {
+        assert_eq!(derived_function_for("ssh").as_deref(), Some("_ssh_api"));
+        assert_eq!(derived_function_for("GS").as_deref(), Some("_gs_api"));
+        assert_eq!(derived_function_for("t3").as_deref(), Some("_t3_api"));
+        // must start with a letter, and only fn-name-safe chars qualify
+        assert_eq!(derived_function_for("3t"), None);
+        assert_eq!(derived_function_for("web+ext"), None);
+        assert_eq!(derived_function_for("a.b"), None);
+        assert_eq!(derived_function_for(""), None);
     }
 }
