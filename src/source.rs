@@ -21,8 +21,13 @@
 //!   producer and must be returned through `free_string` (NUL-terminated
 //!   strings: error messages, etag, content type) or `free_buffer`
 //!   (`get_range` payloads, with their exact length).
-//! - All operations return `0` on success; on failure they return non-zero
-//!   and set `*errmsg` to a producer-allocated string.
+//! - All operations return [`SOURCE_RC_OK`] on success; on failure they
+//!   return non-zero and set `*errmsg` to a producer-allocated string.
+//!   [`SOURCE_RC_CHANGED`] means an `if_match` precondition failed: the
+//!   object no longer has the ETag the consumer read at `head()` time.
+//! - `get` and `get_range` take an optional `if_match` ETag (NULL = none) so
+//!   a consumer that spreads one logical read over many requests can detect
+//!   the object changing underneath it.
 //! - `sqlite3_result_pointer` frees the vtable struct when the producing
 //!   statement is reset, so consumers copy the struct and `retain` the ctx
 //!   while the statement is still live. [`resolve_source_api`] does this.
@@ -41,6 +46,12 @@ use crate::ext::{sqlite3, sqlite3_context};
 pub const SOURCE_API_POINTER_NAME: &[u8] = b"sqlite-source-api-v1\0";
 /// ABI version stored in [`SourceApiRaw::abi_version`].
 pub const SOURCE_ABI_VERSION: u32 = 1;
+
+/// Return codes for `head` / `get` / `get_range` / stream `read`.
+pub const SOURCE_RC_OK: i32 = 0;
+pub const SOURCE_RC_ERROR: i32 = 1;
+/// The `if_match` ETag no longer matches the object.
+pub const SOURCE_RC_CHANGED: i32 = 2;
 
 /// Sentinel for "unknown size" in [`SourceMetaRaw::size`].
 pub const SOURCE_SIZE_UNKNOWN: u64 = u64::MAX;
@@ -92,6 +103,7 @@ pub struct SourceApiRaw {
     pub get: unsafe extern "C" fn(
         ctx: *mut c_void,
         url: *const c_char,
+        if_match: *const c_char,
         out: *mut *mut SourceStreamRaw,
         errmsg: *mut *mut c_char,
     ) -> i32,
@@ -100,6 +112,7 @@ pub struct SourceApiRaw {
         url: *const c_char,
         start: u64,
         len: u64,
+        if_match: *const c_char,
         buf: *mut *mut u8,
         buf_len: *mut u64,
         errmsg: *mut *mut c_char,
@@ -134,6 +147,9 @@ pub enum SourceError {
     NotASourceApi { function: String },
     /// The producer speaks a different ABI version.
     AbiMismatch { function: String, found: u32 },
+    /// An `if_match` precondition failed: the object was modified since the
+    /// consumer read its ETag.
+    Changed { url: String, expected: String },
     /// An error reported by the producer (network, auth, 404, …) or a Rust I/O error.
     Message(String),
 }
@@ -161,6 +177,11 @@ impl SourceError {
             SourceError::AbiMismatch { function, found } => format!(
                 "{}() returned source ABI version {} but this extension expects {}",
                 function, found, SOURCE_ABI_VERSION
+            ),
+            SourceError::Changed { url, expected } => format!(
+                "{} changed since it was opened (ETag {} no longer matches); \
+                 re-create the virtual table to read the new version",
+                url, expected
             ),
             SourceError::Message(m) => m.clone(),
         }
@@ -258,8 +279,17 @@ pub fn looks_like_url(source: &str) -> bool {
 /// handle from any thread and from several cursors at once.
 pub trait SourceApi: Send + Sync + 'static {
     fn head(&self, url: &str) -> SourceResult<SourceMeta>;
-    fn get(&self, url: &str) -> SourceResult<Box<dyn Read + Send>>;
-    fn get_range(&self, url: &str, start: u64, len: u64) -> SourceResult<Vec<u8>>;
+    /// Stream the whole object. If `if_match` is given and the object's ETag
+    /// differs, return [`SourceError::Changed`].
+    fn get(&self, url: &str, if_match: Option<&str>) -> SourceResult<Box<dyn Read + Send>>;
+    /// Read `len` bytes at `start` (fewer only at EOF). Same `if_match` rule.
+    fn get_range(
+        &self,
+        url: &str,
+        start: u64,
+        len: u64,
+        if_match: Option<&str>,
+    ) -> SourceResult<Vec<u8>>;
 }
 
 /// The thing `ctx` points at on the producer side. Sized so the Arc pointer is thin.
@@ -343,6 +373,24 @@ unsafe fn url_from_c<'a>(url: *const c_char) -> Result<&'a str, String> {
     CStr::from_ptr(url)
         .to_str()
         .map_err(|_| "url is not valid UTF-8".to_owned())
+}
+
+unsafe fn opt_str_from_c<'a>(p: *const c_char) -> Result<Option<&'a str>, String> {
+    if p.is_null() {
+        return Ok(None);
+    }
+    CStr::from_ptr(p)
+        .to_str()
+        .map(Some)
+        .map_err(|_| "if_match is not valid UTF-8".to_owned())
+}
+
+/// Map a producer-side error to (return code, message).
+fn error_rc(e: SourceError) -> (i32, String) {
+    match &e {
+        SourceError::Changed { .. } => (SOURCE_RC_CHANGED, e.user_message(None)),
+        _ => (SOURCE_RC_ERROR, e.user_message(None)),
+    }
 }
 
 fn opt_cstring(s: Option<String>) -> *mut c_char {
@@ -429,12 +477,14 @@ unsafe extern "C" fn producer_stream_close(stream: *mut SourceStreamRaw) {
 unsafe extern "C" fn producer_get(
     ctx: *mut c_void,
     url: *const c_char,
+    if_match: *const c_char,
     out: *mut *mut SourceStreamRaw,
     errmsg: *mut *mut c_char,
 ) -> i32 {
-    let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<dyn Read + Send>, String> {
-        let url = url_from_c(url)?;
-        ctx_api(ctx).get(url).map_err(|e| e.user_message(None))
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<Box<dyn Read + Send>, (i32, String)> {
+        let url = url_from_c(url).map_err(|m| (SOURCE_RC_ERROR, m))?;
+        let if_match = opt_str_from_c(if_match).map_err(|m| (SOURCE_RC_ERROR, m))?;
+        ctx_api(ctx).get(url, if_match).map_err(error_rc)
     }));
     match result {
         Ok(Ok(reader)) => {
@@ -451,9 +501,9 @@ unsafe extern "C" fn producer_get(
             *out = Box::into_raw(raw);
             0
         }
-        Ok(Err(msg)) => {
+        Ok(Err((rc, msg))) => {
             set_errmsg(errmsg, msg);
-            1
+            rc
         }
         Err(e) => {
             set_errmsg(errmsg, panic_message(e));
@@ -467,15 +517,15 @@ unsafe extern "C" fn producer_get_range(
     url: *const c_char,
     start: u64,
     len: u64,
+    if_match: *const c_char,
     buf: *mut *mut u8,
     buf_len: *mut u64,
     errmsg: *mut *mut c_char,
 ) -> i32 {
-    let result = catch_unwind(AssertUnwindSafe(|| -> Result<Vec<u8>, String> {
-        let url = url_from_c(url)?;
-        ctx_api(ctx)
-            .get_range(url, start, len)
-            .map_err(|e| e.user_message(None))
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<Vec<u8>, (i32, String)> {
+        let url = url_from_c(url).map_err(|m| (SOURCE_RC_ERROR, m))?;
+        let if_match = opt_str_from_c(if_match).map_err(|m| (SOURCE_RC_ERROR, m))?;
+        ctx_api(ctx).get_range(url, start, len, if_match).map_err(error_rc)
     }));
     match result {
         Ok(Ok(bytes)) => {
@@ -489,9 +539,9 @@ unsafe extern "C" fn producer_get_range(
             *buf_len = n;
             0
         }
-        Ok(Err(msg)) => {
+        Ok(Err((rc, msg))) => {
             set_errmsg(errmsg, msg);
-            1
+            rc
         }
         Err(e) => {
             set_errmsg(errmsg, panic_message(e));
@@ -578,12 +628,34 @@ impl SourceHandle {
     }
 
     fn take_errmsg(&self, errmsg: *mut c_char, fallback: &str) -> SourceError {
-        if errmsg.is_null() {
-            return SourceError::Message(fallback.to_owned());
+        self.take_error(SOURCE_RC_ERROR, errmsg, fallback, "", None)
+    }
+
+    /// Build the consumer-side error for a non-zero return code, freeing the
+    /// producer's message.
+    fn take_error(
+        &self,
+        rc: i32,
+        errmsg: *mut c_char,
+        fallback: &str,
+        url: &str,
+        if_match: Option<&str>,
+    ) -> SourceError {
+        let msg = if errmsg.is_null() {
+            fallback.to_owned()
+        } else {
+            let m = unsafe { CStr::from_ptr(errmsg) }.to_string_lossy().into_owned();
+            unsafe { (self.raw.free_string)(self.raw.ctx, errmsg) };
+            m
+        };
+        if rc == SOURCE_RC_CHANGED {
+            SourceError::Changed {
+                url: url.to_owned(),
+                expected: if_match.unwrap_or("").to_owned(),
+            }
+        } else {
+            SourceError::Message(msg)
         }
-        let msg = unsafe { CStr::from_ptr(errmsg) }.to_string_lossy().into_owned();
-        unsafe { (self.raw.free_string)(self.raw.ctx, errmsg) };
-        SourceError::Message(msg)
     }
 
     fn take_string(&self, s: *mut c_char) -> Option<String> {
@@ -618,12 +690,27 @@ impl SourceHandle {
     }
 
     pub fn get(&self, url: &str) -> SourceResult<SourceStream> {
+        self.get_if(url, None)
+    }
+
+    /// Like [`Self::get`], failing with [`SourceError::Changed`] if the
+    /// object's ETag no longer equals `if_match`.
+    pub fn get_if(&self, url: &str, if_match: Option<&str>) -> SourceResult<SourceStream> {
         let c_url = CString::new(url).map_err(|_| SourceError::Message("url contains NUL".into()))?;
+        let c_if = opt_cstring_arg(if_match)?;
         let mut out: *mut SourceStreamRaw = std::ptr::null_mut();
         let mut errmsg: *mut c_char = std::ptr::null_mut();
-        let rc = unsafe { (self.raw.get)(self.raw.ctx, c_url.as_ptr(), &mut out, &mut errmsg) };
+        let rc = unsafe {
+            (self.raw.get)(
+                self.raw.ctx,
+                c_url.as_ptr(),
+                c_if.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
+                &mut out,
+                &mut errmsg,
+            )
+        };
         if rc != 0 {
-            return Err(self.take_errmsg(errmsg, "get failed"));
+            return Err(self.take_error(rc, errmsg, "get failed", url, if_match));
         }
         if out.is_null() {
             return Err(SourceError::Message("get returned a NULL stream".into()));
@@ -632,7 +719,20 @@ impl SourceHandle {
     }
 
     pub fn get_range(&self, url: &str, start: u64, len: u64) -> SourceResult<Vec<u8>> {
+        self.get_range_if(url, start, len, None)
+    }
+
+    /// Like [`Self::get_range`], failing with [`SourceError::Changed`] if the
+    /// object's ETag no longer equals `if_match`.
+    pub fn get_range_if(
+        &self,
+        url: &str,
+        start: u64,
+        len: u64,
+        if_match: Option<&str>,
+    ) -> SourceResult<Vec<u8>> {
         let c_url = CString::new(url).map_err(|_| SourceError::Message("url contains NUL".into()))?;
+        let c_if = opt_cstring_arg(if_match)?;
         let mut buf: *mut u8 = std::ptr::null_mut();
         let mut buf_len: u64 = 0;
         let mut errmsg: *mut c_char = std::ptr::null_mut();
@@ -642,13 +742,14 @@ impl SourceHandle {
                 c_url.as_ptr(),
                 start,
                 len,
+                c_if.as_ref().map_or(std::ptr::null(), |c| c.as_ptr()),
                 &mut buf,
                 &mut buf_len,
                 &mut errmsg,
             )
         };
         if rc != 0 {
-            return Err(self.take_errmsg(errmsg, "get_range failed"));
+            return Err(self.take_error(rc, errmsg, "get_range failed", url, if_match));
         }
         if buf.is_null() {
             return Ok(Vec::new());
@@ -656,6 +757,15 @@ impl SourceHandle {
         let out = unsafe { std::slice::from_raw_parts(buf, buf_len as usize) }.to_vec();
         unsafe { (self.raw.free_buffer)(self.raw.ctx, buf, buf_len) };
         Ok(out)
+    }
+}
+
+fn opt_cstring_arg(s: Option<&str>) -> SourceResult<Option<CString>> {
+    match s {
+        None => Ok(None),
+        Some(s) => CString::new(s)
+            .map(Some)
+            .map_err(|_| SourceError::Message("if_match contains NUL".into())),
     }
 }
 

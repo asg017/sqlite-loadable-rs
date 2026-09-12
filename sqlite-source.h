@@ -14,9 +14,12 @@
 **
 ** Rules:
 **  - `ctx` must be usable from any thread; consumers may call concurrently.
-**  - All int-returning operations return 0 on success. On failure they return
-**    non-zero and, if `errmsg` is non-NULL, set `*errmsg` to a NUL-terminated
-**    string that the consumer must pass to `free_string`.
+**  - All int-returning operations return SQLITE_SOURCE_RC_OK on success. On
+**    failure they return non-zero and, if `errmsg` is non-NULL, set `*errmsg`
+**    to a NUL-terminated string that the consumer must pass to `free_string`.
+**    SQLITE_SOURCE_RC_CHANGED means the `if_match` precondition failed.
+**  - `get` / `get_range` take an optional `if_match` ETag (NULL = none), as
+**    returned by `head`, so multi-request reads can detect a changed object.
 **  - Strings in `sqlite_source_meta` (etag, content_type) are NULL or
 **    producer-allocated; free them with `free_string`.
 **  - `get_range` buffers are freed with `free_buffer(ctx, buf, buf_len)`.
@@ -35,6 +38,10 @@
 
 #define SQLITE_SOURCE_API_POINTER_NAME "sqlite-source-api-v1"
 #define SQLITE_SOURCE_ABI_VERSION 1
+
+#define SQLITE_SOURCE_RC_OK 0
+#define SQLITE_SOURCE_RC_ERROR 1
+#define SQLITE_SOURCE_RC_CHANGED 2
 
 #define SQLITE_SOURCE_SIZE_UNKNOWN UINT64_MAX
 #define SQLITE_SOURCE_LAST_MODIFIED_UNKNOWN ((int64_t)-1)
@@ -62,9 +69,10 @@ typedef struct sqlite_source_api {
   void (*retain)(void *ctx);
   void (*release)(void *ctx);
   int (*head)(void *ctx, const char *url, sqlite_source_meta *out, char **errmsg);
-  int (*get)(void *ctx, const char *url, sqlite_source_stream **out, char **errmsg);
+  int (*get)(void *ctx, const char *url, const char *if_match,
+             sqlite_source_stream **out, char **errmsg);
   int (*get_range)(void *ctx, const char *url, uint64_t start, uint64_t len,
-                   uint8_t **buf, uint64_t *buf_len, char **errmsg);
+                   const char *if_match, uint8_t **buf, uint64_t *buf_len, char **errmsg);
   void (*free_string)(void *ctx, char *s);
   void (*free_buffer)(void *ctx, uint8_t *p, uint64_t len);
   void *list;             /* reserved; NULL in ABI v1 */

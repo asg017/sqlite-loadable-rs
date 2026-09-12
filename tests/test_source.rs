@@ -28,6 +28,19 @@ impl MemApi {
             .get(url)
             .ok_or_else(|| SourceError::Message(format!("mem: {} not found", url)))
     }
+    fn etag(o: &[u8]) -> String {
+        format!("\"etag-{}\"", o.len())
+    }
+    fn check(&self, url: &str, if_match: Option<&str>) -> SourceResult<&Vec<u8>> {
+        let o = self.object(url)?;
+        match if_match {
+            Some(expected) if expected != Self::etag(o) => Err(SourceError::Changed {
+                url: url.to_owned(),
+                expected: expected.to_owned(),
+            }),
+            _ => Ok(o),
+        }
+    }
 }
 impl SourceApi for MemApi {
     fn head(&self, url: &str) -> SourceResult<SourceMeta> {
@@ -35,18 +48,18 @@ impl SourceApi for MemApi {
         Ok(SourceMeta {
             size: Some(o.len() as u64),
             last_modified_ms: Some(1_700_000_000_000),
-            etag: Some(format!("\"etag-{}\"", o.len())),
+            etag: Some(Self::etag(o)),
             content_type: Some("text/plain".into()),
         })
     }
-    fn get(&self, url: &str) -> SourceResult<Box<dyn Read + Send>> {
+    fn get(&self, url: &str, if_match: Option<&str>) -> SourceResult<Box<dyn Read + Send>> {
         if url == "mem://panic" {
             panic!("boom");
         }
-        Ok(Box::new(std::io::Cursor::new(self.object(url)?.clone())))
+        Ok(Box::new(std::io::Cursor::new(self.check(url, if_match)?.clone())))
     }
-    fn get_range(&self, url: &str, start: u64, len: u64) -> SourceResult<Vec<u8>> {
-        let o = self.object(url)?;
+    fn get_range(&self, url: &str, start: u64, len: u64, if_match: Option<&str>) -> SourceResult<Vec<u8>> {
+        let o = self.check(url, if_match)?;
         let start = start as usize;
         let end = (start + len as usize).min(o.len());
         if start > o.len() {
@@ -62,10 +75,10 @@ impl SourceApi for FileApi {
         let md = std::fs::metadata(url.trim_start_matches("file://"))?;
         Ok(SourceMeta { size: Some(md.len()), ..Default::default() })
     }
-    fn get(&self, url: &str) -> SourceResult<Box<dyn Read + Send>> {
+    fn get(&self, url: &str, _if_match: Option<&str>) -> SourceResult<Box<dyn Read + Send>> {
         Ok(Box::new(std::fs::File::open(url.trim_start_matches("file://"))?))
     }
-    fn get_range(&self, url: &str, start: u64, len: u64) -> SourceResult<Vec<u8>> {
+    fn get_range(&self, url: &str, start: u64, len: u64, _if_match: Option<&str>) -> SourceResult<Vec<u8>> {
         use std::io::{Seek, SeekFrom};
         let mut f = std::fs::File::open(url.trim_start_matches("file://"))?;
         f.seek(SeekFrom::Start(start))?;
@@ -123,12 +136,22 @@ fn t_get(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result
 }
 fn t_range(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
     let h = resolve(context, values)?;
-    let bytes = h.get_range(
+    let if_match = values.get(4).map(|v| api::value_text(v)).transpose()?;
+    let bytes = h.get_range_if(
         api::value_text(&values[1])?,
         api::value_int64(&values[2]) as u64,
         api::value_int64(&values[3]) as u64,
+        if_match,
     )?;
     api::result_blob(context, &bytes);
+    Ok(())
+}
+fn t_get_if(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
+    let h = resolve(context, values)?;
+    let mut stream = h.get_if(api::value_text(&values[1])?, Some(api::value_text(&values[2])?))?;
+    let mut out = Vec::new();
+    stream.read_to_end(&mut out).map_err(|e| sqlite_loadable::Error::new_message(e.to_string()))?;
+    api::result_blob(context, &out);
     Ok(())
 }
 /// Resolve, clone twice, drop everything; returns the drop count delta for MemApi.
@@ -169,6 +192,8 @@ pub fn sqlite3_sourcetest_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "t_head", 2, t_head, flags)?;
     define_scalar_function(db, "t_get", 2, t_get, flags)?;
     define_scalar_function(db, "t_range", 4, t_range, flags)?;
+    define_scalar_function(db, "t_range", 5, t_range, flags)?;
+    define_scalar_function(db, "t_get_if", 3, t_get_if, flags)?;
     define_scalar_function(db, "t_refcount", 1, t_refcount, flags)?;
     define_scalar_function(db, "t_for_source", 1, t_for_source, flags)?;
     Ok(())
@@ -260,6 +285,22 @@ mod tests {
         assert!(e.contains("panic in source provider: boom"), "{}", e);
         let e = err(&db, "select t_get('bad name; drop', 'mem://x')");
         assert!(e.contains("invalid function name"), "{}", e);
+    }
+
+    #[test]
+    fn if_match() {
+        let (db, _g) = conn();
+        let ok: Vec<u8> = q(&db, "select t_range('_mem_api', 'mem://hello.txt', 0, 5, '\"etag-13\"')");
+        assert_eq!(ok, b"hello");
+        let e = err(&db, "select t_range('_mem_api', 'mem://hello.txt', 0, 5, '\"etag-old\"')");
+        assert!(
+            e.contains("mem://hello.txt changed since it was opened (ETag \"etag-old\" no longer matches)"),
+            "{}", e
+        );
+        let ok: Vec<u8> = q(&db, "select t_get_if('_mem_api', 'mem://hello.txt', '\"etag-13\"')");
+        assert_eq!(ok, b"hello, world\n");
+        let e = err(&db, "select t_get_if('_mem_api', 'mem://hello.txt', 'nope')");
+        assert!(e.contains("changed since it was opened"), "{}", e);
     }
 
     #[test]

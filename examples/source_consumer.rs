@@ -4,6 +4,7 @@
 //!   select source_get('_http_api', 'https://…');             -- body blob
 //!   select source_range('_http_api', 'https://…', 10, 5);    -- range blob
 //!   select source_get_len('_http_api', 'https://…');         -- streamed byte count
+//!   select source_range('_http_api', 'https://…', 10, 5, '"etag"');  -- with If-Match
 //!
 //! Build: cargo build --example source_consumer --features source
 use sqlite_loadable::prelude::*;
@@ -55,10 +56,12 @@ fn source_get_len(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) 
     Ok(())
 }
 fn source_range(context: *mut sqlite3_context, values: &[*mut sqlite3_value]) -> Result<()> {
-    let bytes = resolve(context, values)?.get_range(
+    let if_match = values.get(4).map(|v| api::value_text(v)).transpose()?;
+    let bytes = resolve(context, values)?.get_range_if(
         api::value_text(&values[1])?,
         api::value_int64(&values[2]) as u64,
         api::value_int64(&values[3]) as u64,
+        if_match,
     )?;
     api::result_blob(context, &bytes);
     Ok(())
@@ -71,5 +74,6 @@ pub fn sqlite3_sourceconsumer_init(db: *mut sqlite3) -> Result<()> {
     define_scalar_function(db, "source_get", 2, source_get, flags)?;
     define_scalar_function(db, "source_get_len", 2, source_get_len, flags)?;
     define_scalar_function(db, "source_range", 4, source_range, flags)?;
+    define_scalar_function(db, "source_range", 5, source_range, flags)?;
     Ok(())
 }
