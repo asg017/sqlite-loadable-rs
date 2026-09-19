@@ -14,7 +14,7 @@ use crate::ext::{
     sqlite3ext_result_pointer, sqlite3ext_result_subtype, sqlite3ext_result_text,
     sqlite3ext_set_auxdata, sqlite3ext_value_blob, sqlite3ext_value_bytes, sqlite3ext_value_double,
     sqlite3ext_value_int, sqlite3ext_value_int64, sqlite3ext_value_pointer,
-    sqlite3ext_value_subtype, sqlite3ext_value_text, sqlite3ext_value_type,
+    sqlite3ext_value_subtype, sqlite3ext_value_text, sqlite3ext_value_type, sqlite_transient,
 };
 use crate::Error;
 use sqlite3ext_sys::{SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT};
@@ -250,27 +250,28 @@ pub fn value_has_json_subtype(value: &*mut sqlite3_value) -> bool {
 /// Calls [`sqlite3_result_text`](https://www.sqlite.org/c3ref/result_blob.html)
 /// to represent that a function returns a string with the given value. Fails if
 /// the string length is larger than i32 maximum value.
+///
+/// The string is passed with `SQLITE_TRANSIENT`, so SQLite copies it into the result
+/// value (reusing that value's buffer across calls) before this returns; `text` only
+/// needs to live for the duration of the call. Strings may contain NUL characters
+/// (<https://www.sqlite.org/nulinstr.html>), since the length is passed explicitly.
 pub fn result_text<S: AsRef<str>>(context: *mut sqlite3_context, text: S) -> crate::Result<()> {
     let bytes = text.as_ref().as_bytes();
-    unsafe {
-        // Rational: why not use CString::new here? Turns out, SQLite strings can have NUL characters
-        // inside of strings. It fucks with LENGTH()/QUOTE(), but is totally valid. So, we should allow
-        // returning strings with NULL values, as the "n" parameter sets the size limit of the string.
-        // <https://www.sqlite.org/nulinstr.html>
-        let s = CString::from_vec_unchecked(bytes.into());
-
-        let n: i32 = bytes
-            .len()
-            .try_into()
-            .map_err(|_| Error::new_message("i32 overflow, string to large"))?;
-        // CString and into_raw() is needed here, that way we can pass in a proper destructor so
-        // SQLite can drop the allocated memory (avoids segfaults)
-        sqlite3ext_result_text(context, s.into_raw(), n, Some(result_text_destructor));
-    }
+    let n: i32 = bytes
+        .len()
+        .try_into()
+        .map_err(|_| Error::new_message("i32 overflow, string to large"))?;
+    // An empty slice's pointer is dangling. SQLite reads 0 bytes from it, but pass a real
+    // (static) pointer anyway so memcpy never sees a dangling source.
+    let p: *const c_char = if n == 0 {
+        c"".as_ptr()
+    } else {
+        bytes.as_ptr().cast()
+    };
+    // SAFETY: `p` is valid for `n` bytes until this call returns, and SQLITE_TRANSIENT makes
+    // SQLite copy them before returning, so SQLite never holds on to `p`.
+    unsafe { sqlite3ext_result_text(context, p, n, sqlite_transient()) };
     Ok(())
-}
-unsafe extern "C" fn result_text_destructor(raw: *mut c_void) {
-    drop(CString::from_raw(raw.cast::<c_char>()));
 }
 
 /// Calls [`sqlite3_result_int`](https://www.sqlite.org/c3ref/result_blob.html)
