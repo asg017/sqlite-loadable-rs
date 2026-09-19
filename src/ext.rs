@@ -275,25 +275,27 @@ pub unsafe fn sqlite3ext_result_int(context: *mut sqlite3_context, v: c_int) {
     }
 }
 
-// https://www.sqlite.org/c3ref/c_static.html
-// SQLITE_STATIC == 0
-// SQLITE_TRANSIENT == -1
-// TODO instead of making a copy every time, let's tranfer ownership to some Rust box
-// also maybe pass in a box/T and do the box stuff ourself?
-// or serde??
-// or slice??
+/// The `SQLITE_TRANSIENT` destructor sentinel (`((sqlite3_destructor_type)-1)`), which tells
+/// SQLite to copy the buffer before `sqlite3_result_*` / `sqlite3_bind_*` returns. SQLite
+/// compares it by value and never calls it. <https://www.sqlite.org/c3ref/c_static.html>
+///
+/// A fn rather than a const: const-eval rejects an integer as a fn pointer value. This is the
+/// same runtime transmute libsqlite3-sys uses for its `SQLITE_TRANSIENT()`.
+#[inline]
+pub(crate) fn sqlite_transient() -> Option<unsafe extern "C" fn(*mut c_void)> {
+    // SAFETY: -1 is non-null, so this is `Some`; SQLite only compares it and never calls it.
+    Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut c_void)>(-1_isize) })
+}
+
+// Blobs are copied by SQLite (SQLITE_TRANSIENT) into the result Mem, which is cheaper than
+// handing SQLite a Rust allocation plus a destructor callback.
 #[cfg(feature = "static")]
 pub unsafe fn sqlite3ext_result_blob(context: *mut sqlite3_context, p: *const c_void, n: i32) {
-    libsqlite3_sys::sqlite3_result_blob(context, p, n, Some(mem::transmute(-1_isize)));
+    libsqlite3_sys::sqlite3_result_blob(context, p, n, sqlite_transient());
 }
 #[cfg(not(feature = "static"))]
 pub unsafe fn sqlite3ext_result_blob(context: *mut sqlite3_context, p: *const c_void, n: i32) {
-    ((*SQLITE3_API).result_blob.expect(EXPECT_MESSAGE))(
-        context,
-        p,
-        n,
-        Some(mem::transmute(-1_isize)),
-    );
+    ((*SQLITE3_API).result_blob.expect(EXPECT_MESSAGE))(context, p, n, sqlite_transient());
 }
 #[cfg(feature = "static")]
 pub unsafe fn sqlite3ext_result_int64(context: *mut sqlite3_context, v: i64) {
